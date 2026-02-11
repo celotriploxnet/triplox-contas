@@ -1,0 +1,220 @@
+/* Tailwind v4 (compatível) */
+@import "tailwindcss";
+
+/* =========================
+   TEMA (Bradesco vibes)
+   ========================= */
+:root{
+  --red: #d61f2c;
+  --purple: #7a1ea1;
+
+  --bg: #f6f6f8;
+  --card: rgba(255,255,255,.92);
+  --card2: rgba(255,255,255,.75);
+  --stroke: rgba(15, 15, 25, .10);
+
+  --text: #101018;
+  --muted: rgba(16,16,24,.68);
+
+  --r-xl: 28px;
+  --r-lg: 22px;
+
+  --shadow: 0 14px 35px rgba(10, 10, 20, .10);
+  --shadow2: 0 10px 24px rgba(10, 10, 20, .08);
+}
+
+html, body { height: 100%; }
+
+body{
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  color: var(--text);
+
+  /* Fundo claro com “ondas” vermelho/roxo */
+  background:
+    radial-gradient(1100px 700px at 15% -10%, rgba(214,31,44,.18), transparent 55%),
+    radial-gradient(900px 650px at 85% 0%, rgba(122,30,161,.16), transparent 55%),
+    radial-gradient(900px 700px at 50% 105%, rgba(214,31,44,.10), transparent 55%),
+    linear-gradient(180deg, #ffffff 0%, var(--bg) 70%, #ffffff 100%);
+}
+
+/* =========================
+   CLASSES DO SEU SITE
+   ========================= */
+
+/* Estrutura */
+.app-shell{
+  min-height: 100vh;
+}
+
+.app-container{
+  max-width: 80rem;        /* parecido com max-w-5xl */
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+/* Topbar / faixa */
+.topbar{
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  border-bottom: 1px solid rgba(255,255,255,.35);
+  background: linear-gradient(90deg, rgba(214,31,44,.95), rgba(122,30,161,.95));
+  backdrop-filter: blur(10px);
+}
+
+.topbar-inner{
+  max-width: 80rem;
+  margin: 0 auto;
+  padding: .75rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+}
+
+.brand{
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  color: rgba(255,255,255,.95);
+}
+
+.brand-dot{
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.92);
+}
+
+.brand-title{
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-size: .95rem;
+  line-height: 1.1;
+}
+
+.brand-sub{
+  font-size: .78rem;
+  color: rgba(255,255,255,.80);
+  line-height: 1.1;
+}
+
+/* Tipografia */
+.h1{
+  font-size: clamp(1.5rem, 1.2rem + 1vw, 2rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.h2{
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.p-muted{
+  font-size: .95rem;
+  color: var(--muted);
+}
+
+/* Cards */
+.card{
+  border: 1px solid var(--stroke);
+  background: var(--card);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow);
+  padding: 1.25rem;
+}
+
+.card-soft{
+  border: 1px solid rgba(15, 15, 25, .08);
+  background: var(--card2);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow2);
+  padding: 1rem;
+}
+
+/* Labels & Inputs arredondados */
+.label{
+  font-size: .9rem;
+  font-weight: 700;
+  color: rgba(16,16,24,.85);
+}
+
+.input{
+  width: 100%;
+  margin-top: .5rem;
+  padding: .85rem .95rem;
+  font-size: .95rem;
+  border-radius: var(--r-xl);
+  border: 1px solid rgba(15, 15, 25, .12);
+  background: #fff;
+  outline: none;
+  box-shadow: 0 8px 18px rgba(10,10,20,.06);
+  transition: box-shadow .15s ease, border-color .15s ease, transform .15s ease;
+}
+
+.input:focus{
+  border-color: rgba(214,31,44,.40);
+  box-shadow: 0 0 0 6px rgba(214,31,44,.12);
+}
+
+/* Botões */
+.btn-primary{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+
+  border-radius: 999px;
+  padding: .9rem 1.1rem;
+
+  font-size: .95rem;
+  font-weight: 800;
+  color: #fff;
+
+  background: linear-gradient(90deg, var(--red), var(--purple));
+  box-shadow: 0 14px 28px rgba(214,31,44,.16), 0 14px 28px rgba(122,30,161,.14);
+
+  transition: transform .15s ease, filter .15s ease, opacity .15s ease;
+}
+
+.btn-primary:hover{ transform: translateY(-1px); filter: brightness(1.02); }
+.btn-primary:disabled{ opacity: .65; transform: none; cursor: not-allowed; }
+
+.btn-ghost{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+
+  border-radius: 999px;
+  padding: .65rem .9rem;
+
+  font-size: .9rem;
+  font-weight: 700;
+  color: rgba(255,255,255,.95);
+
+  background: rgba(255,255,255,.14);
+  border: 1px solid rgba(255,255,255,.25);
+  transition: background .15s ease;
+}
+
+.btn-ghost:hover{ background: rgba(255,255,255,.20); }
+
+/* Pílula */
+.pill{
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+
+  border-radius: 999px;
+  padding: .38rem .65rem;
+
+  font-size: .78rem;
+  font-weight: 700;
+
+  background: rgba(214,31,44,.08);
+  border: 1px solid rgba(214,31,44,.14);
+  color: rgba(214,31,44,.95);
+}
