@@ -59,7 +59,7 @@ export async function POST(req: Request) {
       }
     }
 
-    const assunto = `Solicitação de baixa de empresa - ${nomeExpresso}`;
+    const assunto = `Solicitação de baixa de check-in - ${nomeExpresso}`;
     const dataHora = new Date().toLocaleString("pt-BR");
 
     const temSolicitante =
@@ -142,7 +142,7 @@ export async function POST(req: Request) {
                   <div style="width:14px;height:14px;border-radius:999px;background:linear-gradient(135deg,#ff2a2a,#7c3aed);box-shadow:0 0 0 6px rgba(124,58,237,.12);"></div>
                   <div>
                     <div style="font-weight:900;letter-spacing:.2px;color:#ffffff;font-size:18px;line-height:1.1;">
-                      TreinoExpresso • TriploX Contas
+                      Sistema • Triplo-X
                     </div>
                     <div style="color:rgba(255,255,255,.65);font-size:12px;margin-top:2px;">
                       Solicitação automática • ${escapeHtml(dataHora)}
@@ -157,7 +157,7 @@ export async function POST(req: Request) {
                 <div style="background:#111026;border-radius:17px;padding:18px 18px 16px 18px;">
                   <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;">
                     <div style="color:#ffffff;font-size:18px;font-weight:900;">
-                      Solicitação de baixa de empresa
+                      Solicitação de baixa de Check-in
                     </div>
                     <div style="display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.06);color:rgba(255,255,255,.85);font-size:12px;">
                       <span style="width:8px;height:8px;border-radius:999px;background:#22c55e;display:inline-block;"></span>
@@ -201,7 +201,7 @@ export async function POST(req: Request) {
                   ${solicitanteHtml}
 
                   <div style="margin-top:14px;color:rgba(255,255,255,.50);font-size:11px;line-height:1.4;">
-                    Este e-mail foi gerado automaticamente pelo sistema TriploX Contas.
+                    Este e-mail foi gerado automaticamente pelo sistema Triplo-X.
                   </div>
                 </div>
               </td>
