@@ -3,25 +3,24 @@ import { Resend } from "resend";
 
 export const runtime = "nodejs";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 function bad(message: string, status = 400) {
   return NextResponse.json({ ok: false, message }, { status });
 }
 
 export async function POST(req: Request) {
   try {
-    // ✅ ENV obrigatórias
     const apiKey = process.env.RESEND_API_KEY;
     const fromEmail = process.env.FROM_EMAIL; // ex: no-reply@treinoexpresso.com.br
     const toEmail = process.env.MAIL_TO; // ex: marcelo@treinexpresso.com.br
 
+    // ✅ Só valida dentro do request (não quebra build)
     if (!apiKey) return bad("RESEND_API_KEY não configurada.", 500);
     if (!fromEmail) return bad("FROM_EMAIL não configurada.", 500);
     if (!toEmail) return bad("MAIL_TO não configurada.", 500);
 
-    const body = await req.json();
+    const resend = new Resend(apiKey);
 
+    const body = await req.json();
     const {
       nomeExpresso,
       chave,
@@ -33,7 +32,6 @@ export async function POST(req: Request) {
       solicitanteNome,
     } = body || {};
 
-    // ✅ Validação
     const obrigatorios = [
       ["Nome do Expresso", nomeExpresso],
       ["Chave", chave],
@@ -51,7 +49,6 @@ export async function POST(req: Request) {
 
     const assunto = `Solicitação de baixa de empresa - ${nomeExpresso}`;
 
-    // ✅ Texto (plain text) – mais confiável e simples
     const texto =
       `Solicitação de baixa de empresa\n\n` +
       `Nome do Expresso: ${nomeExpresso}\n` +
@@ -64,7 +61,6 @@ export async function POST(req: Request) {
       `Solicitante (email/login): ${solicitanteEmail || "—"}\n` +
       `Data/Hora: ${new Date().toLocaleString("pt-BR")}\n`;
 
-    // ✅ Envio
     const { data, error } = await resend.emails.send({
       from: `TreinoExpresso <${fromEmail}>`,
       to: toEmail,
