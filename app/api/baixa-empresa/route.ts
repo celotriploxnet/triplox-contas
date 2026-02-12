@@ -11,9 +11,14 @@ function bad(message: string, status = 400) {
 
 export async function POST(req: Request) {
   try {
-    if (!process.env.RESEND_API_KEY) {
-      return bad("RESEND_API_KEY não configurada nas variáveis de ambiente.", 500);
-    }
+    // ✅ ENV obrigatórias
+    const apiKey = process.env.RESEND_API_KEY;
+    const fromEmail = process.env.FROM_EMAIL; // ex: no-reply@treinoexpresso.com.br
+    const toEmail = process.env.MAIL_TO; // ex: marcelo@treinexpresso.com.br
+
+    if (!apiKey) return bad("RESEND_API_KEY não configurada.", 500);
+    if (!fromEmail) return bad("FROM_EMAIL não configurada.", 500);
+    if (!toEmail) return bad("MAIL_TO não configurada.", 500);
 
     const body = await req.json();
 
@@ -28,7 +33,7 @@ export async function POST(req: Request) {
       solicitanteNome,
     } = body || {};
 
-    // ✅ Validação básica
+    // ✅ Validação
     const obrigatorios = [
       ["Nome do Expresso", nomeExpresso],
       ["Chave", chave],
@@ -46,6 +51,7 @@ export async function POST(req: Request) {
 
     const assunto = `Solicitação de baixa de empresa - ${nomeExpresso}`;
 
+    // ✅ Texto (plain text) – mais confiável e simples
     const texto =
       `Solicitação de baixa de empresa\n\n` +
       `Nome do Expresso: ${nomeExpresso}\n` +
@@ -58,15 +64,10 @@ export async function POST(req: Request) {
       `Solicitante (email/login): ${solicitanteEmail || "—"}\n` +
       `Data/Hora: ${new Date().toLocaleString("pt-BR")}\n`;
 
-    // ⚠️ IMPORTANTE:
-    // Antes de validar domínio no Resend, você só pode enviar "from" usando domínio do Resend.
-    // E o resend.dev tem restrições de destinatário em alguns casos.  [oai_citation:1‡resend.com](https://resend.com/docs/knowledge-base/403-error-resend-dev-domain?utm_source=chatgpt.com)
-    // Se der 403 por isso, me diga que eu te guio pra validar um domínio (rapidinho).
-    const from = "TreinoExpresso <onboarding@resend.dev>";
-
+    // ✅ Envio
     const { data, error } = await resend.emails.send({
-      from,
-      to: "marcelo@treinexpresso.com.br",
+      from: `TreinoExpresso <${fromEmail}>`,
+      to: toEmail,
       subject: assunto,
       text: texto,
       replyTo: solicitanteEmail || undefined,
