@@ -31,7 +31,7 @@ export async function POST(req: Request) {
       solicitanteNome,
     } = body || {};
 
-    // Validação
+    // 🔒 Validação obrigatória
     const obrigatorios = [
       ["Nome do Expresso", nomeExpresso],
       ["Chave", chave],
@@ -47,19 +47,30 @@ export async function POST(req: Request) {
       }
     }
 
-    const dataHora = new Date().toLocaleString("pt-BR");
+    // 🕒 DATA/HORA FIXA NA BAHIA
+    const dataHora = new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Bahia",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).format(new Date());
 
+    // ✉️ EMAIL TEXTO PURO
     let texto =
-      `SOLICITAÇÃO DE BAIXA DE CHECKIN\n\n` +
+      `SOLICITAÇÃO DE BAIXA CHECK-IN\n\n` +
       `Nome do Expresso: ${nomeExpresso}\n` +
       `Chave: ${chave}\n` +
       `Agência: ${agencia}\n` +
-      `PACB: ${pacb}\n` +
+      `PACB: ${pacb}\n\n` +
       `Motivo do pedido de baixa:\n${motivo}\n\n` +
       `E-mail do gerente da agência: ${emailGerente}\n\n` +
-      `Data/Hora: ${dataHora}\n`;
+      `Data/Hora (Bahia): ${dataHora}\n`;
 
-    // Só inclui solicitante se existir
+    // ➕ Inclui solicitante somente se existir
     if (solicitanteNome && String(solicitanteNome).trim()) {
       texto += `\nSolicitante: ${solicitanteNome}`;
     }
@@ -72,7 +83,7 @@ export async function POST(req: Request) {
       from: `TreinoExpresso <${fromEmail}>`,
       to: toEmail,
       subject: `Solicitação de baixa de CHECK-IN - ${nomeExpresso}`,
-      text: texto, // 👈 EMAIL SIMPLES
+      text: texto,
       replyTo:
         solicitanteEmail && String(solicitanteEmail).trim()
           ? solicitanteEmail
