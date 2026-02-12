@@ -12,6 +12,8 @@ import {
   where,
   orderBy,
   getDocs,
+  deleteDoc,
+  doc,
 } from "firebase/firestore";
 
 type Prestacao = {
@@ -30,23 +32,134 @@ type Prestacao = {
   createdAt?: any;
 };
 
-function moeda(v?: number) {
-  return (Number(v || 0)).toFixed(2);
+function moeda(n: number) {
+  return (Number(n || 0)).toFixed(2);
 }
 
 export default function Historico() {
   const router = useRouter();
 
+  const [carregando, setCarregando] = useState(true);
   const [prestacoes, setPrestacoes] = useState<Prestacao[]>([]);
   const [selecionada, setSelecionada] = useState<Prestacao | null>(null);
-  const [carregando, setCarregando] = useState(true);
 
   const [comprovantes, setComprovantes] = useState<string[]>([]);
   const [carregandoComprovantes, setCarregandoComprovantes] = useState(false);
 
+  const [apagando, setApagando] = useState(false);
+
   async function sair() {
     await signOut(auth);
     router.push("/login");
+  }
+
+  async function carregarHistorico(userId: string) {
+    setCarregando(true);
+    try {
+      const q = query(
+        collection(db, "prestacoes"),
+        where("userId", "==", userId),
+        orderBy("createdAt", "desc")
+      );
+
+      const snap = await getDocs(q);
+
+      const lista: Prestacao[] = snap.docs.map((d) => {
+        const data = d.data() as any;
+
+        const gasolina = Number(data.gasolina || 0);
+        const alimentacao = Number(data.alimentacao || 0);
+        const hospedagem = Number(data.hospedagem || 0);
+
+        const totalCalculado = gasolina + alimentacao + hospedagem;
+
+        return {
+          id: d.id,
+          userNome: data.userNome || "—",
+
+          dataViagem: data.dataViagem || "",
+          destino: data.destino || "",
+          kmRodado: Number(data.kmRodado || 0),
+
+          gasolina,
+          alimentacao,
+          hospedagem,
+
+          totalViagem:
+            typeof data.totalViagem === "number" ? data.totalViagem : totalCalculado,
+
+          createdAt: data.createdAt,
+        };
+      });
+
+      setPrestacoes(lista);
+      setSelecionada(lista[0] || null);
+    } catch (e: any) {
+      console.error("ERRO HISTÓRICO:", e);
+      alert(e?.message || "Erro ao carregar histórico");
+    } finally {
+      setCarregando(false);
+    }
+  }
+
+  async function carregarComprovantes(prestacaoId: string) {
+    setCarregandoComprovantes(true);
+    setComprovantes([]);
+
+    try {
+      const urls: string[] = [];
+
+      const compSnap = await getDocs(
+        collection(db, "prestacoes", prestacaoId, "comprovantes")
+      );
+
+      compSnap.forEach((docu) => {
+        const data = docu.data() as any;
+        if (Array.isArray(data.urls)) urls.push(...data.urls);
+      });
+
+      setComprovantes(Array.from(new Set(urls)));
+    } catch (e: any) {
+      console.error("ERRO COMPROVANTES:", e);
+      alert(e?.message || "Erro ao carregar comprovantes");
+    } finally {
+      setCarregandoComprovantes(false);
+    }
+  }
+
+  async function excluirPrestacao() {
+    if (!selecionada) return;
+    if (!auth.currentUser) return;
+
+    const ok = confirm(
+      `Deseja excluir esta prestação?\n\nDestino: ${selecionada.destino}\nData: ${selecionada.dataViagem}\n\nEssa ação não pode ser desfeita.`
+    );
+    if (!ok) return;
+
+    try {
+      setApagando(true);
+
+      // 1) apaga subcoleção comprovantes
+      const compSnap = await getDocs(
+        collection(db, "prestacoes", selecionada.id, "comprovantes")
+      );
+      for (const c of compSnap.docs) {
+        await deleteDoc(doc(db, "prestacoes", selecionada.id, "comprovantes", c.id));
+      }
+
+      // 2) apaga doc principal
+      await deleteDoc(doc(db, "prestacoes", selecionada.id));
+
+      alert("Prestação excluída com sucesso!");
+
+      // 3) recarrega lista
+      await carregarHistorico(auth.currentUser.uid);
+    } catch (e: any) {
+      console.error("ERRO EXCLUIR:", e);
+      alert(e?.message || "Erro ao excluir a prestação");
+    } finally {
+      setApagando(false);
+    }
   }
 
   useEffect(() => {
@@ -55,102 +168,22 @@ export default function Historico() {
         router.push("/login");
         return;
       }
-
-      try {
-        setCarregando(true);
-
-        const q = query(
-          collection(db, "prestacoes"),
-          where("userId", "==", user.uid),
-          orderBy("createdAt", "desc")
-        );
-
-        const snap = await getDocs(q);
-
-        const lista: Prestacao[] = snap.docs.map((d) => {
-          const data = d.data() as any;
-
-          const gasolina = Number(data.gasolina || 0);
-          const alimentacao = Number(data.alimentacao || 0);
-          const hospedagem = Number(data.hospedagem || 0);
-
-          return {
-            id: d.id,
-            userNome: data.userNome || "—",
-
-            dataViagem: data.dataViagem || "",
-            destino: data.destino || "",
-            kmRodado: Number(data.kmRodado || 0),
-
-            gasolina,
-            alimentacao,
-            hospedagem,
-            totalViagem:
-              typeof data.totalViagem === "number"
-                ? data.totalViagem
-                : gasolina + alimentacao + hospedagem,
-
-            createdAt: data.createdAt,
-          };
-        });
-
-        setPrestacoes(lista);
-        if (lista.length > 0) setSelecionada(lista[0]);
-      } catch (err: any) {
-        console.error("ERRO HISTÓRICO:", err);
-        alert(err?.message || "Erro ao carregar histórico");
-      } finally {
-        setCarregando(false);
-      }
+      await carregarHistorico(user.uid);
     });
 
     return () => unsub();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
-  async function carregarComprovantes(p: Prestacao) {
-    setCarregandoComprovantes(true);
-    setComprovantes([]);
-
-    try {
-      const urls: string[] = [];
-
-      const snap = await getDocs(
-        collection(db, "prestacoes", p.id, "comprovantes")
-      );
-
-      snap.forEach((doc) => {
-        const data = doc.data() as any;
-        if (Array.isArray(data.urls)) {
-          urls.push(...data.urls);
-        }
-      });
-
-      setComprovantes(Array.from(new Set(urls)));
-    } catch (err) {
-      console.error("ERRO COMPROVANTES:", err);
-    } finally {
-      setCarregandoComprovantes(false);
-    }
-  }
-
   useEffect(() => {
-    if (selecionada) carregarComprovantes(selecionada);
+    if (selecionada) carregarComprovantes(selecionada.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selecionada?.id]);
 
-  const resumo = useMemo(() => {
-    if (!selecionada) return null;
-    return {
-      gasolina: selecionada.gasolina || 0,
-      alimentacao: selecionada.alimentacao || 0,
-      hospedagem: selecionada.hospedagem || 0,
-      total: selecionada.totalViagem || 0,
-    };
-  }, [selecionada]);
+  const total = useMemo(() => Number(selecionada?.totalViagem || 0), [selecionada]);
 
   return (
     <main className="app-shell">
-      {/* TOPO */}
       <header className="topbar">
         <div className="topbar-inner">
           <div className="brand">
@@ -179,17 +212,15 @@ export default function Historico() {
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <span className="pill">Histórico</span>
-            <h1 className="h1 mt-3">Prestações enviadas</h1>
+            <h1 className="h1 mt-3">Minhas prestações</h1>
             <p className="p-muted mt-2">
-              Toque em uma prestação para ver detalhes e comprovantes.
+              Selecione uma prestação para ver detalhes e comprovantes.
             </p>
           </div>
 
           <div className="card-soft w-full sm:w-[280px]">
             <p className="text-xs text-zinc-600">Total de prestações</p>
-            <p className="mt-1 text-3xl font-extrabold">
-              {prestacoes.length}
-            </p>
+            <p className="mt-1 text-3xl font-extrabold">{prestacoes.length}</p>
           </div>
         </div>
 
@@ -227,9 +258,7 @@ export default function Historico() {
 
                         <div className="text-right">
                           <p className="text-xs text-zinc-500">Total</p>
-                          <p className="font-extrabold">
-                            R$ {moeda(p.totalViagem)}
-                          </p>
+                          <p className="font-extrabold">R$ {moeda(p.totalViagem || 0)}</p>
                         </div>
                       </div>
 
@@ -245,18 +274,37 @@ export default function Historico() {
 
             {/* DETALHES */}
             <section className="card">
-              <h2 className="h2 mb-4">🔎 Detalhes</h2>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h2 className="h2">🔎 Detalhes</h2>
+                  <p className="p-muted mt-1">
+                    Informações da prestação selecionada.
+                  </p>
+                </div>
+
+                {/* ✅ Botão Excluir */}
+                <button
+                  onClick={excluirPrestacao}
+                  disabled={!selecionada || apagando}
+                  className="btn-primary"
+                  style={{
+                    background: "linear-gradient(90deg, #b3122a, #7a1ea1)",
+                  }}
+                >
+                  {apagando ? "Excluindo..." : "Excluir prestação 🗑️"}
+                </button>
+              </div>
 
               {!selecionada ? (
-                <p className="p-muted">Selecione uma prestação.</p>
+                <div className="card-soft mt-4">
+                  <p className="p-muted">Selecione uma prestação na lista.</p>
+                </div>
               ) : (
                 <>
-                  <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="mt-5 grid gap-4 sm:grid-cols-2">
                     <div className="card-soft">
                       <p className="text-xs text-zinc-500">Destino</p>
-                      <p className="font-extrabold mt-1">
-                        {selecionada.destino}
-                      </p>
+                      <p className="font-extrabold mt-1">{selecionada.destino}</p>
 
                       <p className="text-xs text-zinc-500 mt-4">Data</p>
                       <p className="mt-1">{selecionada.dataViagem}</p>
@@ -271,6 +319,11 @@ export default function Historico() {
                         {selecionada.kmRodado}
                         <span className="ml-1 text-sm text-zinc-500">km</span>
                       </p>
+
+                      <p className="text-xs text-zinc-500 mt-4">Total</p>
+                      <p className="text-2xl font-extrabold mt-1">
+                        R$ {moeda(total)}
+                      </p>
                     </div>
                   </div>
 
@@ -281,30 +334,23 @@ export default function Historico() {
                       <div>
                         <p className="text-xs text-zinc-500">Gasolina</p>
                         <p className="font-extrabold">
-                          R$ {moeda(resumo?.gasolina)}
+                          R$ {moeda(selecionada.gasolina || 0)}
                         </p>
                       </div>
 
                       <div>
                         <p className="text-xs text-zinc-500">Alimentação</p>
                         <p className="font-extrabold">
-                          R$ {moeda(resumo?.alimentacao)}
+                          R$ {moeda(selecionada.alimentacao || 0)}
                         </p>
                       </div>
 
                       <div>
                         <p className="text-xs text-zinc-500">Hospedagem</p>
                         <p className="font-extrabold">
-                          R$ {moeda(resumo?.hospedagem)}
+                          R$ {moeda(selecionada.hospedagem || 0)}
                         </p>
                       </div>
-                    </div>
-
-                    <div className="mt-4 flex justify-between rounded-2xl bg-zinc-50 px-4 py-3">
-                      <p className="font-extrabold">Total</p>
-                      <p className="font-extrabold">
-                        R$ {moeda(resumo?.total)}
-                      </p>
                     </div>
                   </div>
 
@@ -331,13 +377,17 @@ export default function Historico() {
                               className="h-32 w-full object-cover"
                             />
                             <div className="p-2 text-center text-xs text-zinc-600">
-                              Abrir
+                              Abrir / Baixar
                             </div>
                           </a>
                         ))}
                       </div>
                     )}
                   </div>
+
+                  <p className="p-muted mt-4">
+                    
+                  </p>
                 </>
               )}
             </section>
