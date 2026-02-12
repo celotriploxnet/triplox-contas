@@ -110,7 +110,7 @@ export default function LoginPage() {
             </form>
 
             <p className="p-muted mt-6 text-center text-sm">
-              Sistema exclusivo para usuários autorizados.
+             
             </p>
           </div>
         </div>
