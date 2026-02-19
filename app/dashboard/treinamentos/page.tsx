@@ -589,7 +589,6 @@ export default function TreinamentosPage() {
     }
   }
 
-  // ✅ NOVO: Resetar (admin) -> apaga o doc do agendamento
   async function resetAgendamento(chaveLoja: string) {
     if (!isAdmin) return
     const ok = window.confirm(
@@ -697,7 +696,8 @@ export default function TreinamentosPage() {
             {checkingAuth ? 'Verificando login...' : loadingRead ? 'Carregando...' : 'Recarregar lista'}
           </button>
 
-          <LightButton onClick={openDownload}>Baixar lista atual</LightButton>
+          {/* ✅ AGORA SÓ ADMIN VÊ */}
+          {isAdmin && <LightButton onClick={openDownload}>Baixar lista atual</LightButton>}
 
           {isAdmin && <span className="pill">Admin</span>}
           {info && <span className="pill">{info}</span>}
