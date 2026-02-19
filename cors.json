@@ -1,0 +1,22 @@
+[
+  {
+    "origin": [
+      "http://localhost:3000",
+      "https://treinoexpresso.com.br",
+      "https://www.treinoexpresso.com.br"
+    ],
+    "method": ["GET", "HEAD", "OPTIONS"],
+    "responseHeader": [
+      "Content-Type",
+      "Content-Disposition",
+      "Content-Length",
+      "Accept-Ranges",
+      "Content-Range",
+      "Range",
+      "ETag",
+      "x-goog-generation",
+      "x-goog-metageneration"
+    ],
+    "maxAgeSeconds": 3600
+  }
+]

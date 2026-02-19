@@ -1,47 +1,93 @@
+'use client'
+
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { signOut } from 'firebase/auth'
+
+import { auth } from '@/lib/firebase'
+import '../globals.css'
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const router = useRouter()
+
+  async function handleLogout() {
+    try {
+      await signOut(auth)
+      router.push('/login')
+    } catch (e) {
+      console.error('Erro ao sair:', e)
+      alert('Não foi possível sair. Tente novamente.')
+    }
+  }
+
   return (
     <div className="app-shell">
-      {/* Topbar usando suas classes do globals.css */}
+      {/* TOPBAR */}
       <header className="topbar">
         <div className="topbar-inner">
-          <Link href="/dashboard" className="brand">
-            <span className="brand-dot" />
+          {/* BRAND */}
+          <div className="brand">
+            <div className="brand-dot" />
             <div>
-              <div className="brand-title">TriploX Contas</div>
-              <div className="brand-sub">Área Restrita</div>
+              <div className="brand-title">TreinoExpresso</div>
+              <div className="brand-sub">Gestão de Treinamentos</div>
             </div>
-          </Link>
+          </div>
 
-          <nav style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
-            <Link href="/dashboard/nova-prestacao" className="btn-ghost">
-              Nova prestação
+          {/* MENU */}
+          <nav
+            style={{
+              display: 'flex',
+              gap: '.5rem',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+            }}
+          >
+            <Link href="/dashboard" className="btn-ghost">
+              Início
             </Link>
-            <Link href="/dashboard/historico" className="btn-ghost">
-              Histórico
-            </Link>
-            <Link href="/dashboard/baixa-empresa" className="btn-ghost">
-              Baixa
-            </Link>
+
             <Link href="/dashboard/treinamentos" className="btn-ghost">
               Treinamentos
             </Link>
-            <Link href="/admin" className="btn-ghost">
-              Admin
+
+            <Link href="/dashboard/agenda" className="btn-ghost">
+              Agenda
             </Link>
-            <Link href="/logout" className="btn-ghost">
+
+            <Link href="/dashboard/nova-prestacao" className="btn-ghost">
+              Nova Prestação
+            </Link>
+
+            <Link href="/dashboard/historico" className="btn-ghost">
+              Histórico
+            </Link>
+
+            <Link href="/dashboard/baixa-empresa" className="btn-ghost">
+              Baixa
+            </Link>
+
+            {/* LOGOUT */}
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="btn-ghost"
+              style={{
+                borderColor: 'rgba(255,255,255,.45)',
+              }}
+              title="Sair do sistema"
+            >
               Sair
-            </Link>
+            </button>
           </nav>
         </div>
       </header>
 
-      {/* Conteúdo */}
+      {/* CONTEÚDO */}
       <main className="app-container">{children}</main>
     </div>
   )
