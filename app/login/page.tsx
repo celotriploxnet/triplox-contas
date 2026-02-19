@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { signInWithEmailAndPassword, onAuthStateChanged } from "firebase/auth";
-import { auth } from "../firebase/config";
+import { auth } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -31,7 +31,7 @@ export default function LoginPage() {
     try {
       await signInWithEmailAndPassword(auth, email, senha);
       router.push("/dashboard");
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
       setErro("Email ou senha inválidos.");
     } finally {
@@ -41,14 +41,16 @@ export default function LoginPage() {
 
   return (
     <main className="app-shell">
-      {/* Topo */}
+      {/* TOPO PADRONIZADO */}
       <header className="topbar">
         <div className="topbar-inner">
           <div className="brand">
             <span className="brand-dot" />
             <div className="leading-tight">
-              <div className="brand-title">TriploX Contas</div>
-              <div className="brand-sub">Área Restrita</div>
+              <div className="brand-title">TRIPLO-X</div>
+              <div className="brand-sub">
+                Sistema desenvolvido por Marcelo Sant&apos;Anna
+              </div>
             </div>
           </div>
 
@@ -58,7 +60,7 @@ export default function LoginPage() {
         </div>
       </header>
 
-      {/* Conteúdo */}
+      {/* CONTEÚDO */}
       <section className="app-container">
         <div className="mx-auto max-w-md">
           <div className="card">
@@ -66,7 +68,7 @@ export default function LoginPage() {
 
             <h1 className="h1 mt-3">Entrar no sistema</h1>
             <p className="p-muted mt-2">
-              Acesse com seu email e senha para continuar.
+              Acesse com seu email corporativo para continuar.
             </p>
 
             <form onSubmit={entrar} className="mt-6 space-y-4">
@@ -75,7 +77,7 @@ export default function LoginPage() {
                 <input
                   type="email"
                   className="input"
-                  placeholder="seuemail@exemplo.com"
+                  placeholder="seunome@treinexpresso.com.br"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -96,7 +98,12 @@ export default function LoginPage() {
 
               {erro && (
                 <div className="card-soft">
-                  <p className="text-sm text-red-600 font-semibold">{erro}</p>
+                  <p
+                    className="p-muted"
+                    style={{ color: "rgba(214,31,44,.95)", fontWeight: 700 }}
+                  >
+                    {erro}
+                  </p>
                 </div>
               )}
 
@@ -108,10 +115,6 @@ export default function LoginPage() {
                 {carregando ? "Entrando..." : "Entrar"}
               </button>
             </form>
-
-            <p className="p-muted mt-6 text-center text-sm">
-             
-            </p>
           </div>
         </div>
       </section>
