@@ -2,6 +2,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { onAuthStateChanged, User } from 'firebase/auth'
 import {
   addDoc,
@@ -13,7 +14,13 @@ import {
   query,
   serverTimestamp,
 } from 'firebase/firestore'
-import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage'
+import {
+  deleteObject,
+  getDownloadURL,
+  listAll,
+  ref,
+  uploadBytes,
+} from 'firebase/storage'
 
 import { auth, db, storage } from '@/lib/firebase'
 
@@ -24,6 +31,7 @@ type ArquivoObrigatorio = {
   fileName: string
   uploadedAt?: any
   uploadedBy?: string
+  readonly?: boolean // ✅ arquivos que já existiam no Storage (sem doc no Firestore)
 }
 
 export default function DashboardPage() {
@@ -34,7 +42,7 @@ export default function DashboardPage() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [userName, setUserName] = useState('Usuário')
 
-  // lista de arquivos (Firestore)
+  // lista de arquivos (Firestore + Storage extra)
   const [items, setItems] = useState<ArquivoObrigatorio[]>([])
   const [loading, setLoading] = useState(false)
   const [info, setInfo] = useState('')
@@ -71,7 +79,8 @@ export default function DashboardPage() {
   }, [])
 
   /* =========================
-     LOAD LIST (Firestore)
+     LOAD LIST (Firestore + Storage extra)
+     (mantém seu comportamento antigo e só adiciona os arquivos antigos do Storage)
      ========================= */
   async function loadObrigatorios() {
     try {
@@ -79,25 +88,28 @@ export default function DashboardPage() {
       setInfo('')
       setLoading(true)
 
+      // 1) Firestore (como sempre)
       const qy = query(collection(db, 'arquivos_obrigatorios'), orderBy('uploadedAt', 'desc'))
       const snap = await getDocs(qy)
 
       const list: ArquivoObrigatorio[] = []
+      const firestorePaths = new Set<string>()
+
       snap.forEach((d) => {
         const data = d.data() as any
+        const storagePath = data.storagePath || ''
         list.push({
           id: d.id,
           titulo: data.titulo || '',
-          storagePath: data.storagePath || '',
+          storagePath,
           fileName: data.fileName || '',
           uploadedAt: data.uploadedAt,
           uploadedBy: data.uploadedBy || '',
         })
+        if (storagePath) firestorePaths.add(storagePath)
       })
 
-      setItems(list)
-
-      // pré-carrega urls (sem estourar rate)
+      // 2) pré-carrega urls do Firestore (mantido)
       const nextUrlMap: Record<string, string> = {}
       for (const it of list) {
         if (!it.storagePath) continue
@@ -107,6 +119,52 @@ export default function DashboardPage() {
           console.error('Erro getDownloadURL:', it.id, e)
         }
       }
+
+      // 3) NOVO: lista arquivos que já existiam no Storage (mas não têm doc no Firestore)
+      try {
+        const folderRef = ref(storage, STORAGE_FOLDER)
+        const listed = await listAll(folderRef)
+
+        const storageOnly: ArquivoObrigatorio[] = []
+        for (const itemRef of listed.items) {
+          if (firestorePaths.has(itemRef.fullPath)) continue
+
+          // título “bonitinho” baseado no nome do arquivo
+          const base = itemRef.name.replace(/\.pdf$/i, '')
+          const pretty = base
+            .replace(/^\d{4}-\d{2}-\d{2}.*?-/, '') // tenta remover prefixos comuns
+            .replace(/[-_]+/g, ' ')
+            .trim()
+
+          const tituloAuto = pretty
+            ? pretty.charAt(0).toUpperCase() + pretty.slice(1)
+            : 'Documento'
+
+          const fakeId = `storage:${itemRef.fullPath}`
+
+          storageOnly.push({
+            id: fakeId,
+            titulo: tituloAuto,
+            storagePath: itemRef.fullPath,
+            fileName: itemRef.name,
+            readonly: true,
+          })
+
+          try {
+            nextUrlMap[fakeId] = await getDownloadURL(itemRef)
+          } catch (e) {
+            console.error('Erro getDownloadURL (storageOnly):', itemRef.fullPath, e)
+          }
+        }
+
+        // junta (Firestore primeiro, depois Storage-only)
+        list.push(...storageOnly)
+      } catch (e) {
+        // se der erro ao listar, não quebra sua lista antiga
+        console.warn('Não consegui listar arquivos antigos do Storage:', e)
+      }
+
+      setItems(list)
       setUrlMap(nextUrlMap)
     } catch (e: any) {
       console.error(e)
@@ -122,7 +180,7 @@ export default function DashboardPage() {
   }, [])
 
   /* =========================
-     ADMIN: UPLOAD PDF
+     ADMIN: UPLOAD PDF (mantido)
      ========================= */
   function validatePdf(file: File) {
     const name = file.name.toLowerCase()
@@ -198,10 +256,15 @@ export default function DashboardPage() {
   }
 
   /* =========================
-     ADMIN: DELETE
+     ADMIN: DELETE (mantido, mas bloqueia apagar os "storageOnly")
      ========================= */
   async function handleDelete(it: ArquivoObrigatorio) {
     if (!user || !isAdmin) return
+    if (it.readonly) {
+      setError('Este arquivo é antigo (só está no Storage). Para removê-lo, envie novamente pelo sistema ou peça ao admin remover manualmente no Storage.')
+      return
+    }
+
     const ok = window.confirm(`Remover este arquivo?\n\n${it.titulo}\n${it.fileName}`)
     if (!ok) return
 
@@ -210,12 +273,10 @@ export default function DashboardPage() {
       setInfo('')
       setDeletingId(it.id)
 
-      // apaga no storage (se existir)
       if (it.storagePath) {
         await deleteObject(ref(storage, it.storagePath))
       }
 
-      // apaga no firestore
       await deleteDoc(doc(db, 'arquivos_obrigatorios', it.id))
 
       setInfo('Arquivo removido ✅')
@@ -251,7 +312,52 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* ARQUIVOS OBRIGATÓRIOS */}
+      {/* ✅ CARDS (FUNCIONÁRIO) */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Link href="/dashboard/treinamentos" className="card-soft">
+          <div className="h2">📚 Treinamentos</div>
+          <p className="p-muted mt-1">Ver empresas, assumir e agendar treinamentos.</p>
+        </Link>
+
+        <Link href="/dashboard/baixa-empresa" className="card-soft">
+          <div className="h2">📤 Solicitar Baixa</div>
+          <p className="p-muted mt-1">Baixa de treinamento ou check-in.</p>
+        </Link>
+
+        <Link href="/dashboard/nova-prestacao" className="card-soft">
+          <div className="h2">💰 Solicitar Reembolso</div>
+          <p className="p-muted mt-1">Enviar nova prestação e anexar comprovantes.</p>
+        </Link>
+
+        <Link href="/dashboard/historico" className="card-soft">
+          <div className="h2">📑 Histórico</div>
+          <p className="p-muted mt-1">Consultar prestações e downloads anteriores.</p>
+        </Link>
+
+        <Link href="/dashboard/agenda" className="card-soft">
+          <div className="h2">🗓️ Agenda</div>
+          <p className="p-muted mt-1">Ver agendamentos.</p>
+        </Link>
+      </div>
+
+      {/* ✅ ADMIN: CSV */}
+      {isAdmin && (
+        <div className="card">
+          <span className="pill">Admin</span>
+          <h2 className="h2" style={{ marginTop: '.65rem' }}>Administração</h2>
+          <p className="p-muted" style={{ marginTop: '.35rem' }}>
+            Atualize a base de lojas para o autopreencher da Baixa.
+          </p>
+
+          <div style={{ marginTop: '1rem' }}>
+            <Link href="/dashboard/importar-lojas" className="btn-primary">
+              📄 Atualizar base de lojas (CSV)
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* ARQUIVOS OBRIGATÓRIOS (SEU BLOCO ANTIGO + STORAGE EXTRA) */}
       <div className="card">
         <div style={{ display: 'flex', gap: '.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
           <span className="pill">Arquivos</span>
@@ -354,25 +460,34 @@ export default function DashboardPage() {
                     {it.fileName}
                   </div>
 
-                  <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
                     <a
                       href={url || '#'}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="btn-primary"
-                      style={{ display: 'inline-flex', pointerEvents: url ? 'auto' : 'none', opacity: url ? 1 : 0.65 }}
+                      style={{
+                        display: 'inline-flex',
+                        pointerEvents: url ? 'auto' : 'none',
+                        opacity: url ? 1 : 0.65,
+                      }}
                       title={url ? 'Baixar PDF' : 'Link indisponível'}
                     >
                       Baixar PDF
                     </a>
 
-                    {isAdmin && (
+                    {it.readonly && <span className="pill">Arquivo antigo</span>}
+
+                    {isAdmin && !it.readonly && (
                       <button
                         type="button"
                         className="btn-ghost"
                         onClick={() => handleDelete(it)}
                         disabled={deletingId === it.id}
-                        style={{ color: 'rgba(16,16,24,.92)', background: 'rgba(255,255,255,.65)' }}
+                        style={{
+                          color: 'rgba(16,16,24,.92)',
+                          background: 'rgba(255,255,255,.65)',
+                        }}
                       >
                         {deletingId === it.id ? 'Removendo...' : 'Remover'}
                       </button>

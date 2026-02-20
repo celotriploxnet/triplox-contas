@@ -7,6 +7,12 @@ function bad(message: string, status = 400) {
   return NextResponse.json({ ok: false, message }, { status });
 }
 
+type AssuntoTipo = "treinamento" | "checkin";
+
+function getAssuntoLabel(assuntoTipo?: AssuntoTipo) {
+  return assuntoTipo === "treinamento" ? "Baixa de Treinamento" : "Baixa de Check-in";
+}
+
 export async function POST(req: Request) {
   try {
     const apiKey = process.env.RESEND_API_KEY;
@@ -20,7 +26,10 @@ export async function POST(req: Request) {
     const resend = new Resend(apiKey);
 
     const body = await req.json();
+
     const {
+      assuntoTipo,
+      assuntoLabel, // opcional (vem do front)
       nomeExpresso,
       chave,
       agencia,
@@ -33,11 +42,12 @@ export async function POST(req: Request) {
 
     // 🔒 Validação obrigatória
     const obrigatorios = [
+      ["Tipo / assunto", assuntoTipo],
       ["Nome do Expresso", nomeExpresso],
       ["Chave", chave],
       ["Agência", agencia],
       ["PACB", pacb],
-      ["Motivo do pedido de baixa", motivo],
+      ["Motivo", motivo],
       ["E-mail do gerente da agência", emailGerente],
     ] as const;
 
@@ -46,6 +56,15 @@ export async function POST(req: Request) {
         return bad(`Campo obrigatório: ${campo}`);
       }
     }
+
+    // valida tipo
+    const tipo = String(assuntoTipo).trim().toLowerCase() as AssuntoTipo;
+    if (tipo !== "treinamento" && tipo !== "checkin") {
+      return bad("Tipo inválido. Use 'treinamento' ou 'checkin'.");
+    }
+
+    const assuntoFinal =
+      (assuntoLabel && String(assuntoLabel).trim()) || getAssuntoLabel(tipo);
 
     // 🕒 DATA/HORA FIXA NA BAHIA
     const dataHora = new Intl.DateTimeFormat("pt-BR", {
@@ -59,30 +78,40 @@ export async function POST(req: Request) {
       hour12: false,
     }).format(new Date());
 
-    // ✉️ EMAIL TEXTO PURO
-    let texto =
-      `SOLICITAÇÃO DE BAIXA CHECK-IN\n\n` +
-      `Nome do Expresso: ${nomeExpresso}\n` +
-      `Chave: ${chave}\n` +
-      `Agência: ${agencia}\n` +
-      `PACB: ${pacb}\n\n` +
-      `Motivo do pedido de baixa:\n${motivo}\n\n` +
-      `E-mail do gerente da agência: ${emailGerente}\n\n` +
-      `Data/Hora (Bahia): ${dataHora}\n`;
+    // ✉️ EMAIL TEXTO PURO (mais organizado)
+    const linhas: string[] = [];
 
-    // ➕ Inclui solicitante somente se existir
+    linhas.push(`SOLICITAÇÃO — ${assuntoFinal.toUpperCase()}`);
+    linhas.push("");
+    linhas.push("📌 Dados da empresa");
+    linhas.push(`• Nome do Expresso: ${nomeExpresso}`);
+    linhas.push(`• Chave: ${chave}`);
+    linhas.push(`• Agência: ${agencia}`);
+    linhas.push(`• PACB: ${pacb}`);
+    linhas.push("");
+    linhas.push("📝 Motivo");
+    linhas.push(String(motivo));
+    linhas.push("");
+    linhas.push(`📩 E-mail do gerente da agência: ${emailGerente}`);
+    linhas.push("");
+    linhas.push(`🕒 Data/Hora (Bahia): ${dataHora}`);
+
+    // ➕ Solicitante (se houver)
     if (solicitanteNome && String(solicitanteNome).trim()) {
-      texto += `\nSolicitante: ${solicitanteNome}`;
+      linhas.push("");
+      linhas.push(`👤 Solicitante: ${solicitanteNome}`);
+    }
+    if (solicitanteEmail && String(solicitanteEmail).trim()) {
+      if (!linhas.includes("")) linhas.push("");
+      linhas.push(`✉️ E-mail do solicitante: ${solicitanteEmail}`);
     }
 
-    if (solicitanteEmail && String(solicitanteEmail).trim()) {
-      texto += `\nE-mail do solicitante: ${solicitanteEmail}`;
-    }
+    const texto = linhas.join("\n");
 
     await resend.emails.send({
       from: `TreinoExpresso <${fromEmail}>`,
       to: toEmail,
-      subject: `Solicitação de baixa de CHECK-IN - ${nomeExpresso}`,
+      subject: `${assuntoFinal} - ${nomeExpresso}`,
       text: texto,
       replyTo:
         solicitanteEmail && String(solicitanteEmail).trim()
