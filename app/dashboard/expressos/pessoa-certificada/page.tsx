@@ -67,8 +67,10 @@ function parseDateToPtBR(v: any) {
   const raw = toStr(v)
   if (!raw) return ''
 
+  // já vem pt-BR?
   if (/^\d{2}\/\d{2}\/\d{4}/.test(raw)) return raw
 
+  // excel serial date
   const n = Number(raw)
   if (Number.isFinite(n) && n > 20000 && n < 90000) {
     const d = XLSX.SSF.parse_date_code(n)
@@ -78,6 +80,7 @@ function parseDateToPtBR(v: any) {
     }
   }
 
+  // tenta Date
   const dt = new Date(raw)
   if (!Number.isNaN(dt.getTime())) {
     return new Intl.DateTimeFormat('pt-BR', {
@@ -188,7 +191,7 @@ export default function PessoaCertificadaPage() {
   const router = useRouter()
 
   const ADMIN_EMAIL = 'marcelo@treinexpresso.com.br'
-  const CSV_PATH = 'pessoa-certificada/certificados.csv' // ✅ Storage path fixo
+  const CSV_PATH = 'pessoa-certificada/certificados.csv' // ✅ caminho fixo no Storage
 
   const [user, setUser] = useState<User | null>(null)
   const [checkingAuth, setCheckingAuth] = useState(true)
@@ -221,7 +224,7 @@ export default function PessoaCertificadaPage() {
 
       const text = new TextDecoder('utf-8').decode(u8)
 
-      // XLSX lê CSV bem (com separador padrão). Se vier ;, ele também costuma reconhecer.
+      // XLSX lê CSV bem
       const wb = XLSX.read(text, { type: 'string' })
       const ws = wb.Sheets[wb.SheetNames[0]]
       const raw: Record<string, any>[] = XLSX.utils.sheet_to_json(ws, { defval: '' })
@@ -355,7 +358,15 @@ export default function PessoaCertificadaPage() {
   const filtered = useMemo(() => {
     if (!hasSearch) return []
     return rows.filter((r) =>
-      [r.cnpj, r.nomeCandidato, r.chaveLoja, r.cpfCandidato, r.correspondente, r.statusProva, r.dataRealizacao]
+      [
+        r.cnpj,
+        r.nomeCandidato,
+        r.chaveLoja,
+        r.cpfCandidato,
+        r.correspondente,
+        r.statusProva,
+        r.dataRealizacao,
+      ]
         .join(' ')
         .toLowerCase()
         .includes(term)
@@ -381,12 +392,14 @@ export default function PessoaCertificadaPage() {
             {checkingAuth ? 'Verificando login...' : loading ? 'Carregando...' : 'Recarregar CSV'}
           </button>
 
-          <LightButton onClick={openDownloadCsv} title="Baixar o CSV atual">
-            Baixar CSV
-          </LightButton>
+          {/* ✅ Baixar CSV só para ADMIN */}
+          {isAdmin && (
+            <LightButton onClick={openDownloadCsv} title="Baixar o CSV atual">
+              Baixar CSV
+            </LightButton>
+          )}
 
           {isAdmin && <span className="pill">Admin</span>}
-
           {info && <span className="pill">{info}</span>}
         </div>
 
@@ -441,7 +454,9 @@ export default function PessoaCertificadaPage() {
         <>
           <div className="card" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
             <span className="pill">Encontrados: {filtered.length}</span>
-            <span className="p-muted">Mostrando resultados para: <b>{q}</b></span>
+            <span className="p-muted">
+              Mostrando resultados para: <b>{q}</b>
+            </span>
           </div>
 
           {filtered.length > 0 ? (
@@ -542,9 +557,7 @@ export default function PessoaCertificadaPage() {
 
       {!hasSearch && (
         <div className="card-soft">
-          <p className="p-muted">
-            Digite algo na busca para exibir os resultados.
-          </p>
+          <p className="p-muted">Digite algo na busca para exibir os resultados.</p>
         </div>
       )}
 
