@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { onAuthStateChanged } from 'firebase/auth'
 import { getBytes, ref } from 'firebase/storage'
 import * as XLSX from 'xlsx'
@@ -52,8 +53,10 @@ function statusBucket(statusRaw: string): 'transacional' | 'treinado' | 'outro' 
    PAGE
    ========================= */
 export default function ContabilPage() {
+  const router = useRouter()
   const CSV_PATH = 'base-lojas/banco.csv'
 
+  const [checkingAuth, setCheckingAuth] = useState(true)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -135,19 +138,34 @@ export default function ContabilPage() {
       setExpressos(list)
     } catch (e: any) {
       console.error(e)
-      setError(`Erro ao carregar base. (${e?.code || 'sem-code'})`)
+      setError(
+        `Falha ao carregar a base CSV. (${e?.code || 'sem-code'}) — ${
+          e?.message || 'erro'
+        }`
+      )
     } finally {
       setLoading(false)
     }
   }
 
+  /* =========================
+     AUTH (redirige se não logado)
+     ========================= */
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
-      if (u) loadBase()
+      setCheckingAuth(false)
+
+      if (!u) {
+        router.push('/login')
+        return
+      }
+
+      loadBase()
     })
+
     return () => unsub()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [router])
 
   const agencias = useMemo(() => {
     const set = new Set<string>()
@@ -175,7 +193,6 @@ export default function ContabilPage() {
     })
   }, [expressos, fAgencia, fStatus, q])
 
-  // ✅ resumo (com filtros aplicados)
   const totalFiltrado = filtered.length
 
   return (
@@ -200,10 +217,10 @@ export default function ContabilPage() {
             type="button"
             className="btn-primary"
             onClick={loadBase}
-            disabled={loading}
+            disabled={loading || checkingAuth}
             style={{ marginLeft: 'auto' }}
           >
-            {loading ? 'Atualizando...' : 'Atualizar'}
+            {checkingAuth ? 'Verificando login...' : loading ? 'Atualizando...' : 'Atualizar'}
           </button>
         </div>
 
@@ -267,7 +284,7 @@ export default function ContabilPage() {
       {/* LISTA */}
       {loading && <p className="p-muted">Carregando…</p>}
 
-      {!loading && filtered.length === 0 && (
+      {!loading && !checkingAuth && filtered.length === 0 && (
         <p className="p-muted">Nenhum resultado com os filtros atuais.</p>
       )}
 
