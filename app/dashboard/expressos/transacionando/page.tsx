@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { onAuthStateChanged } from 'firebase/auth'
 import { getBytes, ref } from 'firebase/storage'
 import * as XLSX from 'xlsx'
@@ -52,11 +51,9 @@ function statusBucket(statusRaw: string): 'transacional' | 'treinado' | 'outro' 
 /* =========================
    PAGE
    ========================= */
-export default function ContabilPage() {
-  const router = useRouter()
+export default function TransacionandoPage() {
   const CSV_PATH = 'base-lojas/banco.csv'
 
-  const [checkingAuth, setCheckingAuth] = useState(true)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -138,34 +135,19 @@ export default function ContabilPage() {
       setExpressos(list)
     } catch (e: any) {
       console.error(e)
-      setError(
-        `Falha ao carregar a base CSV. (${e?.code || 'sem-code'}) — ${
-          e?.message || 'erro'
-        }`
-      )
+      setError(`Erro ao carregar base. (${e?.code || 'sem-code'})`)
     } finally {
       setLoading(false)
     }
   }
 
-  /* =========================
-     AUTH (redirige se não logado)
-     ========================= */
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
-      setCheckingAuth(false)
-
-      if (!u) {
-        router.push('/login')
-        return
-      }
-
-      loadBase()
+      if (u) loadBase()
     })
-
     return () => unsub()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router])
+  }, [])
 
   const agencias = useMemo(() => {
     const set = new Set<string>()
@@ -203,7 +185,7 @@ export default function ContabilPage() {
           Expressos Somente Transacionando
         </h1>
         <p className="p-muted" style={{ marginTop: '.35rem' }}>
-          Expressos Transacionando e que Não fazem nenhum Produtos.
+          Expressos Transacionando e que não fazem nenhum produto.
         </p>
       </div>
 
@@ -217,10 +199,10 @@ export default function ContabilPage() {
             type="button"
             className="btn-primary"
             onClick={loadBase}
-            disabled={loading || checkingAuth}
+            disabled={loading}
             style={{ marginLeft: 'auto' }}
           >
-            {checkingAuth ? 'Verificando login...' : loading ? 'Atualizando...' : 'Atualizar'}
+            {loading ? 'Atualizando...' : 'Atualizar'}
           </button>
         </div>
 
@@ -243,7 +225,13 @@ export default function ContabilPage() {
       {/* ✅ FILTROS */}
       <div className="card">
         <div style={{ display: 'grid', gap: '.75rem' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '.75rem' }}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              gap: '.75rem',
+            }}
+          >
             <div>
               <div className="label">Buscar (Nome do Expresso ou Chave Loja)</div>
               <input
@@ -284,9 +272,7 @@ export default function ContabilPage() {
       {/* LISTA */}
       {loading && <p className="p-muted">Carregando…</p>}
 
-      {!loading && !checkingAuth && filtered.length === 0 && (
-        <p className="p-muted">Nenhum resultado com os filtros atuais.</p>
-      )}
+      {!loading && filtered.length === 0 && <p className="p-muted">Nenhum resultado com os filtros atuais.</p>}
 
       <div
         style={{

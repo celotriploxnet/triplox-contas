@@ -11,15 +11,16 @@ export default function ExpressosMenuPage() {
       enabled: true,
       pill: 'Geral',
     },
+
+    // ✅ NOVO: rota nova (substitui o antigo /contabil)
     {
       title: '💳 Expressos Somente Transacionando',
       desc: 'Transacionam (TRX > 0) e não realizam produtos (demais indicadores 0).',
-      href: '/dashboard/expressos/contabil',
+      href: '/dashboard/expressos/transacionando',
       enabled: true,
-      pill: 'Contábil',
+      pill: 'Transações',
     },
 
-    // ✅ BLOCO: CONSULTAR PESSOA CERTIFICADA
     {
       title: '👤 Consultar Pessoa Certificada',
       desc: 'Consulta por colaborador que realizou a certificação dos expressos.',
@@ -28,16 +29,20 @@ export default function ExpressosMenuPage() {
       pill: 'Certificação',
     },
 
-    // ❌ REMOVIDOS POR ENQUANTO:
-    // 🪪 Expressos sem Certificação
-    // ⏳ Expressos com Certificação a vencer
-
     {
       title: '🚨 Expressos com Certificação Vencida',
       desc: 'TRX ≠ 0 + Treinado + certificação vencida (5+ anos) ou próxima do vencimento.',
       href: '/dashboard/expressos/certificacao-vencida',
       enabled: true,
       pill: 'Certificação',
+    },
+
+    {
+      title: '📘 Expressos Treinados e Zerados',
+      desc: 'Painel em criação. Vamos liberar em breve.',
+      href: '/dashboard/expressos/treinados-zerados',
+      enabled: true,
+      pill: 'Em breve',
     },
   ]
 
@@ -64,6 +69,7 @@ export default function ExpressosMenuPage() {
           <div key={c.title} className="card" style={{ display: 'grid', gap: '.6rem' }}>
             <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
               <span className="pill">{c.pill}</span>
+
               {!c.enabled && (
                 <span
                   className="pill"
