@@ -14,6 +14,9 @@ import { auth, storage } from '@/lib/firebase'
 const ADMIN_EMAIL = 'marcelo@treinexpresso.com.br'
 const CSV_PATH = 'base-lojas/banco.csv'
 
+// ✅ para não explodir a tela quando não tem busca (ajuste como quiser)
+const LIMIT_NO_SEARCH = 200
+
 /* =========================
    TYPES
    ========================= */
@@ -24,9 +27,25 @@ type RowBase = {
   agencia: string
   pacb: string
   statusAnalise: string
-  bloqueadoRaw: string
   dtCertificacao: string
   trx: number
+
+  qtdContas: number
+  qtdContasComDeposito: number
+  qtdCestaServ: number
+  qtdMobilidade: number
+  qtdCartaoEmitido: number
+  qtdChesContratado: number
+  qtdLimeAbConta: number
+  qtdLime: number
+  qtdConsignado: number
+  qtdCreditoParcelado: number
+  qtdMicrosseguro: number
+  qtdVivaVida: number
+  qtdPlanoOdonto: number
+  qtdSegResidencial: number
+  qtdExpSorte: number
+  referencia: string
 }
 
 type CertFilter = 'Todos' | 'NaoCertificado' | 'Certificado' | 'Vencida'
@@ -80,14 +99,6 @@ function splitAgPacb(v: any) {
   return { agencia: ag, pacb }
 }
 
-function isBloqueadoValue(raw: string) {
-  const s = toStr(raw).toLowerCase()
-  if (!s) return false
-  if (s === '1' || s === 'true' || s === 'sim' || s === 'bloqueado') return true
-  if (s.includes('bloq')) return true
-  return false
-}
-
 function isTreinado(status: string) {
   return toStr(status).toLowerCase().includes('trein')
 }
@@ -96,30 +107,44 @@ function isTransacional(status: string) {
   return toStr(status).toLowerCase().includes('trans')
 }
 
+/**
+ * ✅ Parser de data “seguro”
+ * - dd/mm/aaaa
+ * - yyyy-mm-dd
+ * - serial do Excel
+ */
 function parseDateFlexible(v: any): Date | null {
   const raw = toStr(v)
   if (!raw) return null
 
-  // dd/mm/aaaa
-  const m = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})/)
-  if (m) {
-    const dd = Number(m[1])
-    const mm = Number(m[2])
-    const yy = Number(m[3])
+  const mBR = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})/)
+  if (mBR) {
+    const dd = Number(mBR[1])
+    const mm = Number(mBR[2])
+    const yy = Number(mBR[3])
     const dt = new Date(yy, mm - 1, dd)
     return Number.isNaN(dt.getTime()) ? null : dt
   }
 
-  // excel serial
+  const mISO = raw.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (mISO) {
+    const yy = Number(mISO[1])
+    const mm = Number(mISO[2])
+    const dd = Number(mISO[3])
+    const dt = new Date(yy, mm - 1, dd)
+    return Number.isNaN(dt.getTime()) ? null : dt
+  }
+
   const n = Number(raw)
   if (Number.isFinite(n) && n > 20000 && n < 90000) {
     const d = XLSX.SSF.parse_date_code(n)
-    if (d?.y && d?.m && d?.d) return new Date(d.y, d.m - 1, d.d)
+    if (d?.y && d?.m && d?.d) {
+      const dt = new Date(d.y, d.m - 1, d.d)
+      return Number.isNaN(dt.getTime()) ? null : dt
+    }
   }
 
-  // ISO / Date parse
-  const dt = new Date(raw)
-  return Number.isNaN(dt.getTime()) ? null : dt
+  return null
 }
 
 function isCertVencida(certDate: Date | null) {
@@ -137,6 +162,11 @@ function formatPtBRDate(dt: Date | null) {
     month: '2-digit',
     year: 'numeric',
   }).format(dt)
+}
+
+function formatNum(n: number) {
+  if (!Number.isFinite(n)) return '0'
+  return String(n)
 }
 
 /* =========================
@@ -158,18 +188,101 @@ function Pill({
   )
 }
 
-function bloqueadoPillStyle(bloq: boolean): CSSProperties {
-  return bloq
-    ? {
-        background: 'rgba(214,31,44,.10)',
-        border: '1px solid rgba(214,31,44,.20)',
-        color: 'rgba(214,31,44,.95)',
-      }
-    : {
-        background: 'rgba(34,197,94,.10)',
-        border: '1px solid rgba(34,197,94,.20)',
-        color: 'rgba(21,128,61,.95)',
-      }
+function LightButton({
+  children,
+  onClick,
+  disabled,
+  title,
+}: {
+  children: ReactNode
+  onClick?: () => void
+  disabled?: boolean
+  title?: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      style={{
+        borderRadius: 999,
+        padding: '.52rem .75rem',
+        fontSize: '.85rem',
+        fontWeight: 900,
+        border: '1px solid rgba(15,15,25,.18)',
+        background: 'rgba(255,255,255,.88)',
+        color: 'rgba(16,16,24,.92)',
+        boxShadow: '0 10px 18px rgba(10,10,20,.06)',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.65 : 1,
+      }}
+    >
+      {children}
+    </button>
+  )
+}
+
+function buildWhatsAppMessage(args: {
+  nome: string
+  chave: string
+  municipio: string
+  agencia: string
+  pacb: string
+  status: string
+  trx: number
+  certLabel: string
+  certDatePt: string
+
+  qtdContas: number
+  qtdContasComDeposito: number
+  qtdCestaServ: number
+  qtdMobilidade: number
+  qtdCartaoEmitido: number
+  qtdChesContratado: number
+  qtdLimeAbConta: number
+  qtdLime: number
+  qtdConsignado: number
+  qtdCreditoParcelado: number
+  qtdMicrosseguro: number
+  qtdVivaVida: number
+  qtdPlanoOdonto: number
+  qtdSegResidencial: number
+  qtdExpSorte: number
+  referencia: string
+}) {
+  const a = args
+  return [
+    '📊 *Expresso — Visão Geral*',
+    '',
+    `🏪 *Nome:* ${a.nome || '—'}`,
+    `🔑 *Chave:* ${a.chave || '—'}`,
+    `📍 *Município:* ${a.municipio || '—'}`,
+    `🏦 *Agência/PACB:* ${a.agencia || '—'} / ${a.pacb || '—'}`,
+    '',
+    `✅ *Status:* ${a.status || '—'}`,
+    `💳 *TRX Contábil:* ${String(a.trx ?? 0)}`,
+    `🪪 *Certificação:* ${a.certLabel}`,
+    `📅 *dt_certificacao:* ${a.certDatePt || '—'}`,
+    '',
+    '📌 *Indicadores (base)*',
+    `• Contas sem Depósito: ${formatNum(a.qtdContas)}`,
+    `• Contas com Depósito: ${formatNum(a.qtdContasComDeposito)}`,
+    `• Cestas de Serviços: ${formatNum(a.qtdCestaServ)}`,
+    `• Mobilidade: ${formatNum(a.qtdMobilidade)}`,
+    `• Cartão Emitido: ${formatNum(a.qtdCartaoEmitido)}`,
+    `• Ches Contratado: ${formatNum(a.qtdChesContratado)}`,
+    `• Lime na conta: ${formatNum(a.qtdLimeAbConta)}`,
+    `• Lime Contratado: ${formatNum(a.qtdLime)}`,
+    `• Consignado: ${formatNum(a.qtdConsignado)}`,
+    `• Crédito Parcelado: ${formatNum(a.qtdCreditoParcelado)}`,
+    `• Microsseguros: ${formatNum(a.qtdMicrosseguro)}`,
+    `• Viva Vida: ${formatNum(a.qtdVivaVida)}`,
+    `• Dental: ${formatNum(a.qtdPlanoOdonto)}`,
+    `• Residencial: ${formatNum(a.qtdSegResidencial)}`,
+    `• SORTE EXPRESSA: ${formatNum(a.qtdExpSorte)}`,
+    `• EXPRESSO REFERÊNCIA?: ${a.referencia || '—'}`,
+  ].join('\n')
 }
 
 /* =========================
@@ -188,8 +301,10 @@ export default function ExpressoGeralPage() {
 
   const [rows, setRows] = useState<RowBase[]>([])
 
-  // filtros
+  // ✅ busca agora é opcional
   const [q, setQ] = useState('')
+
+  // filtros independentes
   const [fAgencia, setFAgencia] = useState('Todos')
   const [fCert, setFCert] = useState<CertFilter>('Todos')
   const [fTrx, setFTrx] = useState<TrxFilter>('Todos')
@@ -227,16 +342,58 @@ export default function ExpressoGeralPage() {
         const { agencia, pacb } = splitAgPacb(agpacb)
 
         const statusAnalise = toStr(r['status_analise'] || r['status analise'] || r['status'])
-        const bloqueadoRaw = toStr(r['bloqueado'] || r['bloq'])
-        const dtCertificacao = toStr(
-          r['dt_certificacao'] || r['dt certificacao'] || r['certificacao'] || r['certificação']
-        )
+        const dtCertificacao = toStr(r['dt_certificacao'] || r['dt certificacao'] || r['certificacao'] || r['certificação'])
 
-        const trx = parseNumber(
-          r['qtd_trxcontabil'] || r['qtd_trx_contabil'] || r['qtd trxcontabil'] || r['qtd_trx']
-        )
+        const trx = parseNumber(r['qtd_trxcontabil'] || r['qtd_trx_contabil'] || r['qtd trxcontabil'] || r['qtd_trx'])
 
-        return { chave, nome, municipio, agencia, pacb, statusAnalise, bloqueadoRaw, dtCertificacao, trx }
+        const qtdContas = parseNumber(r['qtd_contas'] || r['qtd contas'])
+        const qtdContasComDeposito = parseNumber(r['qtd_contas_com_deposito'] || r['qtd contas com deposito'])
+        const qtdCestaServ = parseNumber(r['qtd_cesta_serv'] || r['qtd cesta serv'])
+        const qtdMobilidade = parseNumber(r['qtd_mobilidade'] || r['qtd mobilidade'])
+        const qtdCartaoEmitido = parseNumber(r['qtd_cartao_emitido'] || r['qtd cartao emitido'])
+        const qtdChesContratado = parseNumber(r['qtd_chesp_contratado'] || r['qtd chesp contratado'])
+        const qtdLimeAbConta = parseNumber(r['qtd_lime_ab_conta'] || r['qtd lime ab conta'])
+        const qtdLime = parseNumber(r['qtd_lime'] || r['qtd lime'])
+        const qtdConsignado = parseNumber(r['qtd_consignado'] || r['qtd consignado'])
+        const qtdCreditoParcelado = parseNumber(
+          r['qtd_credito_parcel_dtlhes'] ||
+            r['qtd_credito_parcelado_dtlhes'] ||
+            r['qtd_credito_parcel'] ||
+            r['credito parcelado']
+        )
+        const qtdMicrosseguro = parseNumber(r['qtd_microsseguro'] || r['qtd microsseguro'])
+        const qtdVivaVida = parseNumber(r['qtd_micro_vivavida'] || r['qtd micro vivavida'] || r['viva vida'])
+        const qtdPlanoOdonto = parseNumber(r['qtd_plano_odonto'] || r['qtd plano odonto'] || r['odonto'])
+        const qtdSegResidencial = parseNumber(r['qtd_seg_residencial'] || r['qtd seg residencial'])
+        const qtdExpSorte = parseNumber(r['qtd_exp_sorte'] || r['qtd exp sorte'])
+        const referencia = toStr(r['referencia'] || r['referência'] || r['expresso referência?'] || r['expresso referencia?'])
+
+        return {
+          chave,
+          nome,
+          municipio,
+          agencia,
+          pacb,
+          statusAnalise,
+          dtCertificacao,
+          trx,
+          qtdContas,
+          qtdContasComDeposito,
+          qtdCestaServ,
+          qtdMobilidade,
+          qtdCartaoEmitido,
+          qtdChesContratado,
+          qtdLimeAbConta,
+          qtdLime,
+          qtdConsignado,
+          qtdCreditoParcelado,
+          qtdMicrosseguro,
+          qtdVivaVida,
+          qtdPlanoOdonto,
+          qtdSegResidencial,
+          qtdExpSorte,
+          referencia,
+        }
       })
 
       setRows(mapped)
@@ -273,11 +430,9 @@ export default function ExpressoGeralPage() {
       const certDate = parseDateFlexible(r.dtCertificacao)
       const semCert = !certDate
       const vencida = isCertVencida(certDate)
-      const bloq = isBloqueadoValue(r.bloqueadoRaw)
-      return { r, certDate, semCert, vencida, bloq }
+      return { r, certDate, semCert, vencida }
     })
 
-    // contadores do topo (base total)
     const total = list.length
     const transacional = list.filter((x) => isTransacional(x.r.statusAnalise)).length
     const treinado = list.filter((x) => isTreinado(x.r.statusAnalise)).length
@@ -296,7 +451,7 @@ export default function ExpressoGeralPage() {
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase()
 
-    return computed.list.filter(({ r, certDate, semCert, vencida }) => {
+    let list = computed.list.filter(({ r, semCert, vencida }) => {
       if (fAgencia !== 'Todos' && r.agencia !== fAgencia) return false
 
       if (fCert !== 'Todos') {
@@ -312,17 +467,65 @@ export default function ExpressoGeralPage() {
         if (fTrx === '200+' && trx < 200) return false
       }
 
-      if (term) {
-        const hay = [r.nome, r.chave, r.municipio, r.agencia, r.pacb, r.statusAnalise].join(' ').toLowerCase()
-        if (!hay.includes(term)) return false
-      }
-
-      // evita TS warn
-      void certDate
-
       return true
     })
+
+    // ✅ busca é só refinamento
+    if (term) {
+      list = list.filter(({ r }) => {
+        const hay = [r.nome, r.chave, r.municipio, r.agencia, r.pacb, r.statusAnalise].join(' ').toLowerCase()
+        return hay.includes(term)
+      })
+    } else {
+      // ✅ sem busca: limita para não travar / poluir
+      list = list.slice(0, LIMIT_NO_SEARCH)
+    }
+
+    return list
   }, [computed.list, q, fAgencia, fCert, fTrx])
+
+  async function copyWhatsApp(r: RowBase, certDate: Date | null, semCert: boolean, vencida: boolean) {
+    try {
+      const certLabel = semCert ? 'Sem certificação' : vencida ? 'Certificação vencida' : 'Certificado'
+      const certDatePt = formatPtBRDate(certDate)
+
+      const msg = buildWhatsAppMessage({
+        nome: r.nome,
+        chave: r.chave,
+        municipio: r.municipio,
+        agencia: r.agencia,
+        pacb: r.pacb,
+        status: r.statusAnalise,
+        trx: r.trx || 0,
+        certLabel,
+        certDatePt,
+
+        qtdContas: r.qtdContas,
+        qtdContasComDeposito: r.qtdContasComDeposito,
+        qtdCestaServ: r.qtdCestaServ,
+        qtdMobilidade: r.qtdMobilidade,
+        qtdCartaoEmitido: r.qtdCartaoEmitido,
+        qtdChesContratado: r.qtdChesContratado,
+        qtdLimeAbConta: r.qtdLimeAbConta,
+        qtdLime: r.qtdLime,
+        qtdConsignado: r.qtdConsignado,
+        qtdCreditoParcelado: r.qtdCreditoParcelado,
+        qtdMicrosseguro: r.qtdMicrosseguro,
+        qtdVivaVida: r.qtdVivaVida,
+        qtdPlanoOdonto: r.qtdPlanoOdonto,
+        qtdSegResidencial: r.qtdSegResidencial,
+        qtdExpSorte: r.qtdExpSorte,
+        referencia: r.referencia,
+      })
+
+      await navigator.clipboard.writeText(msg)
+      setInfo('Mensagem copiada ✅ (cole no WhatsApp)')
+      setError(null)
+    } catch (e) {
+      console.error(e)
+      setError('Não consegui copiar a mensagem.')
+    }
+  }
 
   return (
     <section style={{ display: 'grid', gap: '1.25rem' }}>
@@ -332,11 +535,10 @@ export default function ExpressoGeralPage() {
           📊 Expresso Geral (visão completa)
         </h1>
         <p className="p-muted" style={{ marginTop: '.35rem' }}>
-          Resumo geral da base, filtros e consulta por expresso.
+          Agora os filtros funcionam sem depender da busca.
         </p>
       </div>
 
-      {/* BLOCO SUPERIOR (SOMAS) */}
       <div className="card" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
         <Pill>Total: {computed.total}</Pill>
         <Pill>Transacional: {computed.transacional}</Pill>
@@ -361,13 +563,11 @@ export default function ExpressoGeralPage() {
       <div className="card" style={{ display: 'grid', gap: '1rem' }}>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <label>
-            <div className="label">Buscar (nome ou chave)</div>
-            <input
-              className="input"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Ex.: Mercado Azul | 12345"
-            />
+            <div className="label">Buscar (opcional)</div>
+            <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Nome ou chave..." />
+            <div className="p-muted" style={{ marginTop: '.35rem', fontSize: 12 }}>
+              Sem busca, mostra até <b>{LIMIT_NO_SEARCH}</b> resultados.
+            </div>
           </label>
 
           <label>
@@ -428,14 +628,8 @@ export default function ExpressoGeralPage() {
       </div>
 
       {filtered.length > 0 ? (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-            gap: '1rem',
-          }}
-        >
-          {filtered.map(({ r, certDate, vencida, semCert, bloq }) => (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1rem' }}>
+          {filtered.map(({ r, certDate, vencida, semCert }) => (
             <div key={`${r.chave}-${r.agencia}-${r.pacb}`} className="card" style={{ display: 'grid', gap: '.75rem' }}>
               <div
                 className="card-soft"
@@ -449,60 +643,36 @@ export default function ExpressoGeralPage() {
                 }}
               >
                 <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                  <Pill style={bloqueadoPillStyle(bloq)}>{bloq ? 'Bloqueado' : 'Não bloqueado'}</Pill>
-
                   {semCert ? (
-                    <Pill
-                      style={{
-                        background: 'rgba(15,15,25,.06)',
-                        border: '1px solid rgba(15,15,25,.10)',
-                        color: 'rgba(16,16,24,.70)',
-                      }}
-                    >
+                    <Pill style={{ background: 'rgba(15,15,25,.06)', border: '1px solid rgba(15,15,25,.10)', color: 'rgba(16,16,24,.70)' }}>
                       Sem certificação
                     </Pill>
                   ) : vencida ? (
-                    <Pill
-                      style={{
-                        background: 'rgba(214,31,44,.10)',
-                        border: '1px solid rgba(214,31,44,.20)',
-                        color: 'rgba(214,31,44,.95)',
-                      }}
-                    >
+                    <Pill style={{ background: 'rgba(214,31,44,.10)', border: '1px solid rgba(214,31,44,.20)', color: 'rgba(214,31,44,.95)' }}>
                       Certificação vencida
                     </Pill>
                   ) : (
-                    <Pill
-                      style={{
-                        background: 'rgba(34,197,94,.10)',
-                        border: '1px solid rgba(34,197,94,.20)',
-                        color: 'rgba(21,128,61,.95)',
-                      }}
-                    >
+                    <Pill style={{ background: 'rgba(34,197,94,.10)', border: '1px solid rgba(34,197,94,.20)', color: 'rgba(21,128,61,.95)' }}>
                       Certificado
                     </Pill>
                   )}
 
                   <Pill>TRX: {String(r.trx || 0)}</Pill>
                 </div>
+
+                <LightButton onClick={() => copyWhatsApp(r, certDate, semCert, vencida)} title="Copiar para WhatsApp">
+                  📤 WhatsApp
+                </LightButton>
               </div>
 
               <div>
                 <div className="p-muted" style={{ fontSize: 12 }}>
                   Nome do Expresso
                 </div>
-                <div style={{ fontWeight: 900, fontSize: '1.08rem', marginTop: '.15rem' }}>
-                  {r.nome || '—'}
-                </div>
+                <div style={{ fontWeight: 900, fontSize: '1.08rem', marginTop: '.15rem' }}>{r.nome || '—'}</div>
               </div>
 
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
-                  gap: '.6rem',
-                }}
-              >
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '.6rem' }}>
                 <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
                   <div className="p-muted" style={{ fontSize: 12 }}>
                     Chave Loja
@@ -538,6 +708,127 @@ export default function ExpressoGeralPage() {
                     dt_certificacao
                   </div>
                   <div style={{ fontWeight: 900 }}>{formatPtBRDate(certDate)}</div>
+                </div>
+              </div>
+
+              {/* INDICADORES */}
+              <div className="card-soft" style={{ padding: '.9rem .95rem', display: 'grid', gap: '.55rem' }}>
+                <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span className="pill">Indicadores</span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '.6rem' }}>
+                  <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
+                    <div className="p-muted" style={{ fontSize: 12 }}>
+                      Contas sem Depósito
+                    </div>
+                    <div style={{ fontWeight: 900 }}>{formatNum(r.qtdContas)}</div>
+                  </div>
+
+                  <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
+                    <div className="p-muted" style={{ fontSize: 12 }}>
+                      Contas com Depósito
+                    </div>
+                    <div style={{ fontWeight: 900 }}>{formatNum(r.qtdContasComDeposito)}</div>
+                  </div>
+
+                  <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
+                    <div className="p-muted" style={{ fontSize: 12 }}>
+                      Cestas de Serviços
+                    </div>
+                    <div style={{ fontWeight: 900 }}>{formatNum(r.qtdCestaServ)}</div>
+                  </div>
+
+                  <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
+                    <div className="p-muted" style={{ fontSize: 12 }}>
+                      Mobilidade
+                    </div>
+                    <div style={{ fontWeight: 900 }}>{formatNum(r.qtdMobilidade)}</div>
+                  </div>
+
+                  <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
+                    <div className="p-muted" style={{ fontSize: 12 }}>
+                      Cartão Emitido
+                    </div>
+                    <div style={{ fontWeight: 900 }}>{formatNum(r.qtdCartaoEmitido)}</div>
+                  </div>
+
+                  <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
+                    <div className="p-muted" style={{ fontSize: 12 }}>
+                      Ches Contratado
+                    </div>
+                    <div style={{ fontWeight: 900 }}>{formatNum(r.qtdChesContratado)}</div>
+                  </div>
+
+                  <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
+                    <div className="p-muted" style={{ fontSize: 12 }}>
+                      Lime na conta
+                    </div>
+                    <div style={{ fontWeight: 900 }}>{formatNum(r.qtdLimeAbConta)}</div>
+                  </div>
+
+                  <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
+                    <div className="p-muted" style={{ fontSize: 12 }}>
+                      Lime Contratado
+                    </div>
+                    <div style={{ fontWeight: 900 }}>{formatNum(r.qtdLime)}</div>
+                  </div>
+
+                  <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
+                    <div className="p-muted" style={{ fontSize: 12 }}>
+                      Consignado
+                    </div>
+                    <div style={{ fontWeight: 900 }}>{formatNum(r.qtdConsignado)}</div>
+                  </div>
+
+                  <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
+                    <div className="p-muted" style={{ fontSize: 12 }}>
+                      Crédito Parcelado
+                    </div>
+                    <div style={{ fontWeight: 900 }}>{formatNum(r.qtdCreditoParcelado)}</div>
+                  </div>
+
+                  <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
+                    <div className="p-muted" style={{ fontSize: 12 }}>
+                      Microsseguros
+                    </div>
+                    <div style={{ fontWeight: 900 }}>{formatNum(r.qtdMicrosseguro)}</div>
+                  </div>
+
+                  <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
+                    <div className="p-muted" style={{ fontSize: 12 }}>
+                      Viva Vida
+                    </div>
+                    <div style={{ fontWeight: 900 }}>{formatNum(r.qtdVivaVida)}</div>
+                  </div>
+
+                  <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
+                    <div className="p-muted" style={{ fontSize: 12 }}>
+                      Dental
+                    </div>
+                    <div style={{ fontWeight: 900 }}>{formatNum(r.qtdPlanoOdonto)}</div>
+                  </div>
+
+                  <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
+                    <div className="p-muted" style={{ fontSize: 12 }}>
+                      Residencial
+                    </div>
+                    <div style={{ fontWeight: 900 }}>{formatNum(r.qtdSegResidencial)}</div>
+                  </div>
+
+                  <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
+                    <div className="p-muted" style={{ fontSize: 12 }}>
+                      SORTE EXPRESSA
+                    </div>
+                    <div style={{ fontWeight: 900 }}>{formatNum(r.qtdExpSorte)}</div>
+                  </div>
+
+                  <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
+                    <div className="p-muted" style={{ fontSize: 12 }}>
+                      EXPRESSO REFERÊNCIA?
+                    </div>
+                    <div style={{ fontWeight: 900 }}>{r.referencia || '—'}</div>
+                  </div>
                 </div>
               </div>
             </div>
