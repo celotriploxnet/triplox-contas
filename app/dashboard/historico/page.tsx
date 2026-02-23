@@ -1,7 +1,5 @@
 'use client'
 
-export const dynamic = 'force-dynamic'
-
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { onAuthStateChanged, type User } from 'firebase/auth'
@@ -11,58 +9,52 @@ import {
   limit,
   orderBy,
   query,
-  startAfter,
   where,
   type DocumentData,
-  type QueryDocumentSnapshot,
 } from 'firebase/firestore'
 
 import { auth, db } from '@/lib/firebase'
 
 const ADMIN_EMAIL = 'marcelo@treinexpresso.com.br'
-const PAGE_SIZE = 50
 
 type Prestacao = {
   id: string
-  userId?: string
-  userEmail?: string
-  userName?: string
-
-  nomeExpresso?: string
-  chaveLoja?: string
-  agencia?: string
-  pacb?: string
-
-  total?: number
-  status?: string
-
-  createdAt?: any // Timestamp
-  updatedAt?: any // Timestamp
+  userId: string
+  userNome: string
+  dataViagem: string
+  destino: string
+  kmInicial: number
+  kmFinal: number
+  kmRodado: number
+  gasolina: number
+  alimentacao: number
+  hospedagem: number
+  totalViagem: number
+  createdAt?: any
 }
 
-function toStr(v: any) {
-  return v === null || v === undefined ? '' : String(v)
-}
-
-function formatMoneyBRL(v: any) {
+function toNumber(v: any) {
   const n = Number(v ?? 0)
-  if (!Number.isFinite(n)) return 'R$ 0,00'
-  return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+  return Number.isFinite(n) ? n : 0
 }
 
-function formatDateTimePtBR(ts: any) {
+function moneyBR(v: number) {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0)
+}
+
+function fmtDateTime(v: any) {
   try {
-    const d: Date =
-      ts?.toDate?.() instanceof Date ? ts.toDate() : ts instanceof Date ? ts : new Date(ts)
-    if (Number.isNaN(d.getTime())) return '—'
+    if (!v) return '—'
+    // Firestore Timestamp tem toDate()
+    const dt: Date = typeof v?.toDate === 'function' ? v.toDate() : new Date(v)
+    if (Number.isNaN(dt.getTime())) return '—'
     return new Intl.DateTimeFormat('pt-BR', {
-      timeZone: 'America/Bahia',
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
-    }).format(d)
+    }).format(dt)
   } catch {
     return '—'
   }
@@ -72,113 +64,96 @@ export default function HistoricoPage() {
   const router = useRouter()
 
   const [user, setUser] = useState<User | null>(null)
-  const [checkingAuth, setCheckingAuth] = useState(true)
+  const [checking, setChecking] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
 
   const [loading, setLoading] = useState(false)
-  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState('')
 
   const [items, setItems] = useState<Prestacao[]>([])
-  const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null)
-  const [hasMore, setHasMore] = useState(true)
 
-  const [q, setQ] = useState('')
+  // cache de comprovantes por prestacaoId
+  const [urlsMap, setUrlsMap] = useState<Record<string, string[]>>({})
+  const [loadingUrlsId, setLoadingUrlsId] = useState<string | null>(null)
 
-  function mapDoc(d: QueryDocumentSnapshot<DocumentData>): Prestacao {
-    const data = d.data() || {}
-    return {
-      id: d.id,
-      userId: data.userId,
-      userEmail: data.userEmail,
-      userName: data.userName,
-
-      nomeExpresso: data.nomeExpresso || data.nome_loja || data.nome,
-      chaveLoja: data.chaveLoja || data.chave_loja || data.chave,
-      agencia: data.agencia,
-      pacb: data.pacb,
-
-      total: data.total ?? data.valorTotal ?? data.valor ?? 0,
-      status: data.status ?? data.situacao ?? '',
-
-      createdAt: data.createdAt ?? data.created_at ?? data.dataHora ?? null,
-      updatedAt: data.updatedAt ?? data.updated_at ?? null,
-    }
-  }
-
-  async function loadFirstPage(u: User) {
+  async function loadPrestacoes(u: User) {
     try {
       setLoading(true)
       setError(null)
       setInfo('')
 
-      const admin = (u.email || '').toLowerCase() === ADMIN_EMAIL.toLowerCase()
-      setIsAdmin(admin)
+      const baseRef = collection(db, 'prestacoes')
 
-      const base = collection(db, 'prestacoes')
-
-      const qy = admin
-        ? query(base, orderBy('createdAt', 'desc'), limit(PAGE_SIZE))
-        : query(base, where('userId', '==', u.uid), orderBy('createdAt', 'desc'), limit(PAGE_SIZE))
+      // ✅ Admin vê todas
+      // ✅ Usuário comum vê só as dele
+      const qy = (u.email || '').toLowerCase() === ADMIN_EMAIL.toLowerCase()
+        ? query(baseRef, orderBy('createdAt', 'desc'))
+        : query(baseRef, where('userId', '==', u.uid), orderBy('createdAt', 'desc'))
 
       const snap = await getDocs(qy)
-      const docs = snap.docs
 
-      setItems(docs.map(mapDoc))
-      setLastDoc(docs.length ? docs[docs.length - 1] : null)
-      setHasMore(docs.length === PAGE_SIZE)
+      const list: Prestacao[] = snap.docs.map((d) => {
+        const data = d.data() as DocumentData
+        return {
+          id: d.id,
+          userId: String(data.userId || ''),
+          userNome: String(data.userNome || ''),
+          dataViagem: String(data.dataViagem || ''),
+          destino: String(data.destino || ''),
+          kmInicial: toNumber(data.kmInicial),
+          kmFinal: toNumber(data.kmFinal),
+          kmRodado: toNumber(data.kmRodado),
+          gasolina: toNumber(data.gasolina),
+          alimentacao: toNumber(data.alimentacao),
+          hospedagem: toNumber(data.hospedagem),
+          totalViagem: toNumber(data.totalViagem),
+          createdAt: data.createdAt,
+        }
+      })
 
-      setInfo(admin ? 'Histórico (Admin) carregado ✅' : 'Seu histórico carregado ✅')
+      setItems(list)
+      setInfo('Histórico carregado ✅')
     } catch (e: any) {
-      console.error('loadFirstPage error:', e)
-      setError(e?.message || 'Erro ao carregar histórico.')
+      console.error('loadPrestacoes error:', e)
+      setError(`Erro ao carregar histórico. (${e?.code || 'sem-code'}): ${e?.message || 'erro'}`)
     } finally {
       setLoading(false)
     }
   }
 
-  async function loadMore() {
+  async function loadComprovantes(prestacaoId: string) {
     if (!user) return
-    if (!lastDoc) return
-    if (!hasMore) return
-
     try {
-      setLoadingMore(true)
+      setLoadingUrlsId(prestacaoId)
       setError(null)
       setInfo('')
 
-      const admin = isAdmin
-      const base = collection(db, 'prestacoes')
-
-      const qy = admin
-        ? query(base, orderBy('createdAt', 'desc'), startAfter(lastDoc), limit(PAGE_SIZE))
-        : query(
-            base,
-            where('userId', '==', user.uid),
-            orderBy('createdAt', 'desc'),
-            startAfter(lastDoc),
-            limit(PAGE_SIZE)
-          )
-
+      // pega o registro mais recente (onde você salva { urls: [] })
+      const compRef = collection(db, 'prestacoes', prestacaoId, 'comprovantes')
+      const qy = query(compRef, orderBy('createdAt', 'desc'), limit(1))
       const snap = await getDocs(qy)
-      const docs = snap.docs
 
-      setItems((prev) => [...prev, ...docs.map(mapDoc)])
-      setLastDoc(docs.length ? docs[docs.length - 1] : lastDoc)
-      setHasMore(docs.length === PAGE_SIZE)
+      let urls: string[] = []
+      if (!snap.empty) {
+        const data = snap.docs[0].data() as any
+        if (Array.isArray(data?.urls)) urls = data.urls.filter((x: any) => typeof x === 'string' && x)
+      }
+
+      setUrlsMap((prev) => ({ ...prev, [prestacaoId]: urls }))
+      setInfo(urls.length ? 'Comprovantes carregados ✅' : 'Sem comprovantes nesta prestação.')
     } catch (e: any) {
-      console.error('loadMore error:', e)
-      setError(e?.message || 'Erro ao carregar mais.')
+      console.error('loadComprovantes error:', e)
+      setError(`Erro ao carregar comprovantes. (${e?.code || 'sem-code'}): ${e?.message || 'erro'}`)
     } finally {
-      setLoadingMore(false)
+      setLoadingUrlsId(null)
     }
   }
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u)
-      setCheckingAuth(false)
+      setChecking(false)
 
       if (!u) {
         setIsAdmin(false)
@@ -186,92 +161,72 @@ export default function HistoricoPage() {
         return
       }
 
-      loadFirstPage(u)
+      const admin = (u.email || '').toLowerCase() === ADMIN_EMAIL.toLowerCase()
+      setIsAdmin(admin)
+
+      loadPrestacoes(u)
     })
 
     return () => unsub()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router])
 
-  const filtered = useMemo(() => {
-    const term = q.trim().toLowerCase()
-    if (!term) return items
-
-    return items.filter((p) => {
-      const hay = [
-        p.nomeExpresso,
-        p.chaveLoja,
-        p.agencia,
-        p.pacb,
-        p.userEmail,
-        p.userName,
-        p.status,
-        p.id,
-      ]
-        .join(' ')
-        .toLowerCase()
-
-      return hay.includes(term)
-    })
-  }, [items, q])
+  const totalGeral = useMemo(() => items.length, [items])
+  const totalValor = useMemo(() => items.reduce((acc, it) => acc + (it.totalViagem || 0), 0), [items])
 
   return (
     <section style={{ display: 'grid', gap: '1.25rem' }}>
       <div>
-        <span className="pill">Prestação</span>
+        <span className="pill">Histórico</span>
         <h1 className="h1" style={{ marginTop: '.75rem' }}>
-          📑 Histórico
+          📑 Histórico de prestações
         </h1>
         <p className="p-muted" style={{ marginTop: '.35rem' }}>
-          {isAdmin
-            ? 'Você está como Admin: vendo todas as prestações.'
-            : 'Aqui aparecem apenas as suas prestações.'}
+          {isAdmin ? (
+            <>Você está como <b>Admin</b> e pode ver todas as prestações.</>
+          ) : (
+            <>Aqui aparecem somente as suas prestações.</>
+          )}
         </p>
       </div>
 
-      <div className="card" style={{ display: 'grid', gap: '1rem' }}>
-        <div style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
-          <button
-            className="btn-primary"
-            onClick={() => user && loadFirstPage(user)}
-            disabled={loading || checkingAuth}
-          >
-            {checkingAuth ? 'Verificando login...' : loading ? 'Carregando...' : 'Recarregar'}
-          </button>
+      {/* RESUMO */}
+      <div className="card" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+        <span className="pill">Total: {totalGeral}</span>
+        <span className="pill">Somatório: {moneyBR(totalValor)}</span>
 
-          <span className="pill">Total carregado: {items.length}</span>
-          <span className="pill">Mostrando: {filtered.length}</span>
-
-          {isAdmin && <span className="pill">Admin</span>}
-          {info && <span className="pill">{info}</span>}
-        </div>
-
-        <label>
-          <div className="label">Buscar (nome, chave, e-mail, id...)</div>
-          <input
-            className="input"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Ex.: 12345 | Mercado | marcelo@ | Treinado..."
-          />
-        </label>
-
-        {error && (
-          <div className="card-soft" style={{ borderColor: 'rgba(214,31,44,.25)' }}>
-            <p className="p-muted" style={{ color: 'rgba(214,31,44,.95)', fontWeight: 800 }}>
-              {error}
-            </p>
-          </div>
-        )}
+        <button
+          type="button"
+          className="btn-primary"
+          onClick={() => user && loadPrestacoes(user)}
+          disabled={loading || checking || !user}
+          style={{ marginLeft: 'auto' }}
+        >
+          {checking ? 'Verificando login...' : loading ? 'Atualizando...' : 'Atualizar'}
+        </button>
       </div>
 
-      {filtered.length === 0 && !loading && (
+      {(info || error) && (
+        <div className="card-soft" style={{ borderColor: error ? 'rgba(214,31,44,.25)' : undefined }}>
+          {info && <p className="p-muted" style={{ fontWeight: 800 }}>{info}</p>}
+          {error && (
+            <p className="p-muted" style={{ color: 'rgba(214,31,44,.95)', fontWeight: 900 }}>
+              {error}
+            </p>
+          )}
+        </div>
+      )}
+
+      {loading && <p className="p-muted">Carregando...</p>}
+
+      {!loading && items.length === 0 && (
         <div className="card-soft">
           <p className="p-muted">Nenhuma prestação encontrada.</p>
         </div>
       )}
 
-      {filtered.length > 0 && (
+      {/* LISTA */}
+      {items.length > 0 && (
         <div
           style={{
             display: 'grid',
@@ -279,49 +234,99 @@ export default function HistoricoPage() {
             gap: '1rem',
           }}
         >
-          {filtered.map((p) => (
-            <div key={p.id} className="card" style={{ display: 'grid', gap: '.65rem' }}>
-              <div className="card-soft" style={{ padding: '.8rem .95rem' }}>
-                <div style={{ fontWeight: 900, fontSize: '1.02rem' }}>
-                  {p.nomeExpresso || '—'}
-                </div>
-                <div className="p-muted" style={{ marginTop: '.2rem', fontSize: 13 }}>
-                  Chave: <b>{p.chaveLoja || '—'}</b> • Agência/PACB:{' '}
-                  <b>
-                    {p.agencia || '—'} / {p.pacb || '—'}
-                  </b>
+          {items.map((it) => {
+            const urls = urlsMap[it.id]
+            return (
+              <div key={it.id} className="card" style={{ display: 'grid', gap: '.8rem' }}>
+                <div className="card-soft" style={{ padding: '.8rem .95rem', display: 'grid', gap: '.25rem' }}>
+                  <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <span className="pill">{moneyBR(it.totalViagem)}</span>
+                    <span className="pill">KM: {it.kmRodado}</span>
+                    <span className="pill">{fmtDateTime(it.createdAt)}</span>
+                  </div>
+
+                  {isAdmin && (
+                    <div className="p-muted" style={{ fontSize: 12, marginTop: '.15rem' }}>
+                      <b>Usuário:</b> {it.userNome || '—'} ({it.userId})
+                    </div>
+                  )}
                 </div>
 
-                {isAdmin && (
-                  <div className="p-muted" style={{ marginTop: '.2rem', fontSize: 13 }}>
-                    Usuário: <b>{p.userEmail || '—'}</b>
+                <div style={{ display: 'grid', gap: '.25rem' }}>
+                  <div className="p-muted" style={{ fontSize: 12 }}>Data da viagem</div>
+                  <div style={{ fontWeight: 900 }}>{it.dataViagem || '—'}</div>
+                </div>
+
+                <div style={{ display: 'grid', gap: '.25rem' }}>
+                  <div className="p-muted" style={{ fontSize: 12 }}>Destino</div>
+                  <div style={{ fontWeight: 900 }}>{it.destino || '—'}</div>
+                </div>
+
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+                    gap: '.6rem',
+                  }}
+                >
+                  <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
+                    <div className="p-muted" style={{ fontSize: 12 }}>Gasolina</div>
+                    <div style={{ fontWeight: 900 }}>{moneyBR(it.gasolina)}</div>
+                  </div>
+
+                  <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
+                    <div className="p-muted" style={{ fontSize: 12 }}>Alimentação</div>
+                    <div style={{ fontWeight: 900 }}>{moneyBR(it.alimentacao)}</div>
+                  </div>
+
+                  <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
+                    <div className="p-muted" style={{ fontSize: 12 }}>Hospedagem</div>
+                    <div style={{ fontWeight: 900 }}>{moneyBR(it.hospedagem)}</div>
+                  </div>
+                </div>
+
+                {/* COMPROVANTES */}
+                <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={() => loadComprovantes(it.id)}
+                    disabled={loadingUrlsId === it.id}
+                  >
+                    {loadingUrlsId === it.id ? 'Carregando...' : 'Ver comprovantes'}
+                  </button>
+
+                  {Array.isArray(urls) && (
+                    <span className="pill">{urls.length} arquivo(s)</span>
+                  )}
+                </div>
+
+                {Array.isArray(urls) && urls.length > 0 && (
+                  <div className="card-soft" style={{ display: 'grid', gap: '.4rem' }}>
+                    {urls.map((u, idx) => (
+                      <a
+                        key={`${it.id}-url-${idx}`}
+                        href={u}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-muted"
+                        style={{ textDecoration: 'underline', fontWeight: 800 }}
+                      >
+                        Abrir comprovante {idx + 1}
+                      </a>
+                    ))}
                   </div>
                 )}
               </div>
-
-              <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
-                <span className="pill">Total: {formatMoneyBRL(p.total)}</span>
-                {p.status ? <span className="pill">Status: {p.status}</span> : null}
-                <span className="pill">Criado: {formatDateTimePtBR(p.createdAt)}</span>
-              </div>
-
-              <div className="p-muted" style={{ fontSize: 12 }}>
-                ID: {p.id}
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
 
-      {hasMore && (
-        <button className="btn-primary" onClick={loadMore} disabled={loadingMore || loading || checkingAuth}>
-          {loadingMore ? 'Carregando mais...' : 'Carregar mais'}
-        </button>
-      )}
-
-      {!checkingAuth && user && (
+      {!checking && user && (
         <p className="p-muted" style={{ marginTop: '.25rem' }}>
-          Logado como: <b>{user.email}</b> {isAdmin ? '(Admin)' : ''}
+          Logado como: <b>{user.email}</b>
+          {isAdmin ? ' (Admin)' : ''}
         </p>
       )}
     </section>
