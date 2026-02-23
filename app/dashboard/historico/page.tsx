@@ -1,355 +1,328 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
-import { useEffect, useMemo, useState } from 'react'
-import { onAuthStateChanged } from 'firebase/auth'
+export const dynamic = 'force-dynamic'
 
-import { auth, db } from '@/lib/firebase'
+import { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { onAuthStateChanged, type User } from 'firebase/auth'
 import {
   collection,
-  query,
-  where,
-  orderBy,
   getDocs,
-  deleteDoc,
-  doc,
+  limit,
+  orderBy,
+  query,
+  startAfter,
+  where,
+  type DocumentData,
+  type QueryDocumentSnapshot,
 } from 'firebase/firestore'
+
+import { auth, db } from '@/lib/firebase'
+
+const ADMIN_EMAIL = 'marcelo@treinexpresso.com.br'
+const PAGE_SIZE = 50
 
 type Prestacao = {
   id: string
-  dataViagem: string
-  destino: string
-  kmRodado: number
+  userId?: string
+  userEmail?: string
+  userName?: string
 
-  userNome?: string
+  nomeExpresso?: string
+  chaveLoja?: string
+  agencia?: string
+  pacb?: string
 
-  gasolina?: number
-  alimentacao?: number
-  hospedagem?: number
-  totalViagem?: number
+  total?: number
+  status?: string
 
-  createdAt?: any
+  createdAt?: any // Timestamp
+  updatedAt?: any // Timestamp
 }
 
-function moeda(n: number) {
-  return Number(n || 0).toFixed(2)
+function toStr(v: any) {
+  return v === null || v === undefined ? '' : String(v)
 }
 
-export default function Historico() {
+function formatMoneyBRL(v: any) {
+  const n = Number(v ?? 0)
+  if (!Number.isFinite(n)) return 'R$ 0,00'
+  return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+
+function formatDateTimePtBR(ts: any) {
+  try {
+    const d: Date =
+      ts?.toDate?.() instanceof Date ? ts.toDate() : ts instanceof Date ? ts : new Date(ts)
+    if (Number.isNaN(d.getTime())) return '—'
+    return new Intl.DateTimeFormat('pt-BR', {
+      timeZone: 'America/Bahia',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(d)
+  } catch {
+    return '—'
+  }
+}
+
+export default function HistoricoPage() {
   const router = useRouter()
 
-  const [carregando, setCarregando] = useState(true)
-  const [prestacoes, setPrestacoes] = useState<Prestacao[]>([])
-  const [selecionada, setSelecionada] = useState<Prestacao | null>(null)
+  const [user, setUser] = useState<User | null>(null)
+  const [checkingAuth, setCheckingAuth] = useState(true)
+  const [isAdmin, setIsAdmin] = useState(false)
 
-  const [comprovantes, setComprovantes] = useState<string[]>([])
-  const [carregandoComprovantes, setCarregandoComprovantes] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [info, setInfo] = useState('')
 
-  const [apagando, setApagando] = useState(false)
+  const [items, setItems] = useState<Prestacao[]>([])
+  const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null)
+  const [hasMore, setHasMore] = useState(true)
 
-  async function carregarHistorico(userId: string) {
-    setCarregando(true)
-    try {
-      const q = query(
-        collection(db, 'prestacoes'),
-        where('userId', '==', userId),
-        orderBy('createdAt', 'desc')
-      )
+  const [q, setQ] = useState('')
 
-      const snap = await getDocs(q)
+  function mapDoc(d: QueryDocumentSnapshot<DocumentData>): Prestacao {
+    const data = d.data() || {}
+    return {
+      id: d.id,
+      userId: data.userId,
+      userEmail: data.userEmail,
+      userName: data.userName,
 
-      const lista: Prestacao[] = snap.docs.map((d) => {
-        const data = d.data() as any
+      nomeExpresso: data.nomeExpresso || data.nome_loja || data.nome,
+      chaveLoja: data.chaveLoja || data.chave_loja || data.chave,
+      agencia: data.agencia,
+      pacb: data.pacb,
 
-        const gasolina = Number(data.gasolina || 0)
-        const alimentacao = Number(data.alimentacao || 0)
-        const hospedagem = Number(data.hospedagem || 0)
+      total: data.total ?? data.valorTotal ?? data.valor ?? 0,
+      status: data.status ?? data.situacao ?? '',
 
-        const totalCalculado = gasolina + alimentacao + hospedagem
-
-        return {
-          id: d.id,
-          userNome: data.userNome || '—',
-
-          dataViagem: data.dataViagem || '',
-          destino: data.destino || '',
-          kmRodado: Number(data.kmRodado || 0),
-
-          gasolina,
-          alimentacao,
-          hospedagem,
-
-          totalViagem:
-            typeof data.totalViagem === 'number' ? data.totalViagem : totalCalculado,
-
-          createdAt: data.createdAt,
-        }
-      })
-
-      setPrestacoes(lista)
-      setSelecionada(lista[0] || null)
-    } catch (e: any) {
-      console.error('ERRO HISTÓRICO:', e)
-      alert(e?.message || 'Erro ao carregar histórico')
-    } finally {
-      setCarregando(false)
+      createdAt: data.createdAt ?? data.created_at ?? data.dataHora ?? null,
+      updatedAt: data.updatedAt ?? data.updated_at ?? null,
     }
   }
 
-  async function carregarComprovantes(prestacaoId: string) {
-    setCarregandoComprovantes(true)
-    setComprovantes([])
-
+  async function loadFirstPage(u: User) {
     try {
-      const urls: string[] = []
+      setLoading(true)
+      setError(null)
+      setInfo('')
 
-      const compSnap = await getDocs(
-        collection(db, 'prestacoes', prestacaoId, 'comprovantes')
-      )
+      const admin = (u.email || '').toLowerCase() === ADMIN_EMAIL.toLowerCase()
+      setIsAdmin(admin)
 
-      compSnap.forEach((docu) => {
-        const data = docu.data() as any
-        if (Array.isArray(data.urls)) urls.push(...data.urls)
-      })
+      const base = collection(db, 'prestacoes')
 
-      setComprovantes(Array.from(new Set(urls)))
+      const qy = admin
+        ? query(base, orderBy('createdAt', 'desc'), limit(PAGE_SIZE))
+        : query(base, where('userId', '==', u.uid), orderBy('createdAt', 'desc'), limit(PAGE_SIZE))
+
+      const snap = await getDocs(qy)
+      const docs = snap.docs
+
+      setItems(docs.map(mapDoc))
+      setLastDoc(docs.length ? docs[docs.length - 1] : null)
+      setHasMore(docs.length === PAGE_SIZE)
+
+      setInfo(admin ? 'Histórico (Admin) carregado ✅' : 'Seu histórico carregado ✅')
     } catch (e: any) {
-      console.error('ERRO COMPROVANTES:', e)
-      alert(e?.message || 'Erro ao carregar comprovantes')
+      console.error('loadFirstPage error:', e)
+      setError(e?.message || 'Erro ao carregar histórico.')
     } finally {
-      setCarregandoComprovantes(false)
+      setLoading(false)
     }
   }
 
-  async function excluirPrestacao() {
-    if (!selecionada) return
-    if (!auth.currentUser) return
-
-    const ok = confirm(
-      `Deseja excluir esta prestação?\n\nDestino: ${selecionada.destino}\nData: ${selecionada.dataViagem}\n\nEssa ação não pode ser desfeita.`
-    )
-    if (!ok) return
+  async function loadMore() {
+    if (!user) return
+    if (!lastDoc) return
+    if (!hasMore) return
 
     try {
-      setApagando(true)
+      setLoadingMore(true)
+      setError(null)
+      setInfo('')
 
-      // 1) apaga subcoleção comprovantes
-      const compSnap = await getDocs(
-        collection(db, 'prestacoes', selecionada.id, 'comprovantes')
-      )
-      for (const c of compSnap.docs) {
-        await deleteDoc(doc(db, 'prestacoes', selecionada.id, 'comprovantes', c.id))
-      }
+      const admin = isAdmin
+      const base = collection(db, 'prestacoes')
 
-      // 2) apaga doc principal
-      await deleteDoc(doc(db, 'prestacoes', selecionada.id))
+      const qy = admin
+        ? query(base, orderBy('createdAt', 'desc'), startAfter(lastDoc), limit(PAGE_SIZE))
+        : query(
+            base,
+            where('userId', '==', user.uid),
+            orderBy('createdAt', 'desc'),
+            startAfter(lastDoc),
+            limit(PAGE_SIZE)
+          )
 
-      alert('Prestação excluída com sucesso!')
+      const snap = await getDocs(qy)
+      const docs = snap.docs
 
-      // 3) recarrega lista
-      await carregarHistorico(auth.currentUser.uid)
+      setItems((prev) => [...prev, ...docs.map(mapDoc)])
+      setLastDoc(docs.length ? docs[docs.length - 1] : lastDoc)
+      setHasMore(docs.length === PAGE_SIZE)
     } catch (e: any) {
-      console.error('ERRO EXCLUIR:', e)
-      alert(e?.message || 'Erro ao excluir a prestação')
+      console.error('loadMore error:', e)
+      setError(e?.message || 'Erro ao carregar mais.')
     } finally {
-      setApagando(false)
+      setLoadingMore(false)
     }
   }
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setUser(u)
+      setCheckingAuth(false)
+
+      if (!u) {
+        setIsAdmin(false)
         router.push('/login')
         return
       }
-      await carregarHistorico(user.uid)
+
+      loadFirstPage(u)
     })
 
     return () => unsub()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router])
 
-  useEffect(() => {
-    if (selecionada) carregarComprovantes(selecionada.id)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selecionada?.id])
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase()
+    if (!term) return items
 
-  const total = useMemo(() => Number(selecionada?.totalViagem || 0), [selecionada])
+    return items.filter((p) => {
+      const hay = [
+        p.nomeExpresso,
+        p.chaveLoja,
+        p.agencia,
+        p.pacb,
+        p.userEmail,
+        p.userName,
+        p.status,
+        p.id,
+      ]
+        .join(' ')
+        .toLowerCase()
+
+      return hay.includes(term)
+    })
+  }, [items, q])
 
   return (
-    <section>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <span className="pill">Histórico</span>
-          <h1 className="h1 mt-3">Minhas prestações</h1>
-          <p className="p-muted mt-2">
-            Selecione uma prestação para ver detalhes e comprovantes.
-          </p>
-        </div>
-
-        <div className="card-soft w-full sm:w-[280px]">
-          <p className="text-xs text-zinc-600">Total de prestações</p>
-          <p className="mt-1 text-3xl font-extrabold">{prestacoes.length}</p>
-        </div>
+    <section style={{ display: 'grid', gap: '1.25rem' }}>
+      <div>
+        <span className="pill">Prestação</span>
+        <h1 className="h1" style={{ marginTop: '.75rem' }}>
+          📑 Histórico
+        </h1>
+        <p className="p-muted" style={{ marginTop: '.35rem' }}>
+          {isAdmin
+            ? 'Você está como Admin: vendo todas as prestações.'
+            : 'Aqui aparecem apenas as suas prestações.'}
+        </p>
       </div>
 
-      {carregando ? (
-        <div className="card mt-6">
-          <p className="p-muted">Carregando histórico…</p>
+      <div className="card" style={{ display: 'grid', gap: '1rem' }}>
+        <div style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <button
+            className="btn-primary"
+            onClick={() => user && loadFirstPage(user)}
+            disabled={loading || checkingAuth}
+          >
+            {checkingAuth ? 'Verificando login...' : loading ? 'Carregando...' : 'Recarregar'}
+          </button>
+
+          <span className="pill">Total carregado: {items.length}</span>
+          <span className="pill">Mostrando: {filtered.length}</span>
+
+          {isAdmin && <span className="pill">Admin</span>}
+          {info && <span className="pill">{info}</span>}
         </div>
-      ) : (
-        <div className="mt-6 grid gap-4 lg:grid-cols-[360px_1fr]">
-          {/* LISTA */}
-          <section className="card">
-            <h2 className="h2 mb-4">📚 Lista</h2>
 
-            {prestacoes.length === 0 && (
-              <p className="p-muted">Nenhuma prestação encontrada.</p>
-            )}
+        <label>
+          <div className="label">Buscar (nome, chave, e-mail, id...)</div>
+          <input
+            className="input"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Ex.: 12345 | Mercado | marcelo@ | Treinado..."
+          />
+        </label>
 
-            <div className="space-y-3">
-              {prestacoes.map((p) => {
-                const ativa = selecionada?.id === p.id
-                return (
-                  <button
-                    key={p.id}
-                    onClick={() => setSelecionada(p)}
-                    className={`w-full text-left rounded-2xl border p-4 transition
-                      ${ativa ? 'bg-red-50 border-red-200' : 'bg-white hover:bg-zinc-50'}`}
-                  >
-                    <div className="flex justify-between gap-3">
-                      <div>
-                        <p className="font-extrabold">{p.destino}</p>
-                        <p className="text-xs text-zinc-500 mt-1">
-                          {p.dataViagem} • {p.userNome}
-                        </p>
-                      </div>
+        {error && (
+          <div className="card-soft" style={{ borderColor: 'rgba(214,31,44,.25)' }}>
+            <p className="p-muted" style={{ color: 'rgba(214,31,44,.95)', fontWeight: 800 }}>
+              {error}
+            </p>
+          </div>
+        )}
+      </div>
 
-                      <div className="text-right">
-                        <p className="text-xs text-zinc-500">Total</p>
-                        <p className="font-extrabold">R$ {moeda(p.totalViagem || 0)}</p>
-                      </div>
-                    </div>
+      {filtered.length === 0 && !loading && (
+        <div className="card-soft">
+          <p className="p-muted">Nenhuma prestação encontrada.</p>
+        </div>
+      )}
 
-                    <div className="mt-3 flex justify-between text-xs text-zinc-500">
-                      <span className="pill">KM {p.kmRodado}</span>
-                      <span className="pill">ID {p.id.slice(0, 6)}…</span>
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
-          </section>
+      {filtered.length > 0 && (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+            gap: '1rem',
+          }}
+        >
+          {filtered.map((p) => (
+            <div key={p.id} className="card" style={{ display: 'grid', gap: '.65rem' }}>
+              <div className="card-soft" style={{ padding: '.8rem .95rem' }}>
+                <div style={{ fontWeight: 900, fontSize: '1.02rem' }}>
+                  {p.nomeExpresso || '—'}
+                </div>
+                <div className="p-muted" style={{ marginTop: '.2rem', fontSize: 13 }}>
+                  Chave: <b>{p.chaveLoja || '—'}</b> • Agência/PACB:{' '}
+                  <b>
+                    {p.agencia || '—'} / {p.pacb || '—'}
+                  </b>
+                </div>
 
-          {/* DETALHES */}
-          <section className="card">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <h2 className="h2">🔎 Detalhes</h2>
-                <p className="p-muted mt-1">Informações da prestação selecionada.</p>
+                {isAdmin && (
+                  <div className="p-muted" style={{ marginTop: '.2rem', fontSize: 13 }}>
+                    Usuário: <b>{p.userEmail || '—'}</b>
+                  </div>
+                )}
               </div>
 
-              <button
-                onClick={excluirPrestacao}
-                disabled={!selecionada || apagando}
-                className="btn-primary"
-                style={{ background: 'linear-gradient(90deg, #b3122a, #7a1ea1)' }}
-              >
-                {apagando ? 'Excluindo...' : 'Excluir prestação 🗑️'}
-              </button>
-            </div>
-
-            {!selecionada ? (
-              <div className="card-soft mt-4">
-                <p className="p-muted">Selecione uma prestação na lista.</p>
+              <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
+                <span className="pill">Total: {formatMoneyBRL(p.total)}</span>
+                {p.status ? <span className="pill">Status: {p.status}</span> : null}
+                <span className="pill">Criado: {formatDateTimePtBR(p.createdAt)}</span>
               </div>
-            ) : (
-              <>
-                <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                  <div className="card-soft">
-                    <p className="text-xs text-zinc-500">Destino</p>
-                    <p className="font-extrabold mt-1">{selecionada.destino}</p>
 
-                    <p className="text-xs text-zinc-500 mt-4">Data</p>
-                    <p className="mt-1">{selecionada.dataViagem}</p>
-
-                    <p className="text-xs text-zinc-500 mt-4">Enviado por</p>
-                    <p className="mt-1">{selecionada.userNome}</p>
-                  </div>
-
-                  <div className="card-soft">
-                    <p className="text-xs text-zinc-500">KM rodado</p>
-                    <p className="text-4xl font-extrabold mt-1">
-                      {selecionada.kmRodado}
-                      <span className="ml-1 text-sm text-zinc-500">km</span>
-                    </p>
-
-                    <p className="text-xs text-zinc-500 mt-4">Total</p>
-                    <p className="text-2xl font-extrabold mt-1">R$ {moeda(total)}</p>
-                  </div>
-                </div>
-
-                <div className="card-soft mt-5">
-                  <p className="font-extrabold mb-3">💸 Gastos</p>
-
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <div>
-                      <p className="text-xs text-zinc-500">Gasolina</p>
-                      <p className="font-extrabold">
-                        R$ {moeda(selecionada.gasolina || 0)}
-                      </p>
-                    </div>
-
-                    <div>
-                      <p className="text-xs text-zinc-500">Alimentação</p>
-                      <p className="font-extrabold">
-                        R$ {moeda(selecionada.alimentacao || 0)}
-                      </p>
-                    </div>
-
-                    <div>
-                      <p className="text-xs text-zinc-500">Hospedagem</p>
-                      <p className="font-extrabold">
-                        R$ {moeda(selecionada.hospedagem || 0)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-6">
-                  <h3 className="font-extrabold mb-3">🧾 Comprovantes</h3>
-
-                  {carregandoComprovantes ? (
-                    <p className="p-muted">Carregando comprovantes…</p>
-                  ) : comprovantes.length === 0 ? (
-                    <p className="p-muted">Nenhum comprovante encontrado.</p>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                      {comprovantes.map((url, i) => (
-                        <a
-                          key={i}
-                          href={url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="block overflow-hidden rounded-2xl border bg-white"
-                        >
-                          <img
-                            src={url}
-                            alt={`Comprovante ${i + 1}`}
-                            className="h-32 w-full object-cover"
-                          />
-                          <div className="p-2 text-center text-xs text-zinc-600">
-                            Abrir / Baixar
-                          </div>
-                        </a>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-          </section>
+              <div className="p-muted" style={{ fontSize: 12 }}>
+                ID: {p.id}
+              </div>
+            </div>
+          ))}
         </div>
+      )}
+
+      {hasMore && (
+        <button className="btn-primary" onClick={loadMore} disabled={loadingMore || loading || checkingAuth}>
+          {loadingMore ? 'Carregando mais...' : 'Carregar mais'}
+        </button>
+      )}
+
+      {!checkingAuth && user && (
+        <p className="p-muted" style={{ marginTop: '.25rem' }}>
+          Logado como: <b>{user.email}</b> {isAdmin ? '(Admin)' : ''}
+        </p>
       )}
     </section>
   )
