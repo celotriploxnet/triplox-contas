@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 
@@ -17,12 +17,31 @@ export default function NovaPrestacao() {
   const [alimentacao, setAlimentacao] = useState('')
   const [hospedagem, setHospedagem] = useState('')
 
+  // ✅ NOVO
+  const [outrasDespesas, setOutrasDespesas] = useState('')
+  const [descOutrasDespesas, setDescOutrasDespesas] = useState('')
+
   const [imagens, setImagens] = useState<File[]>([])
   const [loading, setLoading] = useState(false)
 
   const kmRodado = (Number(kmFinal || 0) - Number(kmInicial || 0)) || 0
+
+  const outras = Number(outrasDespesas || 0)
+  const outrasAtivo = outras > 0
+
   const totalViagem =
-    Number(gasolina || 0) + Number(alimentacao || 0) + Number(hospedagem || 0)
+    Number(gasolina || 0) +
+    Number(alimentacao || 0) +
+    Number(hospedagem || 0) +
+    outras
+
+  // ✅ Se zerar "outras despesas", limpa e desativa descrição
+  useEffect(() => {
+    if (!outrasAtivo && descOutrasDespesas) {
+      setDescOutrasDespesas('')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [outrasAtivo])
 
   async function enviarPrestacao(e: React.FormEvent) {
     e.preventDefault()
@@ -30,6 +49,11 @@ export default function NovaPrestacao() {
     if (!auth.currentUser) return alert('Usuário não autenticado')
     if (kmRodado < 0) return alert('KM final não pode ser menor que KM inicial.')
     if (imagens.length > 10) return alert('Você pode anexar no máximo 10 imagens.')
+
+    // ✅ Regra: se outras despesas > 0, descrição obrigatória
+    if (outrasAtivo && !descOutrasDespesas.trim()) {
+      return alert('Descreva as “Outras despesas”.')
+    }
 
     try {
       setLoading(true)
@@ -46,17 +70,30 @@ export default function NovaPrestacao() {
         kmInicial: Number(kmInicial || 0),
         kmFinal: Number(kmFinal || 0),
         kmRodado,
+
         gasolina: Number(gasolina || 0),
         alimentacao: Number(alimentacao || 0),
         hospedagem: Number(hospedagem || 0),
+
+        // ✅ NOVO
+        outrasDespesas: Number(outrasDespesas || 0),
+        descOutrasDespesas: outrasAtivo ? descOutrasDespesas.trim() : '',
+
         totalViagem,
+
+        // ✅ NOVO: status para o admin marcar como paga depois
+        statusPagamento: 'PENDENTE',
+        pago: false,
+        pagoEm: null,
+        pagoPor: '',
 
         createdAt: serverTimestamp(),
       })
 
       const urls: string[] = []
       for (const file of imagens) {
-        const path = `prestacoes/${usuario.uid}/${docRef.id}/${Date.now()}_${file.name}`
+        const safeName = (file.name || 'arquivo').replace(/\s+/g, '_')
+        const path = `prestacoes/${usuario.uid}/${docRef.id}/${Date.now()}_${safeName}`
         const fileRef = ref(storage, path)
         await uploadBytes(fileRef, file)
         urls.push(await getDownloadURL(fileRef))
@@ -75,9 +112,14 @@ export default function NovaPrestacao() {
       setDestino('')
       setKmInicial('')
       setKmFinal('')
+
       setGasolina('')
       setAlimentacao('')
       setHospedagem('')
+
+      setOutrasDespesas('')
+      setDescOutrasDespesas('')
+
       setImagens([])
     } catch (error: any) {
       console.error('ERRO FIREBASE:', error)
@@ -101,7 +143,9 @@ export default function NovaPrestacao() {
         <div className="card-soft w-full sm:w-[320px]">
           <p className="text-xs text-zinc-600">Total da viagem</p>
           <p className="mt-1 text-3xl font-extrabold">R$ {totalViagem.toFixed(2)}</p>
-          <p className="mt-1 text-xs text-zinc-600">gasolina + alimentação + hospedagem</p>
+          <p className="mt-1 text-xs text-zinc-600">
+            gasolina + alimentação + hospedagem + outras despesas
+          </p>
         </div>
       </div>
 
@@ -208,6 +252,38 @@ export default function NovaPrestacao() {
           </div>
         </div>
 
+        {/* ✅ NOVO: OUTRAS DESPESAS + DESCRIÇÃO */}
+        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className="label">Outras despesas (R$)</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={outrasDespesas}
+              onChange={(e) => setOutrasDespesas(e.target.value)}
+              className="input"
+              placeholder="0.00"
+            />
+            <p className="p-muted mt-2 text-xs">
+              Se preencher um valor aqui, a descrição fica obrigatória.
+            </p>
+          </div>
+
+          <div>
+            <label className="label">Especificar despesas</label>
+            <input
+              type="text"
+              value={descOutrasDespesas}
+              onChange={(e) => setDescOutrasDespesas(e.target.value)}
+              className="input"
+              placeholder={outrasAtivo ? 'Ex.: pedágio, estacionamento, etc.' : 'Ativa ao informar “Outras despesas”'}
+              disabled={!outrasAtivo}
+              required={outrasAtivo}
+            />
+          </div>
+        </div>
+
         <div className="mt-6 card-soft">
           <label className="label">Comprovantes (até 10 imagens)</label>
           <input
@@ -225,7 +301,7 @@ export default function NovaPrestacao() {
           </p>
         </div>
 
-        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:em-items-center sm:justify-between">
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="card-soft">
             <p className="text-xs text-zinc-600">Total da viagem</p>
             <p className="mt-1 text-lg font-extrabold">R$ {totalViagem.toFixed(2)}</p>
