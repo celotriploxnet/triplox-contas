@@ -15,7 +15,7 @@ export default function ExpressosMenuPage() {
     // ✅ NOVO: rota nova (substitui o antigo /contabil)
     {
       title: '💳 Expressos Somente Transacionando',
-      desc: 'Transacionam (TRX > 0) e não realizam produtos (demais indicadores 0).',
+      desc: 'Expressos que transacionam, mas não realizam produtos.',
       href: '/dashboard/expressos/transacionando',
       enabled: true,
       pill: 'Transações',
@@ -31,7 +31,7 @@ export default function ExpressosMenuPage() {
 
     {
       title: '🚨 Expressos com Certificação Vencida',
-      desc: 'TRX ≠ 0 + Treinado + certificação vencida (5+ anos) ou próxima do vencimento.',
+      desc: 'Expresso treinado, transacionando e com certificação vencida ou a vencer.',
       href: '/dashboard/expressos/certificacao-vencida',
       enabled: true,
       pill: 'Certificação',
@@ -39,10 +39,19 @@ export default function ExpressosMenuPage() {
 
     {
       title: '📘 Expressos Treinados e Zerados',
-      desc: 'Painel em criação. Vamos liberar em breve.',
+      desc: 'Expresso com Status de treinado e com produção zerada.',
       href: '/dashboard/expressos/treinados-zerados',
       enabled: true,
-      pill: 'Em breve',
+      pill: 'Produção',
+    },
+
+    // ✅ NOVO BLOCO
+    {
+      title: '🧾 Liberados para Microsseguro',
+      desc: 'Expressos ativos para vendas do Microsseguro',
+      href: '/dashboard/expressos/liberados-microsseguro',
+      enabled: true,
+      pill: 'Produção',
     },
   ]
 
@@ -98,11 +107,7 @@ export default function ExpressosMenuPage() {
                   Acessar <span>➜</span>
                 </Link>
               ) : (
-                <button
-                  className="btn-primary"
-                  disabled
-                  style={{ opacity: 0.65, cursor: 'not-allowed' }}
-                >
+                <button className="btn-primary" disabled style={{ opacity: 0.65, cursor: 'not-allowed' }}>
                   Em breve
                 </button>
               )}
