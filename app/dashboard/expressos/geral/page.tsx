@@ -59,8 +59,7 @@ function toStr(v: any) {
 }
 
 function normalizeKey(k: string) {
-  return toStr(k)
-    .replaceAll('\ufeff', '') // BOM
+  return k
     .replaceAll('Ã³', 'ó')
     .replaceAll('Ã£', 'ã')
     .replaceAll('Ã§', 'ç')
@@ -81,80 +80,8 @@ function toUint8(bytes: any): Uint8Array {
   return new Uint8Array(bytes)
 }
 
-/**
- * ✅ Decodifica CSV de forma mais robusta
- * - tenta utf-8
- * - se ficar “estranho”, cai pra latin1
- */
-function decodeBytes(u8: Uint8Array) {
-  const utf8 = new TextDecoder('utf-8', { fatal: false }).decode(u8)
-  // heurística simples: se tiver muito "�", tenta latin1
-  const bad = (utf8.match(/�/g) || []).length
-  if (bad > 3) {
-    return new TextDecoder('iso-8859-1', { fatal: false }).decode(u8)
-  }
-  return utf8
-}
-
-/**
- * ✅ Parser CSV (separador ;)
- * - mantém tudo como string (sem o XLSX “converter” data)
- * - suporta campo com aspas
- */
-function parseCSVSemicolon(text: string): Record<string, string>[] {
-  const lines = text
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    .split('\n')
-    .filter((l) => l.trim().length)
-
-  if (!lines.length) return []
-
-  function parseLine(line: string): string[] {
-    const out: string[] = []
-    let cur = ''
-    let inQuotes = false
-
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i]
-
-      if (ch === '"') {
-        // "" dentro de aspas vira "
-        if (inQuotes && line[i + 1] === '"') {
-          cur += '"'
-          i++
-          continue
-        }
-        inQuotes = !inQuotes
-        continue
-      }
-
-      if (ch === ';' && !inQuotes) {
-        out.push(cur)
-        cur = ''
-        continue
-      }
-
-      cur += ch
-    }
-    out.push(cur)
-    return out.map((s) => s.trim())
-  }
-
-  const headersRaw = parseLine(lines[0])
-  const headers = headersRaw.map((h) => normalizeKey(h))
-
-  const rows: Record<string, string>[] = []
-  for (let i = 1; i < lines.length; i++) {
-    const cols = parseLine(lines[i])
-    const obj: Record<string, string> = {}
-    headers.forEach((h, idx) => {
-      obj[h] = toStr(cols[idx] ?? '')
-    })
-    rows.push(obj)
-  }
-
-  return rows
+function parseCSVText(u8: Uint8Array) {
+  return new TextDecoder('utf-8').decode(u8)
 }
 
 function parseNumber(v: any) {
@@ -182,7 +109,7 @@ function isTransacional(status: string) {
 
 /**
  * ✅ Parser de data “seguro”
- * - dd/mm/aaaa (do seu CSV)
+ * - dd/mm/aaaa
  * - yyyy-mm-dd
  * - serial do Excel
  */
@@ -220,12 +147,43 @@ function parseDateFlexible(v: any): Date | null {
   return null
 }
 
+/** zera hora/min/seg para comparar "dia" com "dia" */
+function startOfDay(dt: Date) {
+  const d = new Date(dt)
+  d.setHours(0, 0, 0, 0)
+  return d
+}
+
+/**
+ * Soma anos preservando mês/dia com ajuste para 29/02.
+ * Ex.: 29/02/2020 + 5 anos => 28/02/2025 (último dia do mês)
+ */
+function addYearsSafe(date: Date, years: number) {
+  const base = new Date(date)
+  const month = base.getMonth()
+  const day = base.getDate()
+
+  base.setFullYear(base.getFullYear() + years)
+
+  // Se mudou o mês, foi “estouro” (ex.: 29/02 virou 01/03). Ajusta para último dia do mês anterior.
+  if (base.getMonth() !== month) {
+    base.setDate(0) // último dia do mês anterior
+  } else {
+    base.setDate(day)
+  }
+
+  return base
+}
+
+/**
+ * ✅ Vencida exatamente quando completar 5 anos:
+ * vencida se HOJE >= (dt_certificacao + 5 anos)
+ */
 function isCertVencida(certDate: Date | null) {
   if (!certDate) return false
-  const now = new Date()
-  const fiveYearsAgo = new Date(now)
-  fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5)
-  return certDate < fiveYearsAgo
+  const hoje = startOfDay(new Date())
+  const venc = startOfDay(addYearsSafe(startOfDay(certDate), 5))
+  return hoje.getTime() >= venc.getTime()
 }
 
 function formatPtBRDate(dt: Date | null) {
@@ -394,28 +352,27 @@ export default function ExpressoGeralPage() {
       setInfo('')
 
       const bytesAny = await getBytes(ref(storage, CSV_PATH))
-      const text = decodeBytes(toUint8(bytesAny))
+      const text = parseCSVText(toUint8(bytesAny))
 
-      // ✅ parse “real” do CSV, mantendo datas como string
-      const raw = parseCSVSemicolon(text)
+      const wb = XLSX.read(text, { type: 'string' })
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      const raw: Record<string, any>[] = XLSX.utils.sheet_to_json(ws, { defval: '' })
 
-      const mapped: RowBase[] = raw.map((r) => {
-        // ✅ CHAVE LOJA (voltou forte aqui)
-        const chave = toStr(
-          r['chave_loja'] ||
-            r['chave loja'] ||
-            r['chave'] ||
-            r['chave_loja ']
-        )
+      const normalized = raw.map((obj) => {
+        const out: Record<string, any> = {}
+        for (const [k, v] of Object.entries(obj)) out[normalizeKey(k)] = v
+        return out
+      })
 
+      const mapped: RowBase[] = normalized.map((r) => {
+        const chave = toStr(r['chave_loja'] || r['chave loja'] || r['chave'])
         const nome = toStr(r['nome_loja'] || r['nome da loja'] || r['nome'])
         const municipio = toStr(r['municipio'] || r['município'])
 
-        const agpacb = r['ag_pacb'] || r['agencia/pacb'] || r['agência/pacb'] || r['ag_pacb ']
+        const agpacb = r['ag_pacb'] || r['agencia/pacb'] || r['agência/pacb']
         const { agencia, pacb } = splitAgPacb(agpacb)
 
         const statusAnalise = toStr(r['status_analise'] || r['status analise'] || r['status'])
-        // ✅ dt_certificacao do CSV (string intacta)
         const dtCertificacao = toStr(r['dt_certificacao'] || r['dt certificacao'] || r['certificacao'] || r['certificação'])
 
         const trx = parseNumber(r['qtd_trxcontabil'] || r['qtd_trx_contabil'] || r['qtd trxcontabil'] || r['qtd_trx'])
@@ -501,7 +458,6 @@ export default function ExpressoGeralPage() {
 
   const computed = useMemo(() => {
     const list = rows.map((r) => {
-      // ✅ agora dtCertificacao vem string 100% do CSV
       const certDate = parseDateFlexible(r.dtCertificacao)
       const semCert = !certDate
       const vencida = isCertVencida(certDate)
@@ -545,12 +501,14 @@ export default function ExpressoGeralPage() {
       return true
     })
 
+    // ✅ busca é só refinamento
     if (term) {
       list = list.filter(({ r }) => {
         const hay = [r.nome, r.chave, r.municipio, r.agencia, r.pacb, r.statusAnalise].join(' ').toLowerCase()
         return hay.includes(term)
       })
     } else {
+      // ✅ sem busca: limita para não travar / poluir
       list = list.slice(0, LIMIT_NO_SEARCH)
     }
 
@@ -660,7 +618,7 @@ export default function ExpressoGeralPage() {
               <option value="Todos">Todos</option>
               <option value="NaoCertificado">Não certificado</option>
               <option value="Certificado">Certificado</option>
-              <option value="Vencida">Certificação vencida (5+ anos)</option>
+              <option value="Vencida">Certificação vencida (5 anos completos)</option>
             </select>
           </label>
 

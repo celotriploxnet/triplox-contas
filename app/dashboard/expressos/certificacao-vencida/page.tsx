@@ -65,7 +65,6 @@ function toUint8(bytes: any): Uint8Array {
 }
 
 function parseCSVText(u8: Uint8Array) {
-  // tenta utf-8, se vier com caracteres estranhos, ainda assim XLSX normalmente resolve
   return new TextDecoder('utf-8').decode(u8)
 }
 
@@ -85,18 +84,28 @@ function splitAgPacb(v: any) {
 }
 
 /* =========================
-   CERT HELPERS
+   CERT HELPERS (EXATO)
    ========================= */
 function parseDateFlexible(v: any): Date | null {
   const raw = toStr(v)
   if (!raw) return null
 
   // dd/mm/aaaa
-  const m = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})/)
-  if (m) {
-    const dd = Number(m[1])
-    const mm = Number(m[2])
-    const yy = Number(m[3])
+  const mBR = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})/)
+  if (mBR) {
+    const dd = Number(mBR[1])
+    const mm = Number(mBR[2])
+    const yy = Number(mBR[3])
+    const dt = new Date(yy, mm - 1, dd)
+    return Number.isNaN(dt.getTime()) ? null : dt
+  }
+
+  // yyyy-mm-dd
+  const mISO = raw.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (mISO) {
+    const yy = Number(mISO[1])
+    const mm = Number(mISO[2])
+    const dd = Number(mISO[3])
     const dt = new Date(yy, mm - 1, dd)
     return Number.isNaN(dt.getTime()) ? null : dt
   }
@@ -105,12 +114,56 @@ function parseDateFlexible(v: any): Date | null {
   const n = Number(raw)
   if (Number.isFinite(n) && n > 20000 && n < 90000) {
     const d = XLSX.SSF.parse_date_code(n)
-    if (d?.y && d?.m && d?.d) return new Date(d.y, d.m - 1, d.d)
+    if (d?.y && d?.m && d?.d) {
+      const dt = new Date(d.y, d.m - 1, d.d)
+      return Number.isNaN(dt.getTime()) ? null : dt
+    }
   }
 
-  // ISO / Date parse
+  // ISO / Date parse fallback
   const dt = new Date(raw)
   return Number.isNaN(dt.getTime()) ? null : dt
+}
+
+function startOfDay(dt: Date) {
+  const d = new Date(dt)
+  d.setHours(0, 0, 0, 0)
+  return d
+}
+
+/**
+ * Soma anos preservando mês/dia com ajuste para 29/02.
+ * Ex.: 29/02/2020 + 5 anos => 28/02/2025 (último dia do mês)
+ */
+function addYearsSafe(date: Date, years: number) {
+  const base = new Date(date)
+  const month = base.getMonth()
+  const day = base.getDate()
+
+  base.setFullYear(base.getFullYear() + years)
+
+  // se estourou o mês (bissexto), ajusta para último dia do mês anterior
+  if (base.getMonth() !== month) {
+    base.setDate(0)
+  } else {
+    base.setDate(day)
+  }
+
+  return base
+}
+
+function addMonthsSafe(date: Date, months: number) {
+  const base = new Date(date)
+  const day = base.getDate()
+
+  base.setMonth(base.getMonth() + months)
+
+  // ajuste para meses menores (ex.: 31 -> 30/28)
+  if (base.getDate() !== day) {
+    base.setDate(0)
+  }
+
+  return base
 }
 
 function formatPtBRDate(dt: Date | null) {
@@ -122,26 +175,26 @@ function formatPtBRDate(dt: Date | null) {
   }).format(dt)
 }
 
-function classifyCert(dt: Date | null): CertGroup {
-  if (!dt) return 'nao_certificado'
+/**
+ * Classificação EXATA:
+ * - vencida: hoje >= dt + 5 anos (no dia certinho)
+ * - proxima: ainda não venceu e vence até 3 meses a partir de hoje
+ * - ok: não venceu e não está próxima
+ */
+function classifyCert(dt: Date | null): { group: CertGroup; expiry: Date | null } {
+  if (!dt) return { group: 'nao_certificado', expiry: null }
 
-  const now = new Date()
+  const cert = startOfDay(dt)
+  const hoje = startOfDay(new Date())
 
-  // vencida: mais de 5 anos
-  const fiveYearsAgo = new Date(now)
-  fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5)
-  if (dt < fiveYearsAgo) return 'vencida'
+  const expiry = startOfDay(addYearsSafe(cert, 5))
 
-  // próxima: vence em até 3 meses (assumindo validade 5 anos)
-  const expiry = new Date(dt)
-  expiry.setFullYear(expiry.getFullYear() + 5)
+  if (hoje.getTime() >= expiry.getTime()) return { group: 'vencida', expiry }
 
-  const threeMonthsFromNow = new Date(now)
-  threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3)
+  const threeMonthsFromNow = startOfDay(addMonthsSafe(hoje, 3))
+  if (expiry.getTime() <= threeMonthsFromNow.getTime()) return { group: 'proxima', expiry }
 
-  if (expiry <= threeMonthsFromNow) return 'proxima'
-
-  return 'ok'
+  return { group: 'ok', expiry }
 }
 
 function isTreinado(status: string) {
@@ -249,7 +302,7 @@ function groupPillStyle(g: CertGroup): CSSProperties {
 /* =========================
    WHATSAPP MSG
    ========================= */
-function buildWhatsApp(r: RowBase, group: CertGroup, certDate: Date | null) {
+function buildWhatsApp(r: RowBase, group: CertGroup, certDate: Date | null, expiry: Date | null) {
   const groupLabel =
     group === 'vencida'
       ? '🚨 Certificação Vencida'
@@ -267,6 +320,7 @@ function buildWhatsApp(r: RowBase, group: CertGroup, certDate: Date | null) {
     `📍 *Município:* ${r.municipio || '—'}`,
     '',
     `📅 *Certificação:* ${formatPtBRDate(certDate)}`,
+    `⏰ *Vence em:* ${formatPtBRDate(expiry)}`,
     `🔁 *TRX Contábil:* ${String(r.trx || 0)}`,
     `📌 *Status:* ${r.statusAnalise || '—'}`,
     `⛔ *Bloqueado:* ${isBloqueadoValue(r.bloqueadoRaw) ? 'SIM' : 'NÃO'}`,
@@ -379,9 +433,9 @@ export default function CertificacaoVencidaPage() {
     return rows
       .map((r) => {
         const certDate = parseDateFlexible(r.dtCertificacao)
-        const group = classifyCert(certDate)
+        const { group, expiry } = classifyCert(certDate)
         const bloq = isBloqueadoValue(r.bloqueadoRaw)
-        return { r, certDate, group, bloq }
+        return { r, certDate, expiry, group, bloq }
       })
       .filter(({ r, group }) => {
         // regras da página:
@@ -411,7 +465,7 @@ export default function CertificacaoVencidaPage() {
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase()
 
-    return parsed.filter(({ r, group, bloq }) => {
+    return parsed.filter(({ r, bloq }) => {
       if (fAgencia !== 'Todos' && r.agencia !== fAgencia) return false
       if (fMunicipio !== 'Todos' && r.municipio !== fMunicipio) return false
 
@@ -447,7 +501,7 @@ export default function CertificacaoVencidaPage() {
 
   async function copyWhatsApp(it: (typeof filtered)[number]) {
     try {
-      const msg = buildWhatsApp(it.r, it.group, it.certDate)
+      const msg = buildWhatsApp(it.r, it.group, it.certDate, it.expiry)
       await navigator.clipboard.writeText(msg)
       setInfo('Mensagem copiada ✅ (cole no WhatsApp)')
       setError(null)
@@ -465,7 +519,7 @@ export default function CertificacaoVencidaPage() {
           🚨 Expressos com Certificação Vencida
         </h1>
         <p className="p-muted" style={{ marginTop: '.35rem' }}>
-          Lista de expressos <b>Treinados</b> com <b>TRX &gt; 0</b> e certificação <b>vencida (5+ anos)</b> ou
+          Lista de expressos <b>Treinados</b> com <b>TRX &gt; 0</b> e certificação <b>vencida (5 anos completos)</b> ou
           <b> próxima do vencimento (até 3 meses)</b>.
         </p>
       </div>
@@ -486,12 +540,7 @@ export default function CertificacaoVencidaPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <label>
             <div className="label">Buscar (nome ou chave)</div>
-            <input
-              className="input"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Ex.: Mercado Azul | 12345"
-            />
+            <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ex.: Mercado Azul | 12345" />
           </label>
 
           <label>
@@ -595,13 +644,7 @@ export default function CertificacaoVencidaPage() {
                   <div style={{ fontWeight: 900, fontSize: '1.08rem', marginTop: '.15rem' }}>{r.nome || '—'}</div>
                 </div>
 
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
-                    gap: '.6rem',
-                  }}
-                >
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '.6rem' }}>
                   <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
                     <div className="p-muted" style={{ fontSize: 12 }}>
                       Chave Loja
@@ -637,6 +680,13 @@ export default function CertificacaoVencidaPage() {
                       Certificação
                     </div>
                     <div style={{ fontWeight: 900 }}>{formatPtBRDate(it.certDate)}</div>
+                  </div>
+
+                  <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
+                    <div className="p-muted" style={{ fontSize: 12 }}>
+                      Vence em
+                    </div>
+                    <div style={{ fontWeight: 900 }}>{formatPtBRDate(it.expiry)}</div>
                   </div>
                 </div>
               </div>
