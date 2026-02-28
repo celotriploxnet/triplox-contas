@@ -59,16 +59,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
 
           <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-            {/* ✅ MENU PRINCIPAL */}
+            {/* ✅ MENU PRINCIPAL (ordem nova) */}
             <NavLink href="/dashboard" label="Início" />
+            <NavLink href="/dashboard/expressos" label="Expressos" />
             <NavLink href="/dashboard/treinamentos" label="Treinamentos" />
             <NavLink href="/dashboard/agenda" label="Agenda" />
             <NavLink href="/dashboard/baixa-empresa" label="Baixa" />
             <NavLink href="/dashboard/nova-prestacao" label="Prestação" />
             <NavLink href="/dashboard/historico" label="Histórico" />
-
-            {/* ✅ NOVO MENU: EXPRESSOS */}
-            <NavLink href="/dashboard/expressos" label="Expressos" />
 
             {/* LOGOUT */}
             {user && (
