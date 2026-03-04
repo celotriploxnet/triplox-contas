@@ -374,7 +374,8 @@ export default function DashboardPage() {
   async function backupCurrentBaseIfExists() {
     try {
       const currentBytes = await getBytes(ref(storage, BASE_STORAGE_PATH))
-      if (!currentBytes || currentBytes.length === 0) return
+      // ✅ FIX: getBytes() retorna ArrayBuffer → use byteLength (não length)
+      if (!currentBytes || currentBytes.byteLength === 0) return
 
       const now = new Date()
       const stamp = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}_${pad2(now.getHours())}-${pad2(
