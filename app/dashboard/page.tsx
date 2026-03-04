@@ -9,14 +9,17 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
 } from 'firebase/firestore'
 import {
   deleteObject,
   getDownloadURL,
+  getBytes,
   listAll,
   ref,
   uploadBytes,
@@ -35,12 +38,53 @@ type ArquivoObrigatorio = {
   readonly?: boolean // ✅ arquivos que já existiam no Storage (sem doc no Firestore)
 }
 
+type BaseMeta = {
+  updatedAt?: any
+  updatedBy?: string
+  originalFileName?: string
+}
+
+function pad2(n: number) {
+  return String(n).padStart(2, '0')
+}
+
+function formatPtBRDateTimeFromDate(d: Date) {
+  const dd = pad2(d.getDate())
+  const mm = pad2(d.getMonth() + 1)
+  const yyyy = d.getFullYear()
+  const hh = pad2(d.getHours())
+  const mi = pad2(d.getMinutes())
+  return `${dd}/${mm}/${yyyy} às ${hh}:${mi}`
+}
+
+function safeTextDecoder(u8: Uint8Array) {
+  try {
+    return new TextDecoder('utf-8').decode(u8)
+  } catch {
+    // fallback simples
+    let s = ''
+    for (const b of u8) s += String.fromCharCode(b)
+    return s
+  }
+}
+
+function sanitizeFileName(name: string) {
+  return name
+    .replace(/\s+/g, '-')
+    .replace(/[^\w.\-]+/g, '')
+    .replace(/-+/g, '-')
+    .toLowerCase()
+}
+
 export default function DashboardPage() {
   const ADMIN_EMAIL = 'marcelo@treinexpresso.com.br'
   const STORAGE_FOLDER = 'arquivos-obrigatorios'
 
-  // ✅ Base geral (banco.csv)
-  const BASE_DEST_PATH = 'base-lojas/banco.csv'
+  // ✅ BASE (Storage)
+  const BASE_STORAGE_PATH = 'base-lojas/banco.csv'
+  const BASE_BACKUP_FOLDER = 'base-lojas/backups'
+  // ✅ META (Firestore)
+  const BASE_META_DOC = { col: 'config', docId: 'base_lojas' }
 
   const [user, setUser] = useState<User | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
@@ -52,18 +96,21 @@ export default function DashboardPage() {
   const [info, setInfo] = useState('')
   const [error, setError] = useState<string | null>(null)
 
-  // upload (admin) - PDFs
+  // upload (admin) PDFs
   const [titulo, setTitulo] = useState('')
   const [pdfFile, setPdfFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
-  // ✅ upload base (CSV/Excel)
-  const [baseFile, setBaseFile] = useState<File | null>(null)
-  const [uploadingBase, setUploadingBase] = useState(false)
-
   // cache de URLs
   const [urlMap, setUrlMap] = useState<Record<string, string>>({})
+
+  // ✅ BASE upload + indicador
+  const [baseFile, setBaseFile] = useState<File | null>(null)
+  const [baseUploading, setBaseUploading] = useState(false)
+  const [baseInfo, setBaseInfo] = useState('')
+  const [baseError, setBaseError] = useState<string | null>(null)
+  const [baseMeta, setBaseMeta] = useState<BaseMeta | null>(null)
 
   /* =========================
      AUTH
@@ -85,6 +132,29 @@ export default function DashboardPage() {
 
     return () => unsub()
   }, [])
+
+  /* =========================
+     LOAD BASE META (Firestore)
+     ========================= */
+  async function loadBaseMeta() {
+    try {
+      const refDoc = doc(db, BASE_META_DOC.col, BASE_META_DOC.docId)
+      const snap = await getDoc(refDoc)
+      if (!snap.exists()) {
+        setBaseMeta(null)
+        return
+      }
+      const data = snap.data() as any
+      setBaseMeta({
+        updatedAt: data.updatedAt,
+        updatedBy: data.updatedBy || '',
+        originalFileName: data.originalFileName || '',
+      })
+    } catch (e) {
+      console.warn('Falha ao ler meta da base:', e)
+      setBaseMeta(null)
+    }
+  }
 
   /* =========================
      LOAD LIST (Firestore + Storage extra)
@@ -140,7 +210,7 @@ export default function DashboardPage() {
           // título “bonitinho” baseado no nome do arquivo
           const base = itemRef.name.replace(/\.pdf$/i, '')
           const pretty = base
-            .replace(/^\d{4}-\d{2}-\d{2}.*?-/, '')
+            .replace(/^\d{4}-\d{2}-\d{2}.*?-/, '') // tenta remover prefixos comuns
             .replace(/[-_]+/g, ' ')
             .trim()
 
@@ -168,6 +238,7 @@ export default function DashboardPage() {
         // junta (Firestore primeiro, depois Storage-only)
         list.push(...storageOnly)
       } catch (e) {
+        // se der erro ao listar, não quebra sua lista antiga
         console.warn('Não consegui listar arquivos antigos do Storage:', e)
       }
 
@@ -183,6 +254,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     loadObrigatorios()
+    loadBaseMeta()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -194,14 +266,6 @@ export default function DashboardPage() {
     const okExt = name.endsWith('.pdf')
     const okType = file.type === 'application/pdf' || file.type === ''
     return okExt && okType
-  }
-
-  function sanitizeFileName(name: string) {
-    return name
-      .replace(/\s+/g, '-')
-      .replace(/[^\w.\-]+/g, '')
-      .replace(/-+/g, '-')
-      .toLowerCase()
   }
 
   async function handleUpload() {
@@ -299,119 +363,130 @@ export default function DashboardPage() {
   }
 
   /* =========================
-     ✅ ADMIN: BASE (CSV/EXCEL)
+     ADMIN: BASE UPLOAD (XLS/XLSX/CSV) + BACKUP + META
      ========================= */
-
-  function isCsv(file: File) {
-    const n = file.name.toLowerCase()
-    return n.endsWith('.csv')
+  function validateBaseFile(file: File) {
+    const name = file.name.toLowerCase()
+    const okExt = name.endsWith('.csv') || name.endsWith('.xlsx') || name.endsWith('.xls')
+    return okExt
   }
 
-  function isExcel(file: File) {
-    const n = file.name.toLowerCase()
-    return n.endsWith('.xlsx') || n.endsWith('.xls')
-  }
-
-  async function uploadCsvTextToBase(csvText: string) {
-    // garante newline final (ajuda alguns parsers)
-    const fixed = csvText.endsWith('\n') ? csvText : csvText + '\n'
-
-    const blob = new Blob([fixed], { type: 'text/csv;charset=utf-8' })
-    const storageRef = ref(storage, BASE_DEST_PATH)
-
-    await uploadBytes(storageRef, blob, { contentType: 'text/csv' })
-  }
-
-  async function handleUploadBaseCsvDirect() {
-    if (!user || !isAdmin) {
-      setError('Apenas o administrador pode atualizar a base.')
-      return
-    }
-    if (!baseFile) {
-      setError('Selecione um arquivo CSV (.csv).')
-      return
-    }
-    if (!isCsv(baseFile)) {
-      setError('Esse botão é apenas para CSV. Use “Atualizar base automática (Excel)” para .xlsx/.xls.')
-      return
-    }
-
+  async function backupCurrentBaseIfExists() {
     try {
-      setUploadingBase(true)
-      setError(null)
-      setInfo('')
+      const currentBytes = await getBytes(ref(storage, BASE_STORAGE_PATH))
+      if (!currentBytes || currentBytes.length === 0) return
 
-      // Sobe o CSV como está
-      await uploadBytes(ref(storage, BASE_DEST_PATH), baseFile, {
-        contentType: 'text/csv',
-      })
+      const now = new Date()
+      const stamp = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}_${pad2(now.getHours())}-${pad2(
+        now.getMinutes()
+      )}-${pad2(now.getSeconds())}`
 
-      setInfo('Base atualizada (CSV) ✅')
-      setBaseFile(null)
+      const backupPath = `${BASE_BACKUP_FOLDER}/banco_${stamp}.csv`
+      await uploadBytes(ref(storage, backupPath), currentBytes, { contentType: 'text/csv' })
     } catch (e: any) {
-      console.error(e)
-      setError(`Erro ao atualizar base: ${e?.message || 'erro'}`)
-    } finally {
-      setUploadingBase(false)
+      // se não existir ainda, ok
+      const code = String(e?.code || '')
+      if (code.includes('storage/object-not-found')) return
+      console.warn('Backup da base falhou:', e)
     }
   }
 
-  async function handleUploadBaseAutoExcel() {
-    if (!user || !isAdmin) {
-      setError('Apenas o administrador pode atualizar a base.')
+  async function handleBaseUpload() {
+    if (!user) {
+      setBaseError('Você precisa estar logado.')
+      return
+    }
+    if (!isAdmin) {
+      setBaseError('Apenas o administrador pode atualizar a base.')
       return
     }
     if (!baseFile) {
-      setError('Selecione um arquivo (.xlsx/.xls/.csv).')
+      setBaseError('Selecione um arquivo (.xlsx, .xls ou .csv).')
+      return
+    }
+    if (!validateBaseFile(baseFile)) {
+      setBaseError('Envie somente .xlsx, .xls ou .csv.')
       return
     }
 
     try {
-      setUploadingBase(true)
-      setError(null)
-      setInfo('')
+      setBaseError(null)
+      setBaseInfo('')
+      setBaseUploading(true)
 
-      if (isCsv(baseFile)) {
-        // Se mandou CSV, já sobe direto
-        await uploadBytes(ref(storage, BASE_DEST_PATH), baseFile, {
-          contentType: 'text/csv',
-        })
-        setInfo('Base atualizada (CSV) ✅')
-        setBaseFile(null)
-        return
-      }
+      // 1) backup automático da base atual
+      await backupCurrentBaseIfExists()
 
-      if (!isExcel(baseFile)) {
-        setError('Formato inválido. Envie .xlsx, .xls ou .csv.')
-        return
-      }
-
-      // ✅ Lê Excel e converte para CSV automaticamente
+      // 2) lê o arquivo novo
       const buf = await baseFile.arrayBuffer()
-      const wb = XLSX.read(buf, { type: 'array' })
 
-      const sheetName = wb.SheetNames?.[0]
-      if (!sheetName) {
-        setError('Planilha sem abas. Verifique o arquivo.')
-        return
+      // 3) salva o original como backup também (para auditoria)
+      {
+        const now = new Date()
+        const stamp = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}_${pad2(now.getHours())}-${pad2(
+          now.getMinutes()
+        )}-${pad2(now.getSeconds())}`
+        const safeName = sanitizeFileName(baseFile.name)
+        const origPath = `${BASE_BACKUP_FOLDER}/upload_${stamp}_${safeName}`
+        await uploadBytes(ref(storage, origPath), new Uint8Array(buf), {
+          contentType: baseFile.type || 'application/octet-stream',
+        })
       }
 
-      const ws = wb.Sheets[sheetName]
-      const csv = XLSX.utils.sheet_to_csv(ws)
+      // 4) garante o arquivo final em CSV (compatível com suas páginas atuais)
+      let csvText = ''
 
-      await uploadCsvTextToBase(csv)
+      const lower = baseFile.name.toLowerCase()
+      if (lower.endsWith('.csv')) {
+        csvText = safeTextDecoder(new Uint8Array(buf))
+      } else {
+        // XLS/XLSX → CSV (primeira aba)
+        const wb = XLSX.read(buf, { type: 'array' })
+        const ws = wb.Sheets[wb.SheetNames[0]]
+        csvText = XLSX.utils.sheet_to_csv(ws)
+      }
 
-      setInfo('Base atualizada automaticamente (Excel → CSV) ✅')
+      const csvBytes = new TextEncoder().encode(csvText)
+
+      // 5) sobe para o caminho oficial (onde seu sistema já lê)
+      await uploadBytes(ref(storage, BASE_STORAGE_PATH), csvBytes, { contentType: 'text/csv' })
+
+      // 6) salva meta no Firestore (para mostrar o indicador)
+      await setDoc(
+        doc(db, BASE_META_DOC.col, BASE_META_DOC.docId),
+        {
+          updatedAt: serverTimestamp(),
+          updatedBy: user.email || '',
+          originalFileName: baseFile.name,
+        },
+        { merge: true }
+      )
+
+      setBaseInfo('Base atualizada ✅')
       setBaseFile(null)
+
+      await loadBaseMeta()
     } catch (e: any) {
       console.error(e)
-      setError(`Erro ao atualizar base automática: ${e?.message || 'erro'}`)
+      setBaseError(`Falha ao atualizar base. (${e?.code || 'sem-code'}): ${e?.message || 'erro'}`)
     } finally {
-      setUploadingBase(false)
+      setBaseUploading(false)
     }
   }
 
   const cards = useMemo(() => items, [items])
+
+  const baseUpdatedLabel = useMemo(() => {
+    const ts = baseMeta?.updatedAt
+    // Timestamp do Firestore normalmente tem toDate()
+    try {
+      if (ts?.toDate) {
+        const d = ts.toDate() as Date
+        return formatPtBRDateTimeFromDate(d)
+      }
+    } catch {}
+    return null
+  }, [baseMeta])
 
   return (
     <section style={{ display: 'grid', gap: '1.5rem' }}>
@@ -462,78 +537,77 @@ export default function DashboardPage() {
         </Link>
       </div>
 
-      {/* ✅ ADMIN: CSV (seu bloco já existente) */}
+      {/* ✅ ADMIN: BASE (XLSX direto) + indicador + backup */}
       {isAdmin && (
         <div className="card">
           <span className="pill">Admin</span>
           <h2 className="h2" style={{ marginTop: '.65rem' }}>
-            Administração
+            Base de dados (Expresso)
           </h2>
           <p className="p-muted" style={{ marginTop: '.35rem' }}>
-            Atualize a base de lojas para o autopreencher da Baixa.
+            Atualize a base principal (banco.csv) direto por Excel ou CSV. O sistema faz backup automático.
           </p>
 
-          <div style={{ marginTop: '1rem' }}>
-            <Link href="/dashboard/importar-lojas" className="btn-primary">
-              📄 Atualizar base de lojas (CSV)
-            </Link>
-          </div>
-        </div>
-      )}
+          <div style={{ marginTop: '.85rem', display: 'grid', gap: '.6rem' }}>
+            <div style={{ display: 'flex', gap: '.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              <span className="pill">📊 Base atualizada em:</span>
+              <span className="p-muted" style={{ fontWeight: 900 }}>
+                {baseUpdatedLabel ? baseUpdatedLabel : '—'}
+              </span>
+              {baseMeta?.originalFileName ? (
+                <span className="pill" title="Último arquivo enviado">
+                  {baseMeta.originalFileName}
+                </span>
+              ) : null}
+            </div>
 
-      {/* ✅ NOVO: ADMIN - ATUALIZAR BANCO GERAL (CSV/EXCEL AUTOMÁTICO) */}
-      {isAdmin && (
-        <div className="card">
-          <span className="pill">Admin</span>
+            {baseInfo && (
+              <div>
+                <span className="pill">{baseInfo}</span>
+              </div>
+            )}
 
-          <h2 className="h2" style={{ marginTop: '.65rem' }}>
-            Atualizar banco geral de dados
-          </h2>
+            {baseError && (
+              <div className="card-soft" style={{ borderColor: 'rgba(214,31,44,.25)' }}>
+                <p className="p-muted" style={{ color: 'rgba(214,31,44,.95)', fontWeight: 800 }}>
+                  {baseError}
+                </p>
+              </div>
+            )}
 
-          <p className="p-muted" style={{ marginTop: '.35rem' }}>
-            Envie <b>.csv</b> ou <b>Excel (.xlsx/.xls)</b>. No modo automático, o sistema converte o Excel em CSV e salva em{' '}
-            <b>{BASE_DEST_PATH}</b>.
-          </p>
-
-          <div style={{ marginTop: '1rem', display: 'grid', gap: '.75rem', maxWidth: 520 }}>
             <label>
-              <div className="label">Arquivo da base (CSV ou Excel)</div>
+              <div className="label">Arquivo da base (.xlsx / .xls / .csv)</div>
               <input
                 className="input"
                 type="file"
-                accept=".csv,.xlsx,.xls"
+                accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
                 onChange={(e) => setBaseFile(e.target.files?.[0] ?? null)}
               />
               <p className="p-muted" style={{ marginTop: '.35rem', fontSize: 13 }}>
-                Dica: pode mandar direto o Excel do relatório — eu converto automaticamente.
+                Você pode subir Excel direto. O sistema converte internamente para CSV e atualiza <b>base-lojas/banco.csv</b>.
               </p>
             </label>
 
-            <div style={{ display: 'flex', gap: '.6rem', flexWrap: 'wrap' }}>
-              <button
-                className="btn-primary"
-                type="button"
-                onClick={handleUploadBaseAutoExcel}
-                disabled={uploadingBase}
-                title="Converte Excel em CSV e atualiza a base"
-              >
-                {uploadingBase ? 'Atualizando...' : '⚡ Atualizar base automática (Excel/CSV)'}
+            <div style={{ display: 'flex', gap: '.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              <button type="button" className="btn-primary" onClick={handleBaseUpload} disabled={baseUploading}>
+                {baseUploading ? 'Atualizando...' : '✅ Atualizar base automática'}
               </button>
 
               <button
-                className="btn-primary"
                 type="button"
-                onClick={handleUploadBaseCsvDirect}
-                disabled={uploadingBase}
-                title="Sobe o CSV exatamente como está"
+                className="btn-ghost"
+                onClick={loadBaseMeta}
+                disabled={baseUploading}
+                style={{ color: 'rgba(16,16,24,.92)', background: 'rgba(255,255,255,.65)' }}
               >
-                {uploadingBase ? 'Atualizando...' : '📄 Atualizar base (CSV direto)'}
+                Recarregar status
               </button>
+
+              {/* Mantém o link antigo (não quebra nada) */}
+              <Link href="/dashboard/importar-lojas" className="btn-ghost" style={{ textDecoration: 'none' }}>
+                Abrir importador antigo
+              </Link>
             </div>
-
-            <p className="p-muted" style={{ fontSize: 12 }}>
-              Isso <b>não altera</b> nenhum outro dado do sistema — apenas substitui o arquivo do banco no Storage.
-            </p>
           </div>
         </div>
       )}
