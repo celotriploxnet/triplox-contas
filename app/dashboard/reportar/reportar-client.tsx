@@ -724,7 +724,7 @@ export default function ReportarClientPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#7a0019] p-4 md:p-6">
+    <div className="min-h-screen bg-gradient-to-b from-[#7a0019] via-[#8c0d2b] to-[#5c0014] p-4 md:p-6">
       <div className="mx-auto max-w-7xl space-y-6">
         <div className="rounded-2xl bg-white p-5 shadow-lg">
           <h1 className="text-2xl font-bold text-[#7a0019]">📕 Reportar</h1>
