@@ -13,8 +13,6 @@ import { auth, storage } from '@/lib/firebase'
    ========================= */
 const ADMIN_EMAIL = 'marcelo@treinexpresso.com.br'
 const CSV_PATH = 'base-lojas/banco.csv'
-
-// ✅ para não explodir a tela quando não tem busca (ajuste como quiser)
 const LIMIT_NO_SEARCH = 200
 
 /* =========================
@@ -846,7 +844,7 @@ export default function ExpressoGeralPage() {
                       onClick={() => irParaReportar(r)}
                       title="Reportar"
                     >
-                      📕
+                      📕 Reportar
                     </LightButton>
 
                     <LightButton

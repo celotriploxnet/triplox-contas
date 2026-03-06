@@ -867,11 +867,6 @@ export default function ReportarClientPage() {
           </div>
 
           <div className="sm:col-span-2">
-            <label className="label">Status do Expresso</label>
-            <input className="input" value={statusExpresso} readOnly />
-          </div>
-
-          <div className="sm:col-span-2">
             <label className="label">Tipo do chamado</label>
             <select
               className="input"
