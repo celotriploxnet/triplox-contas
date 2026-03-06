@@ -712,387 +712,442 @@ export default function ReportarClientPage() {
   }
 
   if (loadingUser) {
-    return <div className="p-6 text-white">Carregando...</div>
+    return <div className="app-container">Carregando...</div>
   }
 
   if (!user) {
     return (
-      <div className="p-6 text-white">
+      <div className="app-container">
         Você precisa estar logado para acessar a área Reportar.
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-r from-[#f2a6c7] via-[#c784c7] to-[#8d67d8] p-4 md:p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <div className="rounded-[28px] border border-white/60 bg-white/95 p-5 shadow-[0_12px_30px_rgba(120,60,120,0.16)] backdrop-blur-sm">
-          <h1 className="text-2xl font-bold text-[#8a3d6d]">📕 Reportar</h1>
-          <p className="mt-1 text-sm text-gray-600">
-            Abra chamados de solicitação, problema, reclamação ou elogios e
-            sugestões.
-          </p>
-        </div>
+    <section className="app-container" style={{ display: 'grid', gap: '1.25rem' }}>
+      <div>
+        <span className="pill">Chamados</span>
+        <h1 className="h1" style={{ marginTop: '.5rem' }}>📕 Reportar</h1>
+        <p className="p-muted" style={{ marginTop: '.35rem' }}>
+          Abra chamados de solicitação, problema, reclamação ou elogios e sugestões.
+        </p>
+      </div>
 
-        <div className="rounded-[28px] border border-white/60 bg-white/95 p-5 shadow-[0_12px_30px_rgba(120,60,120,0.16)] backdrop-blur-sm">
-          <h2 className="text-lg font-bold text-[#8a3d6d]">
-            Localizar expresso
-          </h2>
+      <div className="card">
+        <h2 className="h2">Localizar expresso</h2>
 
-          <div className="mt-4 grid gap-4 md:grid-cols-3">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-[#7f5a73]">
-                Chave Loja
-              </label>
-              <input
-                value={buscaChaveLoja}
-                onChange={(e) => setBuscaChaveLoja(e.target.value)}
-                className="w-full rounded-2xl border border-[#e7d5e3] bg-white px-4 py-3 text-gray-700 outline-none transition focus:border-[#c784c7] focus:ring-2 focus:ring-[#e8c7e6]"
-                placeholder="Digite a chave loja"
-              />
-            </div>
-
-            <div className="relative md:col-span-1" ref={sugestoesRef}>
-              <label className="mb-1 block text-sm font-medium text-[#7f5a73]">
-                Nome do Expresso
-              </label>
-              <input
-                value={buscaNomeExpresso}
-                onChange={(e) => {
-                  setBuscaNomeExpresso(e.target.value)
-                  setMensagemBusca('')
-                }}
-                onFocus={() => {
-                  if (sugestoesExpresso.length > 0) {
-                    setMostrarSugestoes(true)
-                  }
-                }}
-                className="w-full rounded-2xl border border-[#e7d5e3] bg-white px-4 py-3 text-gray-700 outline-none transition focus:border-[#c784c7] focus:ring-2 focus:ring-[#e8c7e6]"
-                placeholder="Digite parte do nome do expresso"
-                autoComplete="off"
-              />
-
-              {loadingSugestoes && (
-                <div className="mt-1 text-xs text-[#8a6f86]">
-                  Buscando opções...
-                </div>
-              )}
-
-              {mostrarSugestoes && sugestoesExpresso.length > 0 && (
-                <div className="absolute z-20 mt-2 max-h-72 w-full overflow-auto rounded-2xl border border-[#ead9e8] bg-white shadow-xl">
-                  {sugestoesExpresso.map((item) => (
-                    <button
-                      key={item.id || `${item.chaveLoja}-${item.nomeExpresso}`}
-                      type="button"
-                      onClick={() => {
-                        preencherExpresso(item)
-                        setMensagemBusca('Expresso selecionado com sucesso.')
-                      }}
-                      className="block w-full border-b border-[#f2e8f1] px-4 py-3 text-left last:border-b-0 hover:bg-[#fbf5fa]"
-                    >
-                      <div className="font-semibold text-[#78486a]">
-                        {item.nomeExpresso || '-'}
-                      </div>
-                      <div className="text-xs text-[#8c7b88]">
-                        Chave Loja: {item.chaveLoja || '-'} | Agência:{' '}
-                        {item.agencia || '-'} | PACB: {item.pacb || '-'}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-end gap-2">
-              <button
-                type="button"
-                onClick={buscarExpresso}
-                disabled={loadingBuscaExpresso}
-                className="rounded-2xl bg-gradient-to-r from-[#b86ab5] to-[#8f67d7] px-5 py-3 font-semibold text-white shadow-md transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {loadingBuscaExpresso ? 'Buscando...' : 'Buscar expresso'}
-              </button>
-
-              <button
-                type="button"
-                onClick={limparExpressoSelecionado}
-                className="rounded-2xl border border-[#d7bfd2] bg-white px-5 py-3 font-semibold text-[#8a5478] transition hover:bg-[#faf5f9]"
-              >
-                Limpar
-              </button>
-            </div>
+        <div className="grid gap-4 sm:grid-cols-3" style={{ marginTop: '1rem' }}>
+          <div>
+            <label className="label">Chave Loja</label>
+            <input
+              value={buscaChaveLoja}
+              onChange={(e) => setBuscaChaveLoja(e.target.value)}
+              className="input"
+              placeholder="Digite a chave loja"
+            />
           </div>
 
-          {mensagemBusca && (
-            <div className="mt-4 rounded-2xl border border-green-200 bg-green-50 p-3 text-sm text-green-700">
-              {mensagemBusca}
-            </div>
-          )}
+          <div className="relative" ref={sugestoesRef}>
+            <label className="label">Nome do Expresso</label>
+            <input
+              value={buscaNomeExpresso}
+              onChange={(e) => {
+                setBuscaNomeExpresso(e.target.value)
+                setMensagemBusca('')
+              }}
+              onFocus={() => {
+                if (sugestoesExpresso.length > 0) {
+                  setMostrarSugestoes(true)
+                }
+              }}
+              className="input"
+              placeholder="Digite parte do nome do expresso"
+              autoComplete="off"
+            />
 
-          {!mensagemBusca &&
-            buscaNomeExpresso.trim().length >= 2 &&
-            sugestoesExpresso.length === 0 &&
-            !loadingSugestoes && (
-              <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
-                Nenhuma opção encontrada para esse nome.
+            {loadingSugestoes && (
+              <div className="p-muted" style={{ marginTop: '.35rem', fontSize: 12 }}>
+                Buscando opções...
               </div>
             )}
-        </div>
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div className="rounded-[28px] border border-white/60 bg-white/95 p-5 shadow-[0_12px_30px_rgba(120,60,120,0.16)] backdrop-blur-sm">
-            <h2 className="text-lg font-bold text-[#8a3d6d]">
-              Dados do Expresso
-            </h2>
-
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <Campo label="Chave Loja" value={expressoKey} />
-              <Campo label="Nome do Expresso" value={nomeExpresso} />
-              <Campo label="Agência" value={agencia} />
-              <Campo label="PACB" value={pacb} />
-              <Campo label="Status" value={statusExpresso} />
-              <Campo
-                label="Usuário logado"
-                value={perfil?.name || perfil?.email || '-'}
-              />
-            </div>
-
-            {!expressoKey && (
-              <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
-                Você pode abrir esta página pelo botão 📕 no Expresso Geral ou
-                localizar o expresso digitando a chave loja ou parte do nome
-                acima.
+            {mostrarSugestoes && sugestoesExpresso.length > 0 && (
+              <div
+                style={{
+                  position: 'absolute',
+                  zIndex: 20,
+                  marginTop: '.5rem',
+                  maxHeight: '18rem',
+                  width: '100%',
+                  overflow: 'auto',
+                  borderRadius: '22px',
+                  border: '1px solid rgba(15,15,25,.08)',
+                  background: '#fff',
+                  boxShadow: '0 10px 24px rgba(10, 10, 20, .08)',
+                }}
+              >
+                {sugestoesExpresso.map((item) => (
+                  <button
+                    key={item.id || `${item.chaveLoja}-${item.nomeExpresso}`}
+                    type="button"
+                    onClick={() => {
+                      preencherExpresso(item)
+                      setMensagemBusca('Expresso selecionado com sucesso.')
+                    }}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      borderBottom: '1px solid rgba(15,15,25,.06)',
+                      padding: '.85rem 1rem',
+                      textAlign: 'left',
+                      background: 'transparent',
+                    }}
+                  >
+                    <div style={{ fontWeight: 700 }}>{item.nomeExpresso || '-'}</div>
+                    <div style={{ fontSize: 12, color: 'rgba(16,16,24,.68)' }}>
+                      Chave Loja: {item.chaveLoja || '-'} | Agência: {item.agencia || '-'} | PACB: {item.pacb || '-'}
+                    </div>
+                  </button>
+                ))}
               </div>
             )}
           </div>
 
-          <div className="rounded-[28px] border border-white/60 bg-white/95 p-5 shadow-[0_12px_30px_rgba(120,60,120,0.16)] backdrop-blur-sm">
-            <h2 className="text-lg font-bold text-[#8a3d6d]">
-              Abrir novo chamado
-            </h2>
-
-            <form onSubmit={abrirChamado} className="mt-4 space-y-4">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-[#7f5a73]">
-                  Tipo do chamado
-                </label>
-                <select
-                  value={tipo}
-                  onChange={(e) => setTipo(e.target.value as TipoChamado)}
-                  className="w-full rounded-2xl border border-[#e7d5e3] bg-white px-4 py-3 text-gray-700 outline-none transition focus:border-[#c784c7] focus:ring-2 focus:ring-[#e8c7e6]"
-                >
-                  {TIPOS.map((item) => (
-                    <option key={item.value} value={item.value}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium text-[#7f5a73]">
-                  Nome com quem falou
-                </label>
-                <input
-                  value={contatoNome}
-                  onChange={(e) => setContatoNome(e.target.value)}
-                  className="w-full rounded-2xl border border-[#e7d5e3] bg-white px-4 py-3 text-gray-700 outline-none transition focus:border-[#c784c7] focus:ring-2 focus:ring-[#e8c7e6]"
-                  placeholder="Digite o nome"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium text-[#7f5a73]">
-                  Celular de contato
-                </label>
-                <input
-                  value={contatoTelefone}
-                  onChange={(e) =>
-                    setContatoTelefone(formatarCelularBR(e.target.value))
-                  }
-                  inputMode="numeric"
-                  className="w-full rounded-2xl border border-[#e7d5e3] bg-white px-4 py-3 text-gray-700 outline-none transition focus:border-[#c784c7] focus:ring-2 focus:ring-[#e8c7e6]"
-                  placeholder="xx xxxxx-xxxx"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium text-[#7f5a73]">
-                  Explique o que houve
-                </label>
-                <textarea
-                  value={descricao}
-                  onChange={(e) => setDescricao(e.target.value)}
-                  rows={5}
-                  className="w-full rounded-2xl border border-[#e7d5e3] bg-white px-4 py-3 text-gray-700 outline-none transition focus:border-[#c784c7] focus:ring-2 focus:ring-[#e8c7e6]"
-                  placeholder="Descreva o ocorrido"
-                />
-              </div>
-
-              {erro && (
-                <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                  {erro}
-                </div>
-              )}
-
-              {erroEmail && (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                  Falha no envio do e-mail: {erroEmail}
-                </div>
-              )}
-
-              {mensagem && (
-                <div className="rounded-2xl border border-green-200 bg-green-50 p-3 text-sm text-green-700">
-                  {mensagem}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={loadingSubmit}
-                className="rounded-2xl bg-gradient-to-r from-[#b86ab5] to-[#8f67d7] px-5 py-3 font-semibold text-white shadow-md transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {loadingSubmit ? 'Enviando...' : 'Abrir chamado'}
-              </button>
-            </form>
-          </div>
-        </div>
-
-        <div className="rounded-[28px] border border-white/60 bg-white/95 p-5 shadow-[0_12px_30px_rgba(120,60,120,0.16)] backdrop-blur-sm">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-lg font-bold text-[#8a3d6d]">
-              {perfil?.isAdmin ? 'Todos os chamados' : 'Meus chamados'}
-            </h2>
+          <div style={{ display: 'flex', alignItems: 'end', gap: '.5rem' }}>
             <button
-              onClick={() => carregarChamados(user.uid, !!perfil?.isAdmin)}
-              className="rounded-2xl border border-[#d7bfd2] bg-white px-4 py-2 text-sm font-semibold text-[#8a5478] transition hover:bg-[#faf5f9]"
+              type="button"
+              onClick={buscarExpresso}
+              disabled={loadingBuscaExpresso}
+              className="btn-primary"
             >
-              Atualizar
+              {loadingBuscaExpresso ? 'Buscando...' : 'Buscar expresso'}
+            </button>
+
+            <button
+              type="button"
+              onClick={limparExpressoSelecionado}
+              className="btn-ghost"
+              style={{
+                color: 'var(--text)',
+                background: 'rgba(255,255,255,.92)',
+                border: '1px solid rgba(15, 15, 25, .10)',
+              }}
+            >
+              Limpar
             </button>
           </div>
+        </div>
 
-          {loadingLista ? (
-            <div className="mt-4 text-sm text-gray-600">
-              Carregando lista...
+        {mensagemBusca && (
+          <div className="card-soft" style={{ marginTop: '1rem', color: '#166534' }}>
+            {mensagemBusca}
+          </div>
+        )}
+
+        {!mensagemBusca &&
+          buscaNomeExpresso.trim().length >= 2 &&
+          sugestoesExpresso.length === 0 &&
+          !loadingSugestoes && (
+            <div className="card-soft" style={{ marginTop: '1rem', color: '#92400e' }}>
+              Nenhuma opção encontrada para esse nome.
             </div>
-          ) : chamados.length === 0 ? (
-            <div className="mt-4 rounded-2xl bg-[#faf6fa] p-4 text-sm text-gray-600">
-              Nenhum chamado encontrado.
+          )}
+      </div>
+
+      <div className="grid gap-6 sm:grid-cols-2">
+        <div className="card">
+          <h2 className="h2">Dados do Expresso</h2>
+
+          <div className="grid gap-3 sm:grid-cols-2" style={{ marginTop: '1rem' }}>
+            <Campo label="Chave Loja" value={expressoKey} />
+            <Campo label="Nome do Expresso" value={nomeExpresso} />
+            <Campo label="Agência" value={agencia} />
+            <Campo label="PACB" value={pacb} />
+            <Campo label="Status" value={statusExpresso} />
+            <Campo label="Usuário logado" value={perfil?.name || perfil?.email || '-'} />
+          </div>
+
+          {!expressoKey && (
+            <div className="card-soft" style={{ marginTop: '1rem', color: '#92400e' }}>
+              Você pode abrir esta página pelo botão 📕 no Expresso Geral ou localizar o expresso digitando a chave loja ou parte do nome acima.
             </div>
-          ) : (
-            <div className="mt-4 space-y-4">
-              {chamados.map((item) => (
+          )}
+        </div>
+
+        <div className="card">
+          <h2 className="h2">Abrir novo chamado</h2>
+
+          <form onSubmit={abrirChamado} style={{ marginTop: '1rem', display: 'grid', gap: '1rem' }}>
+            <div>
+              <label className="label">Tipo do chamado</label>
+              <select
+                value={tipo}
+                onChange={(e) => setTipo(e.target.value as TipoChamado)}
+                className="input"
+              >
+                {TIPOS.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="label">Nome com quem falou</label>
+              <input
+                value={contatoNome}
+                onChange={(e) => setContatoNome(e.target.value)}
+                className="input"
+                placeholder="Digite o nome"
+              />
+            </div>
+
+            <div>
+              <label className="label">Celular de contato</label>
+              <input
+                value={contatoTelefone}
+                onChange={(e) => setContatoTelefone(formatarCelularBR(e.target.value))}
+                inputMode="numeric"
+                className="input"
+                placeholder="xx xxxxx-xxxx"
+              />
+            </div>
+
+            <div>
+              <label className="label">Explique o que houve</label>
+              <textarea
+                value={descricao}
+                onChange={(e) => setDescricao(e.target.value)}
+                rows={5}
+                className="input"
+                placeholder="Descreva o ocorrido"
+              />
+            </div>
+
+            {erro && (
+              <div className="card-soft" style={{ color: '#b91c1c' }}>
+                {erro}
+              </div>
+            )}
+
+            {erroEmail && (
+              <div className="card-soft" style={{ color: '#92400e' }}>
+                Falha no envio do e-mail: {erroEmail}
+              </div>
+            )}
+
+            {mensagem && (
+              <div className="card-soft" style={{ color: '#166534' }}>
+                {mensagem}
+              </div>
+            )}
+
+            <button type="submit" disabled={loadingSubmit} className="btn-primary">
+              {loadingSubmit ? 'Enviando...' : 'Abrir chamado'}
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <div className="card">
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '.75rem',
+          }}
+        >
+          <h2 className="h2">
+            {perfil?.isAdmin ? 'Todos os chamados' : 'Meus chamados'}
+          </h2>
+
+          <button
+            onClick={() => carregarChamados(user.uid, !!perfil?.isAdmin)}
+            className="btn-ghost"
+            style={{
+              color: 'var(--text)',
+              background: 'rgba(255,255,255,.92)',
+              border: '1px solid rgba(15, 15, 25, .10)',
+            }}
+          >
+            Atualizar
+          </button>
+        </div>
+
+        {loadingLista ? (
+          <div className="p-muted" style={{ marginTop: '1rem' }}>
+            Carregando lista...
+          </div>
+        ) : chamados.length === 0 ? (
+          <div className="card-soft" style={{ marginTop: '1rem' }}>
+            Nenhum chamado encontrado.
+          </div>
+        ) : (
+          <div style={{ marginTop: '1rem', display: 'grid', gap: '1rem' }}>
+            {chamados.map((item) => (
+              <div key={item.id} className="card-soft">
                 <div
-                  key={item.id}
-                  className="rounded-[24px] border border-[#eee0ec] bg-white p-4 shadow-sm"
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '.85rem',
+                    justifyContent: 'space-between',
+                  }}
                 >
-                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                    <div className="space-y-1">
-                      <div className="text-sm text-[#8d8090]">
-                        Protocolo:{' '}
-                        <span className="font-semibold text-[#6e5068]">
-                          {item.protocolo}
-                        </span>
-                      </div>
+                  <div style={{ display: 'grid', gap: '.25rem' }}>
+                    <div style={{ fontSize: 14, color: 'rgba(16,16,24,.68)' }}>
+                      Protocolo:{' '}
+                      <span style={{ fontWeight: 700, color: 'var(--text)' }}>
+                        {item.protocolo}
+                      </span>
+                    </div>
 
-                      <div className="text-base font-bold text-[#8a3d6d]">
-                        {item.nomeExpresso || '-'}
-                      </div>
+                    <div style={{ fontSize: 18, fontWeight: 800 }}>
+                      {item.nomeExpresso || '-'}
+                    </div>
 
-                      <div className="text-sm text-gray-600">
-                        Chave Loja: {item.expressoKey || '-'} | Agência:{' '}
-                        {item.agencia || '-'} | PACB: {item.pacb || '-'}
-                      </div>
+                    <div style={{ fontSize: 14, color: 'rgba(16,16,24,.68)' }}>
+                      Chave Loja: {item.expressoKey || '-'} | Agência: {item.agencia || '-'} | PACB: {item.pacb || '-'}
+                    </div>
 
-                      <div className="text-sm text-gray-600">
-                        Tipo: {labelTipoChamado(item.tipo)}
-                      </div>
+                    <div style={{ fontSize: 14, color: 'rgba(16,16,24,.68)' }}>
+                      Tipo: {labelTipoChamado(item.tipo)}
+                    </div>
 
-                      <div className="text-sm text-gray-600">
-                        Status do chamado:{' '}
-                        <span
-                          className={
+                    <div style={{ fontSize: 14, color: 'rgba(16,16,24,.68)' }}>
+                      Status do chamado:{' '}
+                      <span
+                        style={{
+                          fontWeight: 700,
+                          color:
                             item.statusChamado === 'ABERTO'
-                              ? 'font-semibold text-[#c05a7b]'
-                              : 'font-semibold text-green-700'
-                          }
-                        >
-                          {item.statusChamado}
-                        </span>
-                      </div>
+                              ? '#d61f2c'
+                              : '#15803d',
+                        }}
+                      >
+                        {item.statusChamado}
+                      </span>
+                    </div>
 
-                      <div className="text-sm text-gray-600">
-                        Contato: {item.contatoNome || '-'} | Celular:{' '}
-                        {item.contatoTelefone || '-'}
-                      </div>
+                    <div style={{ fontSize: 14, color: 'rgba(16,16,24,.68)' }}>
+                      Contato: {item.contatoNome || '-'} | Celular: {item.contatoTelefone || '-'}
+                    </div>
 
-                      <div className="text-sm text-gray-600">
-                        Criado em: {formatarDataHoraBrasilia(item.createdAt)}
-                      </div>
+                    <div style={{ fontSize: 14, color: 'rgba(16,16,24,.68)' }}>
+                      Criado em: {formatarDataHoraBrasilia(item.createdAt)}
+                    </div>
 
-                      <div className="text-sm text-gray-600">
-                        Mudança de status:{' '}
-                        {formatarDataHoraBrasilia(
-                          item.statusChangedAt ||
-                            item.resolvedAt ||
-                            item.updatedAt
-                        )}
-                      </div>
-
-                      {item.solucaoTexto && (
-                        <div className="mt-2 rounded-2xl border border-green-200 bg-green-50 p-3 text-sm text-green-900">
-                          <div className="mb-1 font-semibold">Solução informada</div>
-                          <div>{item.solucaoTexto}</div>
-                        </div>
-                      )}
-
-                      <div className="mt-2 rounded-2xl bg-[#faf6fa] p-3 text-sm text-gray-700">
-                        {item.descricao || '-'}
-                      </div>
-
-                      {perfil?.isAdmin && (
-                        <div className="text-xs text-[#8d8090]">
-                          Aberto por: {item.userName || '-'} ({item.userEmail || '-'})
-                        </div>
+                    <div style={{ fontSize: 14, color: 'rgba(16,16,24,.68)' }}>
+                      Mudança de status:{' '}
+                      {formatarDataHoraBrasilia(
+                        item.statusChangedAt || item.resolvedAt || item.updatedAt
                       )}
                     </div>
 
+                    {item.solucaoTexto && (
+                      <div
+                        style={{
+                          marginTop: '.5rem',
+                          borderRadius: '22px',
+                          border: '1px solid rgba(21,128,61,.16)',
+                          background: 'rgba(240,253,244,.95)',
+                          padding: '.9rem',
+                          color: '#166534',
+                        }}
+                      >
+                        <div style={{ marginBottom: '.25rem', fontWeight: 700 }}>
+                          Solução informada
+                        </div>
+                        <div>{item.solucaoTexto}</div>
+                      </div>
+                    )}
+
+                    <div
+                      style={{
+                        marginTop: '.5rem',
+                        borderRadius: '22px',
+                        background: 'rgba(255,255,255,.7)',
+                        padding: '.9rem',
+                        fontSize: 14,
+                        color: 'var(--text)',
+                      }}
+                    >
+                      {item.descricao || '-'}
+                    </div>
+
                     {perfil?.isAdmin && (
-                      <div className="flex shrink-0 gap-2">
-                        {item.statusChamado === 'ABERTO' && (
-                          <button
-                            onClick={() => marcarComoSolucionado(item)}
-                            className="rounded-2xl bg-gradient-to-r from-green-500 to-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm"
-                          >
-                            Marcar solucionado
-                          </button>
-                        )}
-                        <button
-                          onClick={() => excluirChamado(item.id)}
-                          className="rounded-2xl bg-gradient-to-r from-[#d97092] to-[#b95779] px-4 py-2 text-sm font-semibold text-white shadow-sm"
-                        >
-                          Excluir
-                        </button>
+                      <div style={{ fontSize: 12, color: 'rgba(16,16,24,.68)' }}>
+                        Aberto por: {item.userName || '-'} ({item.userEmail || '-'})
                       </div>
                     )}
                   </div>
+
+                  {perfil?.isAdmin && (
+                    <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
+                      {item.statusChamado === 'ABERTO' && (
+                        <button
+                          onClick={() => marcarComoSolucionado(item)}
+                          className="btn-primary"
+                          style={{
+                            background:
+                              'linear-gradient(90deg, #16a34a, #0f9f6e)',
+                            boxShadow:
+                              '0 14px 28px rgba(22,163,74,.18), 0 14px 28px rgba(15,159,110,.14)',
+                          }}
+                        >
+                          Marcar solucionado
+                        </button>
+                      )}
+
+                      <button
+                        onClick={() => excluirChamado(item.id)}
+                        className="btn-primary"
+                        style={{
+                          background:
+                            'linear-gradient(90deg, #d61f2c, #b5163b)',
+                          boxShadow:
+                            '0 14px 28px rgba(214,31,44,.18), 0 14px 28px rgba(181,22,59,.14)',
+                        }}
+                      >
+                        Excluir
+                      </button>
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
-    </div>
+    </section>
   )
 }
 
 function Campo({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-[#eadbea] bg-[#fffdfd] p-3">
-      <div className="text-xs font-semibold uppercase tracking-wide text-[#9a7f93]">
+    <div
+      style={{
+        border: '1px solid rgba(15, 15, 25, .08)',
+        background: 'rgba(255,255,255,.75)',
+        borderRadius: '22px',
+        boxShadow: '0 10px 24px rgba(10, 10, 20, .08)',
+        padding: '1rem',
+      }}
+    >
+      <div
+        style={{
+          fontSize: 12,
+          fontWeight: 700,
+          textTransform: 'uppercase',
+          letterSpacing: '.05em',
+          color: 'rgba(16,16,24,.68)',
+        }}
+      >
         {label}
       </div>
-      <div className="mt-1 text-sm font-medium text-[#5f4c5a]">
+      <div style={{ marginTop: '.25rem', fontSize: 14, fontWeight: 600 }}>
         {value || '-'}
       </div>
     </div>
