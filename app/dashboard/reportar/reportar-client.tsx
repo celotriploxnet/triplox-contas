@@ -724,36 +724,36 @@ export default function ReportarClientPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#7a0019] via-[#8c0d2b] to-[#5c0014] p-4 md:p-6">
+    <div className="min-h-screen bg-gradient-to-r from-[#f2a6c7] via-[#c784c7] to-[#8d67d8] p-4 md:p-6">
       <div className="mx-auto max-w-7xl space-y-6">
-        <div className="rounded-2xl bg-white p-5 shadow-lg">
-          <h1 className="text-2xl font-bold text-[#7a0019]">📕 Reportar</h1>
+        <div className="rounded-[28px] border border-white/60 bg-white/95 p-5 shadow-[0_12px_30px_rgba(120,60,120,0.16)] backdrop-blur-sm">
+          <h1 className="text-2xl font-bold text-[#8a3d6d]">📕 Reportar</h1>
           <p className="mt-1 text-sm text-gray-600">
             Abra chamados de solicitação, problema, reclamação ou elogios e
             sugestões.
           </p>
         </div>
 
-        <div className="rounded-2xl bg-white p-5 shadow-lg">
-          <h2 className="text-lg font-bold text-[#7a0019]">
+        <div className="rounded-[28px] border border-white/60 bg-white/95 p-5 shadow-[0_12px_30px_rgba(120,60,120,0.16)] backdrop-blur-sm">
+          <h2 className="text-lg font-bold text-[#8a3d6d]">
             Localizar expresso
           </h2>
 
           <div className="mt-4 grid gap-4 md:grid-cols-3">
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
+              <label className="mb-1 block text-sm font-medium text-[#7f5a73]">
                 Chave Loja
               </label>
               <input
                 value={buscaChaveLoja}
                 onChange={(e) => setBuscaChaveLoja(e.target.value)}
-                className="w-full rounded-xl border border-gray-300 px-3 py-2 outline-none focus:border-[#7a0019]"
+                className="w-full rounded-2xl border border-[#e7d5e3] bg-white px-4 py-3 text-gray-700 outline-none transition focus:border-[#c784c7] focus:ring-2 focus:ring-[#e8c7e6]"
                 placeholder="Digite a chave loja"
               />
             </div>
 
             <div className="relative md:col-span-1" ref={sugestoesRef}>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
+              <label className="mb-1 block text-sm font-medium text-[#7f5a73]">
                 Nome do Expresso
               </label>
               <input
@@ -767,19 +767,19 @@ export default function ReportarClientPage() {
                     setMostrarSugestoes(true)
                   }
                 }}
-                className="w-full rounded-xl border border-gray-300 px-3 py-2 outline-none focus:border-[#7a0019]"
+                className="w-full rounded-2xl border border-[#e7d5e3] bg-white px-4 py-3 text-gray-700 outline-none transition focus:border-[#c784c7] focus:ring-2 focus:ring-[#e8c7e6]"
                 placeholder="Digite parte do nome do expresso"
                 autoComplete="off"
               />
 
               {loadingSugestoes && (
-                <div className="mt-1 text-xs text-gray-500">
+                <div className="mt-1 text-xs text-[#8a6f86]">
                   Buscando opções...
                 </div>
               )}
 
               {mostrarSugestoes && sugestoesExpresso.length > 0 && (
-                <div className="absolute z-20 mt-2 max-h-72 w-full overflow-auto rounded-xl border border-gray-200 bg-white shadow-lg">
+                <div className="absolute z-20 mt-2 max-h-72 w-full overflow-auto rounded-2xl border border-[#ead9e8] bg-white shadow-xl">
                   {sugestoesExpresso.map((item) => (
                     <button
                       key={item.id || `${item.chaveLoja}-${item.nomeExpresso}`}
@@ -788,12 +788,12 @@ export default function ReportarClientPage() {
                         preencherExpresso(item)
                         setMensagemBusca('Expresso selecionado com sucesso.')
                       }}
-                      className="block w-full border-b border-gray-100 px-3 py-3 text-left last:border-b-0 hover:bg-gray-50"
+                      className="block w-full border-b border-[#f2e8f1] px-4 py-3 text-left last:border-b-0 hover:bg-[#fbf5fa]"
                     >
-                      <div className="font-semibold text-gray-800">
+                      <div className="font-semibold text-[#78486a]">
                         {item.nomeExpresso || '-'}
                       </div>
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-[#8c7b88]">
                         Chave Loja: {item.chaveLoja || '-'} | Agência:{' '}
                         {item.agencia || '-'} | PACB: {item.pacb || '-'}
                       </div>
@@ -808,7 +808,7 @@ export default function ReportarClientPage() {
                 type="button"
                 onClick={buscarExpresso}
                 disabled={loadingBuscaExpresso}
-                className="rounded-xl bg-[#7a0019] px-4 py-2 font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-2xl bg-gradient-to-r from-[#b86ab5] to-[#8f67d7] px-5 py-3 font-semibold text-white shadow-md transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {loadingBuscaExpresso ? 'Buscando...' : 'Buscar expresso'}
               </button>
@@ -816,7 +816,7 @@ export default function ReportarClientPage() {
               <button
                 type="button"
                 onClick={limparExpressoSelecionado}
-                className="rounded-xl border border-[#7a0019] px-4 py-2 font-semibold text-[#7a0019]"
+                className="rounded-2xl border border-[#d7bfd2] bg-white px-5 py-3 font-semibold text-[#8a5478] transition hover:bg-[#faf5f9]"
               >
                 Limpar
               </button>
@@ -824,7 +824,7 @@ export default function ReportarClientPage() {
           </div>
 
           {mensagemBusca && (
-            <div className="mt-4 rounded-xl border border-green-300 bg-green-50 p-3 text-sm text-green-700">
+            <div className="mt-4 rounded-2xl border border-green-200 bg-green-50 p-3 text-sm text-green-700">
               {mensagemBusca}
             </div>
           )}
@@ -833,15 +833,15 @@ export default function ReportarClientPage() {
             buscaNomeExpresso.trim().length >= 2 &&
             sugestoesExpresso.length === 0 &&
             !loadingSugestoes && (
-              <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-700">
+              <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
                 Nenhuma opção encontrada para esse nome.
               </div>
             )}
         </div>
 
         <div className="grid gap-6 lg:grid-cols-2">
-          <div className="rounded-2xl bg-white p-5 shadow-lg">
-            <h2 className="text-lg font-bold text-[#7a0019]">
+          <div className="rounded-[28px] border border-white/60 bg-white/95 p-5 shadow-[0_12px_30px_rgba(120,60,120,0.16)] backdrop-blur-sm">
+            <h2 className="text-lg font-bold text-[#8a3d6d]">
               Dados do Expresso
             </h2>
 
@@ -858,7 +858,7 @@ export default function ReportarClientPage() {
             </div>
 
             {!expressoKey && (
-              <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-700">
+              <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
                 Você pode abrir esta página pelo botão 📕 no Expresso Geral ou
                 localizar o expresso digitando a chave loja ou parte do nome
                 acima.
@@ -866,20 +866,20 @@ export default function ReportarClientPage() {
             )}
           </div>
 
-          <div className="rounded-2xl bg-white p-5 shadow-lg">
-            <h2 className="text-lg font-bold text-[#7a0019]">
+          <div className="rounded-[28px] border border-white/60 bg-white/95 p-5 shadow-[0_12px_30px_rgba(120,60,120,0.16)] backdrop-blur-sm">
+            <h2 className="text-lg font-bold text-[#8a3d6d]">
               Abrir novo chamado
             </h2>
 
             <form onSubmit={abrirChamado} className="mt-4 space-y-4">
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
+                <label className="mb-1 block text-sm font-medium text-[#7f5a73]">
                   Tipo do chamado
                 </label>
                 <select
                   value={tipo}
                   onChange={(e) => setTipo(e.target.value as TipoChamado)}
-                  className="w-full rounded-xl border border-gray-300 px-3 py-2 outline-none focus:border-[#7a0019]"
+                  className="w-full rounded-2xl border border-[#e7d5e3] bg-white px-4 py-3 text-gray-700 outline-none transition focus:border-[#c784c7] focus:ring-2 focus:ring-[#e8c7e6]"
                 >
                   {TIPOS.map((item) => (
                     <option key={item.value} value={item.value}>
@@ -890,19 +890,19 @@ export default function ReportarClientPage() {
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
+                <label className="mb-1 block text-sm font-medium text-[#7f5a73]">
                   Nome com quem falou
                 </label>
                 <input
                   value={contatoNome}
                   onChange={(e) => setContatoNome(e.target.value)}
-                  className="w-full rounded-xl border border-gray-300 px-3 py-2 outline-none focus:border-[#7a0019]"
+                  className="w-full rounded-2xl border border-[#e7d5e3] bg-white px-4 py-3 text-gray-700 outline-none transition focus:border-[#c784c7] focus:ring-2 focus:ring-[#e8c7e6]"
                   placeholder="Digite o nome"
                 />
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
+                <label className="mb-1 block text-sm font-medium text-[#7f5a73]">
                   Celular de contato
                 </label>
                 <input
@@ -911,38 +911,38 @@ export default function ReportarClientPage() {
                     setContatoTelefone(formatarCelularBR(e.target.value))
                   }
                   inputMode="numeric"
-                  className="w-full rounded-xl border border-gray-300 px-3 py-2 outline-none focus:border-[#7a0019]"
+                  className="w-full rounded-2xl border border-[#e7d5e3] bg-white px-4 py-3 text-gray-700 outline-none transition focus:border-[#c784c7] focus:ring-2 focus:ring-[#e8c7e6]"
                   placeholder="xx xxxxx-xxxx"
                 />
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
+                <label className="mb-1 block text-sm font-medium text-[#7f5a73]">
                   Explique o que houve
                 </label>
                 <textarea
                   value={descricao}
                   onChange={(e) => setDescricao(e.target.value)}
                   rows={5}
-                  className="w-full rounded-xl border border-gray-300 px-3 py-2 outline-none focus:border-[#7a0019]"
+                  className="w-full rounded-2xl border border-[#e7d5e3] bg-white px-4 py-3 text-gray-700 outline-none transition focus:border-[#c784c7] focus:ring-2 focus:ring-[#e8c7e6]"
                   placeholder="Descreva o ocorrido"
                 />
               </div>
 
               {erro && (
-                <div className="rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+                <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
                   {erro}
                 </div>
               )}
 
               {erroEmail && (
-                <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                   Falha no envio do e-mail: {erroEmail}
                 </div>
               )}
 
               {mensagem && (
-                <div className="rounded-xl border border-green-300 bg-green-50 p-3 text-sm text-green-700">
+                <div className="rounded-2xl border border-green-200 bg-green-50 p-3 text-sm text-green-700">
                   {mensagem}
                 </div>
               )}
@@ -950,7 +950,7 @@ export default function ReportarClientPage() {
               <button
                 type="submit"
                 disabled={loadingSubmit}
-                className="rounded-xl bg-[#7a0019] px-4 py-2 font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-2xl bg-gradient-to-r from-[#b86ab5] to-[#8f67d7] px-5 py-3 font-semibold text-white shadow-md transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {loadingSubmit ? 'Enviando...' : 'Abrir chamado'}
               </button>
@@ -958,14 +958,14 @@ export default function ReportarClientPage() {
           </div>
         </div>
 
-        <div className="rounded-2xl bg-white p-5 shadow-lg">
+        <div className="rounded-[28px] border border-white/60 bg-white/95 p-5 shadow-[0_12px_30px_rgba(120,60,120,0.16)] backdrop-blur-sm">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-lg font-bold text-[#7a0019]">
+            <h2 className="text-lg font-bold text-[#8a3d6d]">
               {perfil?.isAdmin ? 'Todos os chamados' : 'Meus chamados'}
             </h2>
             <button
               onClick={() => carregarChamados(user.uid, !!perfil?.isAdmin)}
-              className="rounded-xl border border-[#7a0019] px-3 py-2 text-sm font-semibold text-[#7a0019]"
+              className="rounded-2xl border border-[#d7bfd2] bg-white px-4 py-2 text-sm font-semibold text-[#8a5478] transition hover:bg-[#faf5f9]"
             >
               Atualizar
             </button>
@@ -976,7 +976,7 @@ export default function ReportarClientPage() {
               Carregando lista...
             </div>
           ) : chamados.length === 0 ? (
-            <div className="mt-4 rounded-xl bg-gray-50 p-4 text-sm text-gray-600">
+            <div className="mt-4 rounded-2xl bg-[#faf6fa] p-4 text-sm text-gray-600">
               Nenhum chamado encontrado.
             </div>
           ) : (
@@ -984,18 +984,18 @@ export default function ReportarClientPage() {
               {chamados.map((item) => (
                 <div
                   key={item.id}
-                  className="rounded-2xl border border-gray-200 p-4"
+                  className="rounded-[24px] border border-[#eee0ec] bg-white p-4 shadow-sm"
                 >
                   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div className="space-y-1">
-                      <div className="text-sm text-gray-500">
+                      <div className="text-sm text-[#8d8090]">
                         Protocolo:{' '}
-                        <span className="font-semibold text-gray-800">
+                        <span className="font-semibold text-[#6e5068]">
                           {item.protocolo}
                         </span>
                       </div>
 
-                      <div className="text-base font-bold text-[#7a0019]">
+                      <div className="text-base font-bold text-[#8a3d6d]">
                         {item.nomeExpresso || '-'}
                       </div>
 
@@ -1013,8 +1013,8 @@ export default function ReportarClientPage() {
                         <span
                           className={
                             item.statusChamado === 'ABERTO'
-                              ? 'font-semibold text-red-600'
-                              : 'font-semibold text-green-600'
+                              ? 'font-semibold text-[#c05a7b]'
+                              : 'font-semibold text-green-700'
                           }
                         >
                           {item.statusChamado}
@@ -1040,18 +1040,18 @@ export default function ReportarClientPage() {
                       </div>
 
                       {item.solucaoTexto && (
-                        <div className="mt-2 rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-900">
+                        <div className="mt-2 rounded-2xl border border-green-200 bg-green-50 p-3 text-sm text-green-900">
                           <div className="mb-1 font-semibold">Solução informada</div>
                           <div>{item.solucaoTexto}</div>
                         </div>
                       )}
 
-                      <div className="mt-2 rounded-xl bg-gray-50 p-3 text-sm text-gray-700">
+                      <div className="mt-2 rounded-2xl bg-[#faf6fa] p-3 text-sm text-gray-700">
                         {item.descricao || '-'}
                       </div>
 
                       {perfil?.isAdmin && (
-                        <div className="text-xs text-gray-500">
+                        <div className="text-xs text-[#8d8090]">
                           Aberto por: {item.userName || '-'} ({item.userEmail || '-'})
                         </div>
                       )}
@@ -1062,14 +1062,14 @@ export default function ReportarClientPage() {
                         {item.statusChamado === 'ABERTO' && (
                           <button
                             onClick={() => marcarComoSolucionado(item)}
-                            className="rounded-xl bg-green-600 px-3 py-2 text-sm font-semibold text-white"
+                            className="rounded-2xl bg-gradient-to-r from-green-500 to-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm"
                           >
                             Marcar solucionado
                           </button>
                         )}
                         <button
                           onClick={() => excluirChamado(item.id)}
-                          className="rounded-xl bg-red-600 px-3 py-2 text-sm font-semibold text-white"
+                          className="rounded-2xl bg-gradient-to-r from-[#d97092] to-[#b95779] px-4 py-2 text-sm font-semibold text-white shadow-sm"
                         >
                           Excluir
                         </button>
@@ -1088,11 +1088,11 @@ export default function ReportarClientPage() {
 
 function Campo({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-gray-200 p-3">
-      <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+    <div className="rounded-2xl border border-[#eadbea] bg-[#fffdfd] p-3">
+      <div className="text-xs font-semibold uppercase tracking-wide text-[#9a7f93]">
         {label}
       </div>
-      <div className="mt-1 text-sm font-medium text-gray-800">
+      <div className="mt-1 text-sm font-medium text-[#5f4c5a]">
         {value || '-'}
       </div>
     </div>
