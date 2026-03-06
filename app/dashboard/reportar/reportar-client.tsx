@@ -477,7 +477,7 @@ export default function ReportarClientPage() {
     return somenteNumeros(value).length === 11
   }
 
-  function formatarData(value: any) {
+  function formatarDataHoraBrasilia(value: any) {
     if (!value) return '-'
 
     try {
@@ -490,13 +490,40 @@ export default function ReportarClientPage() {
 
       if (!date) return '-'
 
-      return new Intl.DateTimeFormat('pt-BR', {
-        dateStyle: 'short',
-        timeStyle: 'short',
-      }).format(date)
+      const partes = new Intl.DateTimeFormat('pt-BR', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }).formatToParts(date)
+
+      const get = (type: string) =>
+        partes.find((p) => p.type === type)?.value || ''
+
+      return `${get('day')}/${get('month')}/${get('year')} ${get('hour')}:${get('minute')}`
     } catch {
       return '-'
     }
+  }
+
+  function dataHoraBrasiliaAgora() {
+    const partes = new Intl.DateTimeFormat('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).formatToParts(new Date())
+
+    const get = (type: string) =>
+      partes.find((p) => p.type === type)?.value || ''
+
+    return `${get('day')}/${get('month')}/${get('year')} ${get('hour')}:${get('minute')}`
   }
 
   async function abrirChamado(e: React.FormEvent) {
@@ -583,6 +610,7 @@ export default function ReportarClientPage() {
         contatoTelefone: payload.contatoTelefone,
         descricao: payload.descricao,
         statusChamado: 'ABERTO',
+        dataHoraEvento: dataHoraBrasiliaAgora(),
       })
 
       if (emailOk) {
@@ -606,17 +634,44 @@ export default function ReportarClientPage() {
     }
   }
 
-  async function marcarComoSolucionado(chamadoId: string) {
+  async function marcarComoSolucionado(item: ChamadoComDatas) {
     if (!perfil?.isAdmin || !user) return
 
     try {
-      await updateDoc(doc(db, 'chamados', chamadoId), {
+      const dataHoraSolucao = dataHoraBrasiliaAgora()
+
+      await updateDoc(doc(db, 'chamados', item.id), {
         statusChamado: 'SOLUCIONADO',
         updatedAt: serverTimestamp(),
         resolvedAt: serverTimestamp(),
         statusChangedAt: serverTimestamp(),
         resolvedBy: user.uid,
       })
+
+      const emailOk = await enviarEmail({
+        protocolo: item.protocolo,
+        userEmail: item.userEmail,
+        userName: item.userName,
+        expressoKey: item.expressoKey,
+        nomeExpresso: item.nomeExpresso,
+        agencia: item.agencia,
+        pacb: item.pacb,
+        statusExpresso: item.statusExpresso,
+        tipo: item.tipo,
+        contatoNome: item.contatoNome,
+        contatoTelefone: item.contatoTelefone,
+        descricao: item.descricao,
+        statusChamado: 'SOLUCIONADO',
+        dataHoraEvento: dataHoraSolucao,
+      })
+
+      if (!emailOk) {
+        setMensagem(
+          `Chamado ${item.protocolo} marcado como solucionado, mas o e-mail do usuário não foi enviado.`
+        )
+      } else {
+        setMensagem(`Chamado ${item.protocolo} marcado como solucionado.`)
+      }
 
       await carregarChamados(user.uid, !!perfil?.isAdmin)
     } catch (e) {
@@ -956,12 +1011,12 @@ export default function ReportarClientPage() {
                       </div>
 
                       <div className="text-sm text-gray-600">
-                        Criado em: {formatarData(item.createdAt)}
+                        Criado em: {formatarDataHoraBrasilia(item.createdAt)}
                       </div>
 
                       <div className="text-sm text-gray-600">
                         Mudança de status:{' '}
-                        {formatarData(
+                        {formatarDataHoraBrasilia(
                           item.statusChangedAt ||
                             item.resolvedAt ||
                             item.updatedAt
@@ -983,7 +1038,7 @@ export default function ReportarClientPage() {
                       <div className="flex shrink-0 gap-2">
                         {item.statusChamado === 'ABERTO' && (
                           <button
-                            onClick={() => marcarComoSolucionado(item.id)}
+                            onClick={() => marcarComoSolucionado(item)}
                             className="rounded-xl bg-green-600 px-3 py-2 text-sm font-semibold text-white"
                           >
                             Marcar solucionado

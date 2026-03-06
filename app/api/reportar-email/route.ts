@@ -12,6 +12,23 @@ function escapeText(value: unknown) {
   return String(value ?? '').trim()
 }
 
+function formatarDataHoraBrasilia(date = new Date()) {
+  const partes = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date)
+
+  const get = (type: string) =>
+    partes.find((p) => p.type === type)?.value || ''
+
+  return `${get('day')}/${get('month')}/${get('year')} ${get('hour')}:${get('minute')}`
+}
+
 export async function POST(req: Request) {
   try {
     const apiKey = process.env.RESEND_API_KEY
@@ -39,6 +56,7 @@ export async function POST(req: Request) {
     const contatoTelefone = escapeText(body?.contatoTelefone)
     const descricao = escapeText(body?.descricao)
     const statusChamado = escapeText(body?.statusChamado || 'ABERTO')
+    const dataHoraEvento = escapeText(body?.dataHoraEvento || formatarDataHoraBrasilia())
 
     const obrigatorios = [
       ['Protocolo', protocolo],
@@ -46,9 +64,6 @@ export async function POST(req: Request) {
       ['Tipo', tipo],
       ['Chave Loja', expressoKey],
       ['Nome do Expresso', nomeExpresso],
-      ['Contato', contatoNome],
-      ['Telefone', contatoTelefone],
-      ['Descrição', descricao],
     ] as const
 
     for (const [campo, valor] of obrigatorios) {
@@ -57,66 +72,108 @@ export async function POST(req: Request) {
       }
     }
 
-    const dataHora = new Intl.DateTimeFormat('pt-BR', {
-      timeZone: 'America/Bahia',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-    }).format(new Date())
+    const tipoLabel = labelTipoChamado(tipo)
 
-    const linhas: string[] = []
+    if (statusChamado === 'SOLUCIONADO') {
+      const textoAdmin = [
+        `CHAMADO SOLUCIONADO — ${protocolo}`,
+        ``,
+        `📌 Dados do chamado`,
+        `• Protocolo: ${protocolo}`,
+        `• Tipo: ${tipoLabel}`,
+        `• Status do chamado: SOLUCIONADO`,
+        ``,
+        `🏪 Dados do expresso`,
+        `• Nome do Expresso: ${nomeExpresso}`,
+        `• Chave Loja: ${expressoKey}`,
+        `• Agência: ${agencia || '—'}`,
+        `• PACB: ${pacb || '—'}`,
+        `• Status do Expresso: ${statusExpresso || '—'}`,
+        ``,
+        `👤 Usuário do chamado`,
+        `• Nome: ${userName || '—'}`,
+        `• E-mail: ${userEmail}`,
+        ``,
+        `👥 Contato informado no chamado`,
+        `• Nome com quem falou: ${contatoNome || '—'}`,
+        `• Telefone: ${contatoTelefone || '—'}`,
+        ``,
+        `📝 Descrição original`,
+        `${descricao || '—'}`,
+        ``,
+        `🕒 Data/Hora da solução (Brasília): ${dataHoraEvento}`,
+      ].join('\n')
 
-    linhas.push(`CHAMADO ABERTO — ${protocolo}`)
-    linhas.push('')
-    linhas.push('📌 Dados do chamado')
-    linhas.push(`• Protocolo: ${protocolo}`)
-    linhas.push(`• Tipo: ${labelTipoChamado(tipo)}`)
-    linhas.push(`• Status do chamado: ${statusChamado}`)
-    linhas.push('')
+      await resend.emails.send({
+        from: `TreinoExpresso <${fromEmail}>`,
+        to: toEmail,
+        subject: `Chamado solucionado - ${protocolo} - ${nomeExpresso}`,
+        text: textoAdmin,
+        replyTo: userEmail || undefined,
+      })
 
-    linhas.push('🏪 Dados do expresso')
-    linhas.push(`• Nome do Expresso: ${nomeExpresso}`)
-    linhas.push(`• Chave Loja: ${expressoKey}`)
-    linhas.push(`• Agência: ${agencia || '—'}`)
-    linhas.push(`• PACB: ${pacb || '—'}`)
-    linhas.push(`• Status do Expresso: ${statusExpresso || '—'}`)
-    linhas.push('')
+      await resend.emails.send({
+        from: `TreinoExpresso <${fromEmail}>`,
+        to: userEmail,
+        subject: `Seu chamado foi solucionado - ${protocolo}`,
+        text: [
+          `Olá${userName ? `, ${userName}` : ''}!`,
+          ``,
+          `Seu chamado foi marcado como SOLUCIONADO.`,
+          ``,
+          `Protocolo: ${protocolo}`,
+          `Tipo: ${tipoLabel}`,
+          `Expresso: ${nomeExpresso}`,
+          `Chave Loja: ${expressoKey}`,
+          `Agência: ${agencia || '—'}`,
+          `PACB: ${pacb || '—'}`,
+          `Data/Hora da solução (Brasília): ${dataHoraEvento}`,
+          ``,
+          `Descrição do chamado:`,
+          `${descricao || '—'}`,
+        ].join('\n'),
+      })
 
-    linhas.push('👤 Contato informado')
-    linhas.push(`• Nome com quem falou: ${contatoNome}`)
-    linhas.push(`• Telefone: ${contatoTelefone}`)
-    linhas.push('')
+      return NextResponse.json({ ok: true })
+    }
 
-    linhas.push('📝 Descrição')
-    linhas.push(descricao)
-    linhas.push('')
+    const textoAberturaAdmin = [
+      `CHAMADO ABERTO — ${protocolo}`,
+      ``,
+      `📌 Dados do chamado`,
+      `• Protocolo: ${protocolo}`,
+      `• Tipo: ${tipoLabel}`,
+      `• Status do chamado: ${statusChamado}`,
+      ``,
+      `🏪 Dados do expresso`,
+      `• Nome do Expresso: ${nomeExpresso}`,
+      `• Chave Loja: ${expressoKey}`,
+      `• Agência: ${agencia || '—'}`,
+      `• PACB: ${pacb || '—'}`,
+      `• Status do Expresso: ${statusExpresso || '—'}`,
+      ``,
+      `👤 Contato informado`,
+      `• Nome com quem falou: ${contatoNome || '—'}`,
+      `• Telefone: ${contatoTelefone || '—'}`,
+      ``,
+      `📝 Descrição`,
+      `${descricao || '—'}`,
+      ``,
+      `🙋 Usuário que abriu o chamado`,
+      `• Nome: ${userName || '—'}`,
+      `• E-mail: ${userEmail}`,
+      ``,
+      `🕒 Data/Hora (Brasília): ${dataHoraEvento}`,
+    ].join('\n')
 
-    linhas.push('🙋 Usuário que abriu o chamado')
-    linhas.push(`• Nome: ${userName || '—'}`)
-    linhas.push(`• E-mail: ${userEmail}`)
-    linhas.push('')
-
-    linhas.push(`🕒 Data/Hora (Bahia): ${dataHora}`)
-
-    const texto = linhas.join('\n')
-
-    const assunto = `Chamado aberto - ${protocolo} - ${nomeExpresso}`
-
-    // 1) ENVIA PARA O ADMIN (mesmo padrão do baixa-empresa)
     await resend.emails.send({
       from: `TreinoExpresso <${fromEmail}>`,
       to: toEmail,
-      subject: assunto,
-      text: texto,
+      subject: `Chamado aberto - ${protocolo} - ${nomeExpresso}`,
+      text: textoAberturaAdmin,
       replyTo: userEmail || undefined,
     })
 
-    // 2) TENTA ENVIAR UMA CÓPIA PARA O USUÁRIO
-    // Se falhar, não derruba a rota inteira
     try {
       await resend.emails.send({
         from: `TreinoExpresso <${fromEmail}>`,
@@ -126,15 +183,14 @@ export async function POST(req: Request) {
           `Seu chamado foi registrado com sucesso.`,
           ``,
           `Protocolo: ${protocolo}`,
-          `Tipo: ${labelTipoChamado(tipo)}`,
+          `Tipo: ${tipoLabel}`,
           `Expresso: ${nomeExpresso}`,
           `Chave Loja: ${expressoKey}`,
           `Status do chamado: ${statusChamado}`,
+          `Data/Hora (Brasília): ${dataHoraEvento}`,
           ``,
           `Descrição:`,
-          descricao,
-          ``,
-          `Data/Hora (Bahia): ${dataHora}`,
+          `${descricao || '—'}`,
         ].join('\n'),
       })
     } catch (userMailError) {
