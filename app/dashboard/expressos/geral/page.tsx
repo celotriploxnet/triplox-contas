@@ -1,6 +1,12 @@
 'use client'
 
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react'
 import { useRouter } from 'next/navigation'
 import { onAuthStateChanged, type User } from 'firebase/auth'
 import { getBytes, ref } from 'firebase/storage'
@@ -212,6 +218,86 @@ function calcPontos(r: {
 }
 
 /* =========================
+   SEMÁFORO / AÇÃO
+   ========================= */
+function gerarSinalizacoes(
+  r: RowBase,
+  semCert: boolean,
+  vencida: boolean
+) {
+  const sinais: { texto: string; estilo?: CSSProperties }[] = []
+
+  if (semCert) {
+    sinais.push({
+      texto: '🔴 Sem certificação',
+      estilo: {
+        background: 'rgba(214,31,44,.10)',
+        border: '1px solid rgba(214,31,44,.20)',
+        color: 'rgba(214,31,44,.95)',
+      },
+    })
+  }
+
+  if (vencida) {
+    sinais.push({
+      texto: '🔴 Certificação vencida',
+      estilo: {
+        background: 'rgba(214,31,44,.10)',
+        border: '1px solid rgba(214,31,44,.20)',
+        color: 'rgba(214,31,44,.95)',
+      },
+    })
+  }
+
+  if ((r.trx || 0) === 0) {
+    sinais.push({
+      texto: '🟠 TRX zerada',
+      estilo: {
+        background: 'rgba(245,158,11,.10)',
+        border: '1px solid rgba(245,158,11,.22)',
+        color: 'rgba(180,83,9,.98)',
+      },
+    })
+  }
+
+  if ((r.pontos || 0) < 10) {
+    sinais.push({
+      texto: '🟠 Baixa pontuação',
+      estilo: {
+        background: 'rgba(245,158,11,.10)',
+        border: '1px solid rgba(245,158,11,.22)',
+        color: 'rgba(180,83,9,.98)',
+      },
+    })
+  }
+
+  if (!semCert && !vencida && (r.trx || 0) >= 200 && (r.pontos || 0) >= 10) {
+    sinais.push({
+      texto: '🟢 Expresso saudável',
+      estilo: {
+        background: 'rgba(34,197,94,.10)',
+        border: '1px solid rgba(34,197,94,.20)',
+        color: 'rgba(21,128,61,.95)',
+      },
+    })
+  }
+
+  return sinais
+}
+
+function acaoRecomendada(
+  r: RowBase,
+  semCert: boolean,
+  vencida: boolean
+) {
+  if (semCert) return 'Regularizar certificação'
+  if (vencida) return 'Atualizar certificação'
+  if ((r.trx || 0) === 0) return 'Incentivar movimentação'
+  if ((r.pontos || 0) < 10) return 'Incentivar produção'
+  return 'Acompanhar expresso'
+}
+
+/* =========================
    UI
    ========================= */
 function Pill({
@@ -342,11 +428,19 @@ export default function ExpressoGeralPage() {
   const [info, setInfo] = useState('')
 
   const [rows, setRows] = useState<RowBase[]>([])
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
 
   const [q, setQ] = useState('')
   const [fAgencia, setFAgencia] = useState('Todos')
   const [fCert, setFCert] = useState<CertFilter>('Todos')
   const [fTrx, setFTrx] = useState<TrxFilter>('Todos')
+
+  function toggleExpand(key: string) {
+    setExpanded((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }))
+  }
 
   async function loadCsv() {
     if (!auth.currentUser) {
@@ -592,9 +686,19 @@ export default function ExpressoGeralPage() {
     return list
   }, [computed.list, q, fAgencia, fCert, fTrx])
 
-  async function copyWhatsApp(r: RowBase, certDate: Date | null, semCert: boolean, vencida: boolean) {
+  async function copyWhatsApp(
+    r: RowBase,
+    certDate: Date | null,
+    semCert: boolean,
+    vencida: boolean
+  ) {
     try {
-      const certLabel = semCert ? 'Sem certificação' : vencida ? 'Certificação vencida' : 'Certificado'
+      const certLabel = semCert
+        ? 'Sem certificação'
+        : vencida
+          ? 'Certificação vencida'
+          : 'Certificado'
+
       const certDatePt = formatPtBRDate(certDate)
 
       const msg = buildWhatsAppMessage({
@@ -644,6 +748,10 @@ export default function ExpressoGeralPage() {
     })
 
     router.push(`/dashboard/reportar?${params.toString()}`)
+  }
+
+  function irParaArvoreCronologica(r: RowBase) {
+    router.push(`/dashboard/arvorecronologica/${encodeURIComponent(r.chave)}`)
   }
 
   return (
@@ -775,6 +883,8 @@ export default function ExpressoGeralPage() {
           {filtered.map(({ r, certDate, vencida, semCert }) => {
             const pontos = r.pontos || 0
             const pontosOk = pontos >= 10
+            const expandKey = `${r.chave}-${r.agencia}-${r.pacb}`
+            const aberto = !!expanded[expandKey]
 
             const pontosPillStyle: CSSProperties = pontosOk
               ? {
@@ -788,7 +898,14 @@ export default function ExpressoGeralPage() {
                   color: 'rgba(214,31,44,.95)',
                 }
 
-            const certLabel = semCert ? 'Sem certificação' : vencida ? 'Certificação vencida' : 'Certificado'
+            const certLabel = semCert
+              ? 'Sem certificação'
+              : vencida
+                ? 'Certificação vencida'
+                : 'Certificado'
+
+            const sinais = gerarSinalizacoes(r, semCert, vencida)
+            const recomendacao = acaoRecomendada(r, semCert, vencida)
 
             return (
               <div
@@ -841,9 +958,12 @@ export default function ExpressoGeralPage() {
 
                   <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
                     <LightButton
-                      onClick={() => irParaReportar(r)}
-                      title="Reportar"
+                      onClick={() => irParaArvoreCronologica(r)}
+                      title="Árvore Cronológica"
                     >
+                      🌳 Árvore
+                    </LightButton>
+                    <LightButton onClick={() => irParaReportar(r)} title="Reportar">
                       📕 Reportar
                     </LightButton>
 
@@ -852,6 +972,13 @@ export default function ExpressoGeralPage() {
                       title="Copiar para WhatsApp"
                     >
                       📤 WhatsApp
+                    </LightButton>
+
+                    <LightButton
+                      onClick={() => toggleExpand(expandKey)}
+                      title={aberto ? 'Ocultar produção' : 'Ver produção'}
+                    >
+                      {aberto ? '📊 Ocultar produção' : '📊 Ver produção'}
                     </LightButton>
                   </div>
                 </div>
@@ -910,38 +1037,60 @@ export default function ExpressoGeralPage() {
                   </div>
                 </div>
 
-                <div className="card-soft" style={{ padding: '.9rem .95rem', display: 'grid', gap: '.55rem' }}>
-                  <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                    <span className="pill">Indicadores</span>
-                  </div>
+                {sinais.length > 0 && (
+                  <div className="card-soft" style={{ padding: '.9rem .95rem' }}>
+                    <div className="p-muted" style={{ fontSize: 12, marginBottom: '.45rem' }}>
+                      Sinalizações
+                    </div>
 
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-                      gap: '.6rem',
-                    }}
-                  >
-                    <Indicador label="Contas sem Depósito" value={formatNum(r.qtdContas)} />
-                    <Indicador label="Contas com Depósito" value={formatNum(r.qtdContasComDeposito)} />
-                    <Indicador label="Cestas de Serviços" value={formatNum(r.qtdCestaServ)} />
-                    <Indicador label="Super Protegido" value={formatNum(r.qtdSuperProtegido)} />
-                    <Indicador label="Mobilidade" value={formatNum(r.qtdMobilidade)} />
-                    <Indicador label="Cartão Emitido" value={formatNum(r.qtdCartaoEmitido)} />
-                    <Indicador label="Ches Contratado" value={formatNum(r.qtdChesContratado)} />
-                    <Indicador label="Lime na conta" value={formatNum(r.qtdLimeAbConta)} />
-                    <Indicador label="Lime Contratado" value={formatNum(r.qtdLime)} />
-                    <Indicador label="Consignado" value={formatNum(r.qtdConsignado)} />
-                    <Indicador label="Crédito Parcelado" value={formatNum(r.qtdCreditoParcelado)} />
-                    <Indicador label="Microsseguros" value={formatNum(r.qtdMicrosseguro)} />
-                    <Indicador label="Viva Vida" value={formatNum(r.qtdVivaVida)} />
-                    <Indicador label="Dental" value={formatNum(r.qtdPlanoOdonto)} />
-                    <Indicador label="Residencial" value={formatNum(r.qtdSegResidencial)} />
-                    <Indicador label="Seguro Cartão Débito" value={formatNum(r.qtdSegCartaoDeb)} />
-                    <Indicador label="VLR Exp. Sorte (pontos a cada 50)" value={formatNum(r.vlrExpSorte)} />
-                    <Indicador label="EXPRESSO REFERÊNCIA?" value={r.referencia || '—'} />
+                    <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
+                      {sinais.map((sinal, idx) => (
+                        <Pill key={`${expandKey}-sinal-${idx}`} style={sinal.estilo}>
+                          {sinal.texto}
+                        </Pill>
+                      ))}
+                    </div>
+
+                    <div style={{ marginTop: '.7rem', fontSize: 14 }}>
+                      <b>Ação recomendada:</b> {recomendacao}
+                    </div>
                   </div>
-                </div>
+                )}
+
+                {aberto && (
+                  <div className="card-soft" style={{ padding: '.9rem .95rem', display: 'grid', gap: '.55rem' }}>
+                    <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <span className="pill">Indicadores</span>
+                    </div>
+
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                        gap: '.6rem',
+                      }}
+                    >
+                      <Indicador label="Contas sem Depósito" value={formatNum(r.qtdContas)} />
+                      <Indicador label="Contas com Depósito" value={formatNum(r.qtdContasComDeposito)} />
+                      <Indicador label="Cestas de Serviços" value={formatNum(r.qtdCestaServ)} />
+                      <Indicador label="Super Protegido" value={formatNum(r.qtdSuperProtegido)} />
+                      <Indicador label="Mobilidade" value={formatNum(r.qtdMobilidade)} />
+                      <Indicador label="Cartão Emitido" value={formatNum(r.qtdCartaoEmitido)} />
+                      <Indicador label="Ches Contratado" value={formatNum(r.qtdChesContratado)} />
+                      <Indicador label="Lime na conta" value={formatNum(r.qtdLimeAbConta)} />
+                      <Indicador label="Lime Contratado" value={formatNum(r.qtdLime)} />
+                      <Indicador label="Consignado" value={formatNum(r.qtdConsignado)} />
+                      <Indicador label="Crédito Parcelado" value={formatNum(r.qtdCreditoParcelado)} />
+                      <Indicador label="Microsseguros" value={formatNum(r.qtdMicrosseguro)} />
+                      <Indicador label="Viva Vida" value={formatNum(r.qtdVivaVida)} />
+                      <Indicador label="Dental" value={formatNum(r.qtdPlanoOdonto)} />
+                      <Indicador label="Residencial" value={formatNum(r.qtdSegResidencial)} />
+                      <Indicador label="Seguro Cartão Débito" value={formatNum(r.qtdSegCartaoDeb)} />
+                      <Indicador label="VLR Exp. Sorte (pontos a cada 50)" value={formatNum(r.vlrExpSorte)} />
+                      <Indicador label="EXPRESSO REFERÊNCIA?" value={r.referencia || '—'} />
+                    </div>
+                  </div>
+                )}
               </div>
             )
           })}

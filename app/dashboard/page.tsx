@@ -15,6 +15,7 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  where,
 } from 'firebase/firestore'
 import {
   deleteObject,
@@ -35,7 +36,7 @@ type ArquivoObrigatorio = {
   fileName: string
   uploadedAt?: any
   uploadedBy?: string
-  readonly?: boolean // ✅ arquivos que já existiam no Storage (sem doc no Firestore)
+  readonly?: boolean
 }
 
 type BaseMeta = {
@@ -61,7 +62,6 @@ function safeTextDecoder(u8: Uint8Array) {
   try {
     return new TextDecoder('utf-8').decode(u8)
   } catch {
-    // fallback simples
     let s = ''
     for (const b of u8) s += String.fromCharCode(b)
     return s
@@ -76,47 +76,50 @@ function sanitizeFileName(name: string) {
     .toLowerCase()
 }
 
+function isChamadoAberto(status: any) {
+  const s = String(status || '').trim().toLowerCase()
+  if (!s) return true
+  return s !== 'solucionado'
+}
+
 export default function DashboardPage() {
   const ADMIN_EMAIL = 'marcelo@treinexpresso.com.br'
   const STORAGE_FOLDER = 'arquivos-obrigatorios'
 
-  // ✅ BASE (Storage)
   const BASE_STORAGE_PATH = 'base-lojas/banco.csv'
   const BASE_BACKUP_FOLDER = 'base-lojas/backups'
-  // ✅ META (Firestore)
   const BASE_META_DOC = { col: 'config', docId: 'base_lojas' }
 
   const [user, setUser] = useState<User | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
   const [userName, setUserName] = useState('Usuário')
 
-  // lista de arquivos (Firestore + Storage extra)
   const [items, setItems] = useState<ArquivoObrigatorio[]>([])
   const [loading, setLoading] = useState(false)
   const [info, setInfo] = useState('')
   const [error, setError] = useState<string | null>(null)
 
-  // upload (admin) PDFs
   const [titulo, setTitulo] = useState('')
   const [pdfFile, setPdfFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
-  // cache de URLs
   const [urlMap, setUrlMap] = useState<Record<string, string>>({})
 
-  // ✅ BASE upload + indicador
   const [baseFile, setBaseFile] = useState<File | null>(null)
   const [baseUploading, setBaseUploading] = useState(false)
   const [baseInfo, setBaseInfo] = useState('')
   const [baseError, setBaseError] = useState<string | null>(null)
   const [baseMeta, setBaseMeta] = useState<BaseMeta | null>(null)
 
+  const [chamadosAbertos, setChamadosAbertos] = useState(0)
+  const [carregandoChamados, setCarregandoChamados] = useState(false)
+
   /* =========================
      AUTH
      ========================= */
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
+    const unsub = onAuthStateChanged(auth, async (u) => {
       setUser(u)
 
       if (u?.email) {
@@ -128,10 +131,41 @@ export default function DashboardPage() {
       } else {
         setIsAdmin(false)
       }
+
+      if (u?.uid) {
+        await loadChamadosAbertos(u.uid)
+      } else {
+        setChamadosAbertos(0)
+      }
     })
 
     return () => unsub()
   }, [])
+
+  /* =========================
+     CHAMADOS
+     ========================= */
+  async function loadChamadosAbertos(uid: string) {
+    try {
+      setCarregandoChamados(true)
+
+      const qy = query(collection(db, 'chamados'), where('userId', '==', uid))
+      const snap = await getDocs(qy)
+
+      let total = 0
+      snap.forEach((d) => {
+        const data = d.data() as any
+        if (isChamadoAberto(data?.statusChamado)) total++
+      })
+
+      setChamadosAbertos(total)
+    } catch (e) {
+      console.warn('Falha ao carregar chamados em aberto:', e)
+      setChamadosAbertos(0)
+    } finally {
+      setCarregandoChamados(false)
+    }
+  }
 
   /* =========================
      LOAD BASE META (Firestore)
@@ -158,7 +192,6 @@ export default function DashboardPage() {
 
   /* =========================
      LOAD LIST (Firestore + Storage extra)
-     (mantém seu comportamento antigo e só adiciona os arquivos antigos do Storage)
      ========================= */
   async function loadObrigatorios() {
     try {
@@ -166,7 +199,6 @@ export default function DashboardPage() {
       setInfo('')
       setLoading(true)
 
-      // 1) Firestore (como sempre)
       const qy = query(collection(db, 'arquivos_obrigatorios'), orderBy('uploadedAt', 'desc'))
       const snap = await getDocs(qy)
 
@@ -187,7 +219,6 @@ export default function DashboardPage() {
         if (storagePath) firestorePaths.add(storagePath)
       })
 
-      // 2) pré-carrega urls do Firestore (mantido)
       const nextUrlMap: Record<string, string> = {}
       for (const it of list) {
         if (!it.storagePath) continue
@@ -198,7 +229,6 @@ export default function DashboardPage() {
         }
       }
 
-      // 3) NOVO: lista arquivos que já existiam no Storage (mas não têm doc no Firestore)
       try {
         const folderRef = ref(storage, STORAGE_FOLDER)
         const listed = await listAll(folderRef)
@@ -207,10 +237,9 @@ export default function DashboardPage() {
         for (const itemRef of listed.items) {
           if (firestorePaths.has(itemRef.fullPath)) continue
 
-          // título “bonitinho” baseado no nome do arquivo
           const base = itemRef.name.replace(/\.pdf$/i, '')
           const pretty = base
-            .replace(/^\d{4}-\d{2}-\d{2}.*?-/, '') // tenta remover prefixos comuns
+            .replace(/^\d{4}-\d{2}-\d{2}.*?-/, '')
             .replace(/[-_]+/g, ' ')
             .trim()
 
@@ -235,10 +264,8 @@ export default function DashboardPage() {
           }
         }
 
-        // junta (Firestore primeiro, depois Storage-only)
         list.push(...storageOnly)
       } catch (e) {
-        // se der erro ao listar, não quebra sua lista antiga
         console.warn('Não consegui listar arquivos antigos do Storage:', e)
       }
 
@@ -255,11 +282,10 @@ export default function DashboardPage() {
   useEffect(() => {
     loadObrigatorios()
     loadBaseMeta()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   /* =========================
-     ADMIN: UPLOAD PDF (mantido)
+     ADMIN: UPLOAD PDF
      ========================= */
   function validatePdf(file: File) {
     const name = file.name.toLowerCase()
@@ -299,12 +325,10 @@ export default function DashboardPage() {
       const stamp = new Date().toISOString().replace(/[:.]/g, '-')
       const storagePath = `${STORAGE_FOLDER}/${stamp}-${safeName}`
 
-      // 1) sobe no Storage
       await uploadBytes(ref(storage, storagePath), pdfFile, {
         contentType: 'application/pdf',
       })
 
-      // 2) salva registro no Firestore
       await addDoc(collection(db, 'arquivos_obrigatorios'), {
         titulo: titulo.trim(),
         storagePath,
@@ -327,7 +351,7 @@ export default function DashboardPage() {
   }
 
   /* =========================
-     ADMIN: DELETE (mantido, mas bloqueia apagar os "storageOnly")
+     ADMIN: DELETE
      ========================= */
   async function handleDelete(it: ArquivoObrigatorio) {
     if (!user || !isAdmin) return
@@ -363,7 +387,7 @@ export default function DashboardPage() {
   }
 
   /* =========================
-     ADMIN: BASE UPLOAD (XLS/XLSX/CSV) + BACKUP + META
+     ADMIN: BASE UPLOAD
      ========================= */
   function validateBaseFile(file: File) {
     const name = file.name.toLowerCase()
@@ -374,7 +398,6 @@ export default function DashboardPage() {
   async function backupCurrentBaseIfExists() {
     try {
       const currentBytes = await getBytes(ref(storage, BASE_STORAGE_PATH))
-      // ✅ FIX: getBytes() retorna ArrayBuffer → use byteLength (não length)
       if (!currentBytes || currentBytes.byteLength === 0) return
 
       const now = new Date()
@@ -385,7 +408,6 @@ export default function DashboardPage() {
       const backupPath = `${BASE_BACKUP_FOLDER}/banco_${stamp}.csv`
       await uploadBytes(ref(storage, backupPath), currentBytes, { contentType: 'text/csv' })
     } catch (e: any) {
-      // se não existir ainda, ok
       const code = String(e?.code || '')
       if (code.includes('storage/object-not-found')) return
       console.warn('Backup da base falhou:', e)
@@ -415,13 +437,10 @@ export default function DashboardPage() {
       setBaseInfo('')
       setBaseUploading(true)
 
-      // 1) backup automático da base atual
       await backupCurrentBaseIfExists()
 
-      // 2) lê o arquivo novo
       const buf = await baseFile.arrayBuffer()
 
-      // 3) salva o original como backup também (para auditoria)
       {
         const now = new Date()
         const stamp = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}_${pad2(now.getHours())}-${pad2(
@@ -434,14 +453,12 @@ export default function DashboardPage() {
         })
       }
 
-      // 4) garante o arquivo final em CSV (compatível com suas páginas atuais)
       let csvText = ''
 
       const lower = baseFile.name.toLowerCase()
       if (lower.endsWith('.csv')) {
         csvText = safeTextDecoder(new Uint8Array(buf))
       } else {
-        // XLS/XLSX → CSV (primeira aba)
         const wb = XLSX.read(buf, { type: 'array' })
         const ws = wb.Sheets[wb.SheetNames[0]]
         csvText = XLSX.utils.sheet_to_csv(ws)
@@ -449,10 +466,8 @@ export default function DashboardPage() {
 
       const csvBytes = new TextEncoder().encode(csvText)
 
-      // 5) sobe para o caminho oficial (onde seu sistema já lê)
       await uploadBytes(ref(storage, BASE_STORAGE_PATH), csvBytes, { contentType: 'text/csv' })
 
-      // 6) salva meta no Firestore (para mostrar o indicador)
       await setDoc(
         doc(db, BASE_META_DOC.col, BASE_META_DOC.docId),
         {
@@ -479,7 +494,6 @@ export default function DashboardPage() {
 
   const baseUpdatedLabel = useMemo(() => {
     const ts = baseMeta?.updatedAt
-    // Timestamp do Firestore normalmente tem toDate()
     try {
       if (ts?.toDate) {
         const d = ts.toDate() as Date
@@ -489,9 +503,15 @@ export default function DashboardPage() {
     return null
   }, [baseMeta])
 
+  const textoChamados = useMemo(() => {
+    if (carregandoChamados) return 'Carregando seus chamados...'
+    if (chamadosAbertos === 0) return 'Você não tem chamados em aberto.'
+    if (chamadosAbertos === 1) return 'Você tem 1 chamado em aberto.'
+    return `Você tem ${chamadosAbertos} chamados em aberto.`
+  }, [carregandoChamados, chamadosAbertos])
+
   return (
     <section style={{ display: 'grid', gap: '1.5rem' }}>
-      {/* BOAS-VINDAS */}
       <div className="card">
         <span className="pill">Dashboard</span>
 
@@ -510,7 +530,6 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* ✅ CARDS (FUNCIONÁRIO) */}
       <div className="grid gap-4 sm:grid-cols-2">
         <Link href="/dashboard/treinamentos" className="card-soft">
           <div className="h2">📚 Treinamentos</div>
@@ -536,9 +555,18 @@ export default function DashboardPage() {
           <div className="h2">🗓️ Agenda</div>
           <p className="p-muted mt-1">Ver agendamentos.</p>
         </Link>
+
+        <Link href="/dashboard/reportar" className="card-soft">
+          <div className="h2">📕 Reportar</div>
+          <p className="p-muted mt-1">
+            Abrir chamado ou acompanhar problemas reportados.
+          </p>
+          <p className="p-muted mt-1" style={{ fontWeight: 900 }}>
+            {textoChamados}
+          </p>
+        </Link>
       </div>
 
-      {/* ✅ ADMIN: BASE (XLSX direto) + indicador + backup */}
       {isAdmin && (
         <div className="card">
           <span className="pill">Admin</span>
@@ -604,7 +632,6 @@ export default function DashboardPage() {
                 Recarregar status
               </button>
 
-              {/* Mantém o link antigo (não quebra nada) */}
               <Link href="/dashboard/importar-lojas" className="btn-ghost" style={{ textDecoration: 'none' }}>
                 Abrir importador antigo
               </Link>
@@ -613,7 +640,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ARQUIVOS OBRIGATÓRIOS (SEU BLOCO ANTIGO + STORAGE EXTRA) */}
       <div className="card">
         <div style={{ display: 'flex', gap: '.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
           <span className="pill">Arquivos</span>
@@ -648,7 +674,6 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* BLOCO ADMIN (UPLOAD) */}
         {isAdmin && (
           <div className="card-soft" style={{ marginTop: '1rem', display: 'grid', gap: '.85rem' }}>
             <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -685,7 +710,6 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* LISTA */}
         {loading && (
           <p className="p-muted" style={{ marginTop: '1rem' }}>
             Carregando...

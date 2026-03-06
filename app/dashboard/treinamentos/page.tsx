@@ -26,7 +26,7 @@ type LinhaTreinamento = {
   chaveLoja: string
   razaoSocial: string
   nomeLoja: string
-  cnpj: string // xx.xxx.xxx/xxxx-xx
+  cnpj: string
   codAgRelacionamento: string
   nomeAg: string
   numPacb: string
@@ -280,7 +280,6 @@ function CompanyCard({
             <LightButton onClick={onMarkDone}>Marcar concluído</LightButton>
           )}
 
-          {/* ✅ SÓ ADMIN: RESETAR */}
           {isAdmin && ag && (
             <LightButton
               onClick={onReset}
@@ -331,7 +330,14 @@ function CompanyCard({
         }}
       >
         <FieldRow label="CNPJ" value={r.cnpj} />
-        <FieldRow label="Agente (Nome Ag.)" value={r.nomeAg} />
+        <FieldRow
+          label="Agência"
+          value={
+            r.codAgRelacionamento || r.nomeAg
+              ? `${r.codAgRelacionamento || '—'}${r.nomeAg ? ` — ${r.nomeAg}` : ''}`
+              : '—'
+          }
+        />
         <FieldRow label="Telefone" value={telefone} />
         <FieldRow label="Contato" value={r.contato} />
         <FieldRow label="Email do contato" value={r.emailContato} />
@@ -379,9 +385,12 @@ export default function TreinamentosPage() {
   const [resettingKey, setResettingKey] = useState<string | null>(null)
 
   const filtered = useMemo(() => {
+    const semAgendamento = rows.filter((r) => !agMap[r.chaveLoja])
+
     const term = q.trim().toLowerCase()
-    if (!term) return rows
-    return rows.filter((r) =>
+    if (!term) return semAgendamento
+
+    return semAgendamento.filter((r) =>
       [
         r.chaveLoja,
         r.razaoSocial,
@@ -398,7 +407,7 @@ export default function TreinamentosPage() {
         .toLowerCase()
         .includes(term)
     )
-  }, [rows, q])
+  }, [rows, q, agMap])
 
   async function loadAssignments() {
     try {
@@ -696,7 +705,6 @@ export default function TreinamentosPage() {
             {checkingAuth ? 'Verificando login...' : loadingRead ? 'Carregando...' : 'Recarregar lista'}
           </button>
 
-          {/* ✅ AGORA SÓ ADMIN VÊ */}
           {isAdmin && <LightButton onClick={openDownload}>Baixar lista atual</LightButton>}
 
           {isAdmin && <span className="pill">Admin</span>}
@@ -743,7 +751,7 @@ export default function TreinamentosPage() {
       {rows.length > 0 && (
         <div style={{ display: 'grid', gap: '1rem' }}>
           <div className="card" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
-            <span className="pill">Registros: {filtered.length}</span>
+            <span className="pill">Registros disponíveis: {filtered.length}</span>
 
             <div style={{ flex: 1, minWidth: 260 }}>
               <input
