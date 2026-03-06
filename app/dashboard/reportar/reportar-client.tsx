@@ -157,7 +157,13 @@ export default function ReportarClientPage() {
           isAdmin: data?.role === 'admin' || data?.isAdmin === true,
         })
       } catch (e) {
-        console.error(e)
+        console.error('ERRO AO LER USERS:', e)
+        setPerfil({
+          name: firebaseUser.displayName || '',
+          email: firebaseUser.email || '',
+          role: '',
+          isAdmin: false,
+        })
       } finally {
         setLoadingUser(false)
       }
@@ -203,6 +209,21 @@ export default function ReportarClientPage() {
     return () => clearTimeout(timer)
   }, [buscaNomeExpresso])
 
+  function ordenarChamadosPorData(lista: ChamadoComDatas[]) {
+    return [...lista].sort((a, b) => {
+      const da =
+        typeof a?.createdAt?.toDate === 'function'
+          ? a.createdAt.toDate().getTime()
+          : 0
+      const dbb =
+        typeof b?.createdAt?.toDate === 'function'
+          ? b.createdAt.toDate().getTime()
+          : 0
+
+      return dbb - da
+    })
+  }
+
   async function carregarChamados(uid?: string, isAdmin?: boolean) {
     if (!uid) return
 
@@ -212,25 +233,55 @@ export default function ReportarClientPage() {
     try {
       const chamadosRef = collection(db, 'chamados')
 
-      const q = isAdmin
-        ? query(chamadosRef, orderBy('createdAt', 'desc'))
-        : query(
-            chamadosRef,
-            where('userId', '==', uid),
-            orderBy('createdAt', 'desc')
-          )
+      if (isAdmin) {
+        const qAdmin = query(chamadosRef, orderBy('createdAt', 'desc'))
+        const snapAdmin = await getDocs(qAdmin)
 
-      const snap = await getDocs(q)
-      const lista = snap.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-      })) as ChamadoComDatas[]
+        const listaAdmin = snapAdmin.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+        })) as ChamadoComDatas[]
 
-      setChamados(lista)
+        setChamados(listaAdmin)
+        return
+      }
+
+      try {
+        const qUser = query(
+          chamadosRef,
+          where('userId', '==', uid),
+          orderBy('createdAt', 'desc')
+        )
+
+        const snapUser = await getDocs(qUser)
+
+        const listaUser = snapUser.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+        })) as ChamadoComDatas[]
+
+        setChamados(listaUser)
+      } catch (indexError) {
+        console.warn(
+          'Consulta com orderBy falhou, tentando fallback sem índice:',
+          indexError
+        )
+
+        const qUserFallback = query(chamadosRef, where('userId', '==', uid))
+        const snapFallback = await getDocs(qUserFallback)
+
+        const listaFallback = snapFallback.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+        })) as ChamadoComDatas[]
+
+        setChamados(ordenarChamadosPorData(listaFallback))
+      }
     } catch (e: any) {
-      console.error(e)
+      console.error('ERRO AO CARREGAR CHAMADOS:', e)
       setErro(
-        'Não foi possível carregar os chamados. Se aparecer índice do Firestore no console, basta clicar no link para criar.'
+        e?.message ||
+          'Não foi possível carregar os chamados. Se aparecer índice do Firestore no console, basta clicar no link para criar.'
       )
     } finally {
       setLoadingLista(false)
@@ -411,8 +462,14 @@ export default function ReportarClientPage() {
   function formatarCelularBR(value: string) {
     const digits = somenteNumeros(value).slice(0, 11)
 
-    if (digits.length <= 2) return digits
-    if (digits.length <= 7) return `${digits.slice(0, 2)} ${digits.slice(2)}`
+    if (digits.length <= 2) {
+      return digits
+    }
+
+    if (digits.length <= 7) {
+      return `${digits.slice(0, 2)} ${digits.slice(2)}`
+    }
+
     return `${digits.slice(0, 2)} ${digits.slice(2, 7)}-${digits.slice(7, 11)}`
   }
 
@@ -601,12 +658,15 @@ export default function ReportarClientPage() {
         <div className="rounded-2xl bg-white p-5 shadow-lg">
           <h1 className="text-2xl font-bold text-[#7a0019]">📕 Reportar</h1>
           <p className="mt-1 text-sm text-gray-600">
-            Abra chamados de solicitação, problema, reclamação ou elogios e sugestões.
+            Abra chamados de solicitação, problema, reclamação ou elogios e
+            sugestões.
           </p>
         </div>
 
         <div className="rounded-2xl bg-white p-5 shadow-lg">
-          <h2 className="text-lg font-bold text-[#7a0019]">Localizar expresso</h2>
+          <h2 className="text-lg font-bold text-[#7a0019]">
+            Localizar expresso
+          </h2>
 
           <div className="mt-4 grid gap-4 md:grid-cols-3">
             <div>
@@ -642,7 +702,9 @@ export default function ReportarClientPage() {
               />
 
               {loadingSugestoes && (
-                <div className="mt-1 text-xs text-gray-500">Buscando opções...</div>
+                <div className="mt-1 text-xs text-gray-500">
+                  Buscando opções...
+                </div>
               )}
 
               {mostrarSugestoes && sugestoesExpresso.length > 0 && (
@@ -661,7 +723,8 @@ export default function ReportarClientPage() {
                         {item.nomeExpresso || '-'}
                       </div>
                       <div className="text-xs text-gray-500">
-                        Chave Loja: {item.chaveLoja || '-'} | Agência: {item.agencia || '-'} | PACB: {item.pacb || '-'}
+                        Chave Loja: {item.chaveLoja || '-'} | Agência:{' '}
+                        {item.agencia || '-'} | PACB: {item.pacb || '-'}
                       </div>
                     </button>
                   ))}
@@ -707,7 +770,9 @@ export default function ReportarClientPage() {
 
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="rounded-2xl bg-white p-5 shadow-lg">
-            <h2 className="text-lg font-bold text-[#7a0019]">Dados do Expresso</h2>
+            <h2 className="text-lg font-bold text-[#7a0019]">
+              Dados do Expresso
+            </h2>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <Campo label="Chave Loja" value={expressoKey} />
@@ -715,18 +780,25 @@ export default function ReportarClientPage() {
               <Campo label="Agência" value={agencia} />
               <Campo label="PACB" value={pacb} />
               <Campo label="Status" value={statusExpresso} />
-              <Campo label="Usuário logado" value={perfil?.name || perfil?.email || '-'} />
+              <Campo
+                label="Usuário logado"
+                value={perfil?.name || perfil?.email || '-'}
+              />
             </div>
 
             {!expressoKey && (
               <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-700">
-                Você pode abrir esta página pelo botão 📕 no Expresso Geral ou localizar o expresso digitando a chave loja ou parte do nome acima.
+                Você pode abrir esta página pelo botão 📕 no Expresso Geral ou
+                localizar o expresso digitando a chave loja ou parte do nome
+                acima.
               </div>
             )}
           </div>
 
           <div className="rounded-2xl bg-white p-5 shadow-lg">
-            <h2 className="text-lg font-bold text-[#7a0019]">Abrir novo chamado</h2>
+            <h2 className="text-lg font-bold text-[#7a0019]">
+              Abrir novo chamado
+            </h2>
 
             <form onSubmit={abrirChamado} className="mt-4 space-y-4">
               <div>
@@ -764,7 +836,9 @@ export default function ReportarClientPage() {
                 </label>
                 <input
                   value={contatoTelefone}
-                  onChange={(e) => setContatoTelefone(formatarCelularBR(e.target.value))}
+                  onChange={(e) =>
+                    setContatoTelefone(formatarCelularBR(e.target.value))
+                  }
                   inputMode="numeric"
                   className="w-full rounded-xl border border-gray-300 px-3 py-2 outline-none focus:border-[#7a0019]"
                   placeholder="xx xxxxx-xxxx"
@@ -827,7 +901,9 @@ export default function ReportarClientPage() {
           </div>
 
           {loadingLista ? (
-            <div className="mt-4 text-sm text-gray-600">Carregando lista...</div>
+            <div className="mt-4 text-sm text-gray-600">
+              Carregando lista...
+            </div>
           ) : chamados.length === 0 ? (
             <div className="mt-4 rounded-xl bg-gray-50 p-4 text-sm text-gray-600">
               Nenhum chamado encontrado.
@@ -835,7 +911,10 @@ export default function ReportarClientPage() {
           ) : (
             <div className="mt-4 space-y-4">
               {chamados.map((item) => (
-                <div key={item.id} className="rounded-2xl border border-gray-200 p-4">
+                <div
+                  key={item.id}
+                  className="rounded-2xl border border-gray-200 p-4"
+                >
                   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div className="space-y-1">
                       <div className="text-sm text-gray-500">
@@ -850,7 +929,8 @@ export default function ReportarClientPage() {
                       </div>
 
                       <div className="text-sm text-gray-600">
-                        Chave Loja: {item.expressoKey || '-'} | Agência: {item.agencia || '-'} | PACB: {item.pacb || '-'}
+                        Chave Loja: {item.expressoKey || '-'} | Agência:{' '}
+                        {item.agencia || '-'} | PACB: {item.pacb || '-'}
                       </div>
 
                       <div className="text-sm text-gray-600">
@@ -871,7 +951,8 @@ export default function ReportarClientPage() {
                       </div>
 
                       <div className="text-sm text-gray-600">
-                        Contato: {item.contatoNome || '-'} | Celular: {item.contatoTelefone || '-'}
+                        Contato: {item.contatoNome || '-'} | Celular:{' '}
+                        {item.contatoTelefone || '-'}
                       </div>
 
                       <div className="text-sm text-gray-600">
@@ -880,7 +961,11 @@ export default function ReportarClientPage() {
 
                       <div className="text-sm text-gray-600">
                         Mudança de status:{' '}
-                        {formatarData(item.statusChangedAt || item.resolvedAt || item.updatedAt)}
+                        {formatarData(
+                          item.statusChangedAt ||
+                            item.resolvedAt ||
+                            item.updatedAt
+                        )}
                       </div>
 
                       <div className="mt-2 rounded-xl bg-gray-50 p-3 text-sm text-gray-700">
