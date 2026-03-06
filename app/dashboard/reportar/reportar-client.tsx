@@ -366,17 +366,17 @@ export default function ReportarClientPage() {
           } as Loja
 
           preencherExpresso(loja)
-          setMensagemBusca('Expresso localizado com sucesso pela chave loja.')
+          setMensagemBusca('✅ Dados preenchidos automaticamente.')
           return
         }
 
-        setErro('Nenhum expresso encontrado com a chave loja informada.')
+        setErro('⚠️ Chave não encontrada. Preencha manualmente.')
         return
       }
 
       if (sugestoesExpresso.length === 1) {
         preencherExpresso(sugestoesExpresso[0])
-        setMensagemBusca('Expresso localizado com sucesso pelo nome.')
+        setMensagemBusca('✅ Expresso localizado com sucesso.')
         return
       }
 
@@ -462,14 +462,8 @@ export default function ReportarClientPage() {
   function formatarCelularBR(value: string) {
     const digits = somenteNumeros(value).slice(0, 11)
 
-    if (digits.length <= 2) {
-      return digits
-    }
-
-    if (digits.length <= 7) {
-      return `${digits.slice(0, 2)} ${digits.slice(2)}`
-    }
-
+    if (digits.length <= 2) return digits
+    if (digits.length <= 7) return `${digits.slice(0, 2)} ${digits.slice(2)}`
     return `${digits.slice(0, 2)} ${digits.slice(2, 7)}-${digits.slice(7, 11)}`
   }
 
@@ -525,6 +519,16 @@ export default function ReportarClientPage() {
 
     return `${get('day')}/${get('month')}/${get('year')} ${get('hour')}:${get('minute')}`
   }
+
+  const isFormValid = useMemo(() => {
+    return (
+      expressoKey.trim() !== '' &&
+      nomeExpresso.trim() !== '' &&
+      contatoNome.trim() !== '' &&
+      telefoneCompleto(contatoTelefone) &&
+      descricao.trim() !== ''
+    )
+  }, [expressoKey, nomeExpresso, contatoNome, contatoTelefone, descricao])
 
   async function abrirChamado(e: React.FormEvent) {
     e.preventDefault()
@@ -614,10 +618,10 @@ export default function ReportarClientPage() {
       })
 
       if (emailOk) {
-        setMensagem(`Chamado aberto com sucesso. Protocolo: ${protocolo}`)
+        setMensagem(`✅ Chamado aberto com sucesso. Protocolo: ${protocolo}`)
       } else {
         setMensagem(
-          `Chamado aberto com sucesso. Protocolo: ${protocolo}. Porém, o e-mail não foi enviado.`
+          `✅ Chamado aberto com sucesso. Protocolo: ${protocolo}. Porém, o e-mail não foi enviado.`
         )
       }
 
@@ -712,78 +716,70 @@ export default function ReportarClientPage() {
   }
 
   if (loadingUser) {
-    return <div className="app-container">Carregando...</div>
+    return <section style={{ display: 'grid', gap: '1.25rem' }}>Carregando...</section>
   }
 
   if (!user) {
     return (
-      <div className="app-container">
+      <section style={{ display: 'grid', gap: '1.25rem' }}>
         Você precisa estar logado para acessar a área Reportar.
-      </div>
+      </section>
     )
   }
 
   return (
-    <section className="app-container" style={{ display: 'grid', gap: '1.25rem' }}>
+    <section style={{ display: 'grid', gap: '1.25rem' }}>
       <div>
         <span className="pill">Chamados</span>
-        <h1 className="h1" style={{ marginTop: '.5rem' }}>📕 Reportar</h1>
+        <h1 className="h1">Reportar</h1>
         <p className="p-muted" style={{ marginTop: '.35rem' }}>
-          Abra chamados de solicitação, problema, reclamação ou elogios e sugestões.
+          Localize o expresso e abra chamados de solicitação, problema, reclamação ou elogios e sugestões.
         </p>
       </div>
 
       <div className="card">
-        <h2 className="h2">Localizar expresso</h2>
-
-        <div className="grid gap-4 sm:grid-cols-3" style={{ marginTop: '1rem' }}>
+        <div className="grid gap-4 sm:grid-cols-3">
           <div>
             <label className="label">Chave Loja</label>
             <input
+              className="input"
               value={buscaChaveLoja}
               onChange={(e) => setBuscaChaveLoja(e.target.value)}
-              className="input"
-              placeholder="Digite a chave loja"
+              placeholder="Digite a chave"
             />
           </div>
 
-          <div className="relative" ref={sugestoesRef}>
+          <div style={{ position: 'relative' }} ref={sugestoesRef}>
             <label className="label">Nome do Expresso</label>
             <input
+              className="input"
               value={buscaNomeExpresso}
               onChange={(e) => {
                 setBuscaNomeExpresso(e.target.value)
                 setMensagemBusca('')
               }}
               onFocus={() => {
-                if (sugestoesExpresso.length > 0) {
-                  setMostrarSugestoes(true)
-                }
+                if (sugestoesExpresso.length > 0) setMostrarSugestoes(true)
               }}
-              className="input"
               placeholder="Digite parte do nome do expresso"
               autoComplete="off"
             />
 
-            {loadingSugestoes && (
-              <div className="p-muted" style={{ marginTop: '.35rem', fontSize: 12 }}>
-                Buscando opções...
-              </div>
-            )}
+            <p className="p-muted" style={{ fontSize: 12 }}>
+              {loadingSugestoes ? 'Buscando opções...' : ' '}
+            </p>
 
             {mostrarSugestoes && sugestoesExpresso.length > 0 && (
               <div
+                className="card-soft"
                 style={{
                   position: 'absolute',
                   zIndex: 20,
-                  marginTop: '.5rem',
-                  maxHeight: '18rem',
                   width: '100%',
+                  marginTop: '.35rem',
+                  maxHeight: '18rem',
                   overflow: 'auto',
-                  borderRadius: '22px',
-                  border: '1px solid rgba(15,15,25,.08)',
-                  background: '#fff',
-                  boxShadow: '0 10px 24px rgba(10, 10, 20, .08)',
+                  padding: '.35rem',
                 }}
               >
                 {sugestoesExpresso.map((item) => (
@@ -792,19 +788,20 @@ export default function ReportarClientPage() {
                     type="button"
                     onClick={() => {
                       preencherExpresso(item)
-                      setMensagemBusca('Expresso selecionado com sucesso.')
+                      setMensagemBusca('✅ Expresso selecionado com sucesso.')
                     }}
                     style={{
                       display: 'block',
                       width: '100%',
-                      borderBottom: '1px solid rgba(15,15,25,.06)',
-                      padding: '.85rem 1rem',
                       textAlign: 'left',
+                      padding: '.75rem .8rem',
+                      borderRadius: '18px',
+                      border: 'none',
                       background: 'transparent',
                     }}
                   >
-                    <div style={{ fontWeight: 700 }}>{item.nomeExpresso || '-'}</div>
-                    <div style={{ fontSize: 12, color: 'rgba(16,16,24,.68)' }}>
+                    <div style={{ fontWeight: 800 }}>{item.nomeExpresso || '-'}</div>
+                    <div className="p-muted" style={{ fontSize: 12 }}>
                       Chave Loja: {item.chaveLoja || '-'} | Agência: {item.agencia || '-'} | PACB: {item.pacb || '-'}
                     </div>
                   </button>
@@ -816,22 +813,18 @@ export default function ReportarClientPage() {
           <div style={{ display: 'flex', alignItems: 'end', gap: '.5rem' }}>
             <button
               type="button"
-              onClick={buscarExpresso}
-              disabled={loadingBuscaExpresso}
               className="btn-primary"
+              disabled={loadingBuscaExpresso}
+              onClick={buscarExpresso}
             >
               {loadingBuscaExpresso ? 'Buscando...' : 'Buscar expresso'}
             </button>
 
             <button
               type="button"
-              onClick={limparExpressoSelecionado}
               className="btn-ghost"
-              style={{
-                color: 'var(--text)',
-                background: 'rgba(255,255,255,.92)',
-                border: '1px solid rgba(15, 15, 25, .10)',
-              }}
+              style={{ color: '#fff' }}
+              onClick={limparExpressoSelecionado}
             >
               Limpar
             </button>
@@ -839,138 +832,140 @@ export default function ReportarClientPage() {
         </div>
 
         {mensagemBusca && (
-          <div className="card-soft" style={{ marginTop: '1rem', color: '#166534' }}>
+          <div className="card-soft" style={{ marginTop: '1rem' }}>
             {mensagemBusca}
           </div>
         )}
 
-        {!mensagemBusca &&
-          buscaNomeExpresso.trim().length >= 2 &&
-          sugestoesExpresso.length === 0 &&
-          !loadingSugestoes && (
-            <div className="card-soft" style={{ marginTop: '1rem', color: '#92400e' }}>
-              Nenhuma opção encontrada para esse nome.
-            </div>
-          )}
+        {erro && !mensagemBusca && (
+          <div className="card-soft" style={{ marginTop: '1rem' }}>
+            {erro}
+          </div>
+        )}
       </div>
 
-      <div className="grid gap-6 sm:grid-cols-2">
-        <div className="card">
-          <h2 className="h2">Dados do Expresso</h2>
-
-          <div className="grid gap-3 sm:grid-cols-2" style={{ marginTop: '1rem' }}>
-            <Campo label="Chave Loja" value={expressoKey} />
-            <Campo label="Nome do Expresso" value={nomeExpresso} />
-            <Campo label="Agência" value={agencia} />
-            <Campo label="PACB" value={pacb} />
-            <Campo label="Status" value={statusExpresso} />
-            <Campo label="Usuário logado" value={perfil?.name || perfil?.email || '-'} />
+      <form onSubmit={abrirChamado} className="card">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className="label">Chave Loja</label>
+            <input className="input" value={expressoKey} readOnly />
           </div>
 
-          {!expressoKey && (
-            <div className="card-soft" style={{ marginTop: '1rem', color: '#92400e' }}>
-              Você pode abrir esta página pelo botão 📕 no Expresso Geral ou localizar o expresso digitando a chave loja ou parte do nome acima.
-            </div>
-          )}
+          <div>
+            <label className="label">Nome do Expresso</label>
+            <input className="input" value={nomeExpresso} readOnly />
+          </div>
+
+          <div>
+            <label className="label">Agência</label>
+            <input className="input" value={agencia} readOnly />
+          </div>
+
+          <div>
+            <label className="label">PACB</label>
+            <input className="input" value={pacb} readOnly />
+          </div>
+
+          <div className="sm:col-span-2">
+            <label className="label">Status do Expresso</label>
+            <input className="input" value={statusExpresso} readOnly />
+          </div>
+
+          <div className="sm:col-span-2">
+            <label className="label">Tipo do chamado</label>
+            <select
+              className="input"
+              value={tipo}
+              onChange={(e) => setTipo(e.target.value as TipoChamado)}
+            >
+              {TIPOS.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="label">Nome com quem falou</label>
+            <input
+              className="input"
+              value={contatoNome}
+              onChange={(e) => setContatoNome(e.target.value)}
+              placeholder="Digite o nome"
+            />
+          </div>
+
+          <div>
+            <label className="label">Celular de contato</label>
+            <input
+              className="input"
+              value={contatoTelefone}
+              onChange={(e) => setContatoTelefone(formatarCelularBR(e.target.value))}
+              placeholder="xx xxxxx-xxxx"
+              inputMode="numeric"
+            />
+          </div>
+
+          <div className="sm:col-span-2">
+            <label className="label">Explique o que houve</label>
+            <textarea
+              className="input"
+              rows={5}
+              value={descricao}
+              onChange={(e) => setDescricao(e.target.value)}
+              placeholder="Descreva o ocorrido"
+            />
+          </div>
         </div>
 
-        <div className="card">
-          <h2 className="h2">Abrir novo chamado</h2>
+        {erroEmail && (
+          <div className="card-soft" style={{ marginTop: '1rem' }}>
+            Falha no envio do e-mail: {erroEmail}
+          </div>
+        )}
 
-          <form onSubmit={abrirChamado} style={{ marginTop: '1rem', display: 'grid', gap: '1rem' }}>
-            <div>
-              <label className="label">Tipo do chamado</label>
-              <select
-                value={tipo}
-                onChange={(e) => setTipo(e.target.value as TipoChamado)}
-                className="input"
-              >
-                {TIPOS.map((item) => (
-                  <option key={item.value} value={item.value}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+        {mensagem && (
+          <div className="card-soft" style={{ marginTop: '1rem' }}>
+            {mensagem}
+          </div>
+        )}
 
-            <div>
-              <label className="label">Nome com quem falou</label>
-              <input
-                value={contatoNome}
-                onChange={(e) => setContatoNome(e.target.value)}
-                className="input"
-                placeholder="Digite o nome"
-              />
-            </div>
-
-            <div>
-              <label className="label">Celular de contato</label>
-              <input
-                value={contatoTelefone}
-                onChange={(e) => setContatoTelefone(formatarCelularBR(e.target.value))}
-                inputMode="numeric"
-                className="input"
-                placeholder="xx xxxxx-xxxx"
-              />
-            </div>
-
-            <div>
-              <label className="label">Explique o que houve</label>
-              <textarea
-                value={descricao}
-                onChange={(e) => setDescricao(e.target.value)}
-                rows={5}
-                className="input"
-                placeholder="Descreva o ocorrido"
-              />
-            </div>
-
-            {erro && (
-              <div className="card-soft" style={{ color: '#b91c1c' }}>
-                {erro}
-              </div>
-            )}
-
-            {erroEmail && (
-              <div className="card-soft" style={{ color: '#92400e' }}>
-                Falha no envio do e-mail: {erroEmail}
-              </div>
-            )}
-
-            {mensagem && (
-              <div className="card-soft" style={{ color: '#166534' }}>
-                {mensagem}
-              </div>
-            )}
-
-            <button type="submit" disabled={loadingSubmit} className="btn-primary">
-              {loadingSubmit ? 'Enviando...' : 'Abrir chamado'}
-            </button>
-          </form>
-        </div>
-      </div>
-
-      <div className="card">
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '.75rem',
-          }}
-        >
-          <h2 className="h2">
-            {perfil?.isAdmin ? 'Todos os chamados' : 'Meus chamados'}
-          </h2>
+        <div className="mt-6 flex justify-between">
+          <button
+            type="button"
+            className="btn-ghost"
+            style={{ color: '#fff' }}
+            onClick={limparExpressoSelecionado}
+          >
+            Limpar formulário
+          </button>
 
           <button
-            onClick={() => carregarChamados(user.uid, !!perfil?.isAdmin)}
+            className="btn-primary"
+            type="submit"
+            disabled={!isFormValid || loadingSubmit}
+          >
+            {loadingSubmit ? 'Enviando...' : 'Abrir chamado ➜'}
+          </button>
+        </div>
+      </form>
+
+      <div className="card">
+        <div className="flex justify-between items-center gap-3">
+          <div>
+            <span className="pill">
+              {perfil?.isAdmin ? 'Painel completo' : 'Seus chamados'}
+            </span>
+            <h2 className="h2" style={{ marginTop: '.6rem' }}>
+              {perfil?.isAdmin ? 'Todos os chamados' : 'Meus chamados'}
+            </h2>
+          </div>
+
+          <button
             className="btn-ghost"
-            style={{
-              color: 'var(--text)',
-              background: 'rgba(255,255,255,.92)',
-              border: '1px solid rgba(15, 15, 25, .10)',
-            }}
+            style={{ color: '#fff' }}
+            onClick={() => carregarChamados(user.uid, !!perfil?.isAdmin)}
           >
             Atualizar
           </button>
@@ -988,168 +983,99 @@ export default function ReportarClientPage() {
           <div style={{ marginTop: '1rem', display: 'grid', gap: '1rem' }}>
             {chamados.map((item) => (
               <div key={item.id} className="card-soft">
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '.85rem',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <div style={{ display: 'grid', gap: '.25rem' }}>
-                    <div style={{ fontSize: 14, color: 'rgba(16,16,24,.68)' }}>
-                      Protocolo:{' '}
-                      <span style={{ fontWeight: 700, color: 'var(--text)' }}>
-                        {item.protocolo}
-                      </span>
-                    </div>
-
-                    <div style={{ fontSize: 18, fontWeight: 800 }}>
-                      {item.nomeExpresso || '-'}
-                    </div>
-
-                    <div style={{ fontSize: 14, color: 'rgba(16,16,24,.68)' }}>
-                      Chave Loja: {item.expressoKey || '-'} | Agência: {item.agencia || '-'} | PACB: {item.pacb || '-'}
-                    </div>
-
-                    <div style={{ fontSize: 14, color: 'rgba(16,16,24,.68)' }}>
-                      Tipo: {labelTipoChamado(item.tipo)}
-                    </div>
-
-                    <div style={{ fontSize: 14, color: 'rgba(16,16,24,.68)' }}>
-                      Status do chamado:{' '}
-                      <span
-                        style={{
-                          fontWeight: 700,
-                          color:
-                            item.statusChamado === 'ABERTO'
-                              ? '#d61f2c'
-                              : '#15803d',
-                        }}
-                      >
-                        {item.statusChamado}
-                      </span>
-                    </div>
-
-                    <div style={{ fontSize: 14, color: 'rgba(16,16,24,.68)' }}>
-                      Contato: {item.contatoNome || '-'} | Celular: {item.contatoTelefone || '-'}
-                    </div>
-
-                    <div style={{ fontSize: 14, color: 'rgba(16,16,24,.68)' }}>
-                      Criado em: {formatarDataHoraBrasilia(item.createdAt)}
-                    </div>
-
-                    <div style={{ fontSize: 14, color: 'rgba(16,16,24,.68)' }}>
-                      Mudança de status:{' '}
-                      {formatarDataHoraBrasilia(
-                        item.statusChangedAt || item.resolvedAt || item.updatedAt
-                      )}
-                    </div>
-
-                    {item.solucaoTexto && (
-                      <div
-                        style={{
-                          marginTop: '.5rem',
-                          borderRadius: '22px',
-                          border: '1px solid rgba(21,128,61,.16)',
-                          background: 'rgba(240,253,244,.95)',
-                          padding: '.9rem',
-                          color: '#166534',
-                        }}
-                      >
-                        <div style={{ marginBottom: '.25rem', fontWeight: 700 }}>
-                          Solução informada
-                        </div>
-                        <div>{item.solucaoTexto}</div>
-                      </div>
-                    )}
-
-                    <div
+                <div style={{ display: 'grid', gap: '.35rem' }}>
+                  <div style={{ fontSize: 14 }}>
+                    <b>Protocolo:</b> {item.protocolo}
+                  </div>
+                  <div style={{ fontSize: 14 }}>
+                    <b>Expresso:</b> {item.nomeExpresso || '-'}
+                  </div>
+                  <div style={{ fontSize: 14 }}>
+                    <b>Chave Loja:</b> {item.expressoKey || '-'} | <b>Agência:</b> {item.agencia || '-'} | <b>PACB:</b> {item.pacb || '-'}
+                  </div>
+                  <div style={{ fontSize: 14 }}>
+                    <b>Tipo:</b> {labelTipoChamado(item.tipo)}
+                  </div>
+                  <div style={{ fontSize: 14 }}>
+                    <b>Status:</b>{' '}
+                    <span
                       style={{
-                        marginTop: '.5rem',
-                        borderRadius: '22px',
-                        background: 'rgba(255,255,255,.7)',
-                        padding: '.9rem',
-                        fontSize: 14,
-                        color: 'var(--text)',
+                        fontWeight: 800,
+                        color: item.statusChamado === 'ABERTO' ? 'var(--red)' : '#15803d',
                       }}
                     >
-                      {item.descricao || '-'}
-                    </div>
-
-                    {perfil?.isAdmin && (
-                      <div style={{ fontSize: 12, color: 'rgba(16,16,24,.68)' }}>
-                        Aberto por: {item.userName || '-'} ({item.userEmail || '-'})
-                      </div>
+                      {item.statusChamado}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 14 }}>
+                    <b>Contato:</b> {item.contatoNome || '-'} | <b>Celular:</b> {item.contatoTelefone || '-'}
+                  </div>
+                  <div style={{ fontSize: 14 }}>
+                    <b>Criado em:</b> {formatarDataHoraBrasilia(item.createdAt)}
+                  </div>
+                  <div style={{ fontSize: 14 }}>
+                    <b>Mudança de status:</b>{' '}
+                    {formatarDataHoraBrasilia(
+                      item.statusChangedAt || item.resolvedAt || item.updatedAt
                     )}
                   </div>
 
-                  {perfil?.isAdmin && (
-                    <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
-                      {item.statusChamado === 'ABERTO' && (
-                        <button
-                          onClick={() => marcarComoSolucionado(item)}
-                          className="btn-primary"
-                          style={{
-                            background:
-                              'linear-gradient(90deg, #16a34a, #0f9f6e)',
-                            boxShadow:
-                              '0 14px 28px rgba(22,163,74,.18), 0 14px 28px rgba(15,159,110,.14)',
-                          }}
-                        >
-                          Marcar solucionado
-                        </button>
-                      )}
+                  {item.solucaoTexto && (
+                    <div className="card-soft" style={{ marginTop: '.35rem' }}>
+                      <b>Solução informada</b>
+                      <div style={{ marginTop: '.35rem' }}>{item.solucaoTexto}</div>
+                    </div>
+                  )}
 
-                      <button
-                        onClick={() => excluirChamado(item.id)}
-                        className="btn-primary"
-                        style={{
-                          background:
-                            'linear-gradient(90deg, #d61f2c, #b5163b)',
-                          boxShadow:
-                            '0 14px 28px rgba(214,31,44,.18), 0 14px 28px rgba(181,22,59,.14)',
-                        }}
-                      >
-                        Excluir
-                      </button>
+                  <div className="card-soft" style={{ marginTop: '.35rem' }}>
+                    {item.descricao || '-'}
+                  </div>
+
+                  {perfil?.isAdmin && (
+                    <div className="p-muted" style={{ fontSize: 12 }}>
+                      Aberto por: {item.userName || '-'} ({item.userEmail || '-'})
                     </div>
                   )}
                 </div>
+
+                {perfil?.isAdmin && (
+                  <div style={{ marginTop: '1rem', display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
+                    {item.statusChamado === 'ABERTO' && (
+                      <button
+                        type="button"
+                        className="btn-primary"
+                        style={{
+                          background:
+                            'linear-gradient(90deg, #16a34a, #0f9f6e)',
+                          boxShadow:
+                            '0 14px 28px rgba(22,163,74,.16), 0 14px 28px rgba(15,159,110,.14)',
+                        }}
+                        onClick={() => marcarComoSolucionado(item)}
+                      >
+                        Marcar solucionado
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      style={{
+                        background:
+                          'linear-gradient(90deg, #d61f2c, #b5163b)',
+                        boxShadow:
+                          '0 14px 28px rgba(214,31,44,.16), 0 14px 28px rgba(181,22,59,.14)',
+                      }}
+                      onClick={() => excluirChamado(item.id)}
+                    >
+                      Excluir
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         )}
       </div>
     </section>
-  )
-}
-
-function Campo({ label, value }: { label: string; value: string }) {
-  return (
-    <div
-      style={{
-        border: '1px solid rgba(15, 15, 25, .08)',
-        background: 'rgba(255,255,255,.75)',
-        borderRadius: '22px',
-        boxShadow: '0 10px 24px rgba(10, 10, 20, .08)',
-        padding: '1rem',
-      }}
-    >
-      <div
-        style={{
-          fontSize: 12,
-          fontWeight: 700,
-          textTransform: 'uppercase',
-          letterSpacing: '.05em',
-          color: 'rgba(16,16,24,.68)',
-        }}
-      >
-        {label}
-      </div>
-      <div style={{ marginTop: '.25rem', fontSize: 14, fontWeight: 600 }}>
-        {value || '-'}
-      </div>
-    </div>
   )
 }
