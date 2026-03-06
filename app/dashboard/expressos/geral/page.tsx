@@ -636,6 +636,18 @@ export default function ExpressoGeralPage() {
     }
   }
 
+  function irParaReportar(r: RowBase) {
+    const params = new URLSearchParams({
+      chaveLoja: r.chave || '',
+      nomeExpresso: r.nome || '',
+      agencia: r.agencia || '',
+      pacb: r.pacb || '',
+      status: r.statusAnalise || '',
+    })
+
+    router.push(`/dashboard/reportar?${params.toString()}`)
+  }
+
   return (
     <section style={{ display: 'grid', gap: '1.25rem' }}>
       <div>
@@ -829,12 +841,21 @@ export default function ExpressoGeralPage() {
                     </Pill>
                   </div>
 
-                  <LightButton
-                    onClick={() => copyWhatsApp(r, certDate, semCert, vencida)}
-                    title="Copiar para WhatsApp"
-                  >
-                    📤 WhatsApp
-                  </LightButton>
+                  <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
+                    <LightButton
+                      onClick={() => irParaReportar(r)}
+                      title="Reportar"
+                    >
+                      📕
+                    </LightButton>
+
+                    <LightButton
+                      onClick={() => copyWhatsApp(r, certDate, semCert, vencida)}
+                      title="Copiar para WhatsApp"
+                    >
+                      📤 WhatsApp
+                    </LightButton>
+                  </div>
                 </div>
 
                 <div>
