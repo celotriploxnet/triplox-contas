@@ -637,11 +637,26 @@ export default function ReportarClientPage() {
   async function marcarComoSolucionado(item: ChamadoComDatas) {
     if (!perfil?.isAdmin || !user) return
 
+    const resposta = window.prompt(
+      `Digite a solução para o chamado ${item.protocolo}:`,
+      item.solucaoTexto || ''
+    )
+
+    if (resposta === null) return
+
+    const solucaoTexto = resposta.trim()
+
+    if (!solucaoTexto) {
+      window.alert('Informe o texto da solução antes de marcar como solucionado.')
+      return
+    }
+
     try {
       const dataHoraSolucao = dataHoraBrasiliaAgora()
 
       await updateDoc(doc(db, 'chamados', item.id), {
         statusChamado: 'SOLUCIONADO',
+        solucaoTexto,
         updatedAt: serverTimestamp(),
         resolvedAt: serverTimestamp(),
         statusChangedAt: serverTimestamp(),
@@ -663,6 +678,7 @@ export default function ReportarClientPage() {
         descricao: item.descricao,
         statusChamado: 'SOLUCIONADO',
         dataHoraEvento: dataHoraSolucao,
+        solucaoTexto,
       })
 
       if (!emailOk) {
@@ -1022,6 +1038,13 @@ export default function ReportarClientPage() {
                             item.updatedAt
                         )}
                       </div>
+
+                      {item.solucaoTexto && (
+                        <div className="mt-2 rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-900">
+                          <div className="mb-1 font-semibold">Solução informada</div>
+                          <div>{item.solucaoTexto}</div>
+                        </div>
+                      )}
 
                       <div className="mt-2 rounded-xl bg-gray-50 p-3 text-sm text-gray-700">
                         {item.descricao || '-'}

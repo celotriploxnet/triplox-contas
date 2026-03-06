@@ -56,6 +56,7 @@ export async function POST(req: Request) {
     const contatoTelefone = escapeText(body?.contatoTelefone)
     const descricao = escapeText(body?.descricao)
     const statusChamado = escapeText(body?.statusChamado || 'ABERTO')
+    const solucaoTexto = escapeText(body?.solucaoTexto)
     const dataHoraEvento = escapeText(body?.dataHoraEvento || formatarDataHoraBrasilia())
 
     const obrigatorios = [
@@ -101,6 +102,9 @@ export async function POST(req: Request) {
         `📝 Descrição original`,
         `${descricao || '—'}`,
         ``,
+        `✅ Solução informada pelo admin`,
+        `${solucaoTexto || '—'}`,
+        ``,
         `🕒 Data/Hora da solução (Brasília): ${dataHoraEvento}`,
       ].join('\n')
 
@@ -128,6 +132,9 @@ export async function POST(req: Request) {
           `Agência: ${agencia || '—'}`,
           `PACB: ${pacb || '—'}`,
           `Data/Hora da solução (Brasília): ${dataHoraEvento}`,
+          ``,
+          `✅ Solução informada:`,
+          `${solucaoTexto || '—'}`,
           ``,
           `Descrição do chamado:`,
           `${descricao || '—'}`,

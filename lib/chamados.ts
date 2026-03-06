@@ -27,10 +27,13 @@ export type Chamado = {
 
   statusChamado: StatusChamado
 
+  solucaoTexto?: string
+
   createdAt?: any
   updatedAt?: any
   resolvedAt?: any
   resolvedBy?: string
+  statusChangedAt?: any
 }
 
 export function gerarProtocolo() {
