@@ -1,10 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { signInWithEmailAndPassword, onAuthStateChanged } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import {
+  signInWithEmailAndPassword,
+  onAuthStateChanged,
+  signOut,
+} from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+
+type UserProfile = {
+  nome?: string;
+  email?: string;
+  telefone?: string;
+  nascimento?: string;
+  role?: "admin" | "operacional" | "consulta";
+  ativo?: boolean;
+};
 
 export default function LoginPage() {
   const router = useRouter();
@@ -12,14 +26,64 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [carregando, setCarregando] = useState(false);
+  const [verificandoSessao, setVerificandoSessao] = useState(true);
   const [erro, setErro] = useState("");
 
+  async function validarAcesso(uid: string) {
+    const ref = doc(db, "users", uid);
+    const snap = await getDoc(ref);
+
+    if (!snap.exists()) {
+      return {
+        ok: false,
+        mensagem:
+          "Seu usuário não possui cadastro liberado no sistema. Fale com o administrador.",
+      };
+    }
+
+    const profile = snap.data() as UserProfile;
+
+    if (profile.ativo !== true) {
+      return {
+        ok: false,
+        mensagem:
+          "Seu acesso está inativo no sistema. Fale com o administrador.",
+      };
+    }
+
+    return {
+      ok: true,
+      profile,
+    };
+  }
+
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        router.push("/dashboard");
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      try {
+        if (!user) {
+          setVerificandoSessao(false);
+          return;
+        }
+
+        const validacao = await validarAcesso(user.uid);
+
+        if (validacao.ok) {
+          router.push("/dashboard");
+          return;
+        }
+
+        await signOut(auth);
+        setErro(validacao.mensagem);
+        setVerificandoSessao(false);
+      } catch {
+        try {
+          await signOut(auth);
+        } catch {}
+        setErro("Não foi possível validar seu acesso no momento.");
+        setVerificandoSessao(false);
       }
     });
+
     return () => unsub();
   }, [router]);
 
@@ -29,11 +93,30 @@ export default function LoginPage() {
     setCarregando(true);
 
     try {
-      await signInWithEmailAndPassword(auth, email, senha);
+      const cred = await signInWithEmailAndPassword(auth, email, senha);
+
+      const validacao = await validarAcesso(cred.user.uid);
+
+      if (!validacao.ok) {
+        await signOut(auth);
+        setErro(validacao.mensagem);
+        return;
+      }
+
       router.push("/dashboard");
-    } catch (err) {
-      console.error(err);
-      setErro("Email ou senha inválidos.");
+    } catch (err: any) {
+      const code = String(err?.code || "");
+
+      if (
+        code.includes("auth/invalid-credential") ||
+        code.includes("auth/wrong-password") ||
+        code.includes("auth/user-not-found") ||
+        code.includes("auth/invalid-email")
+      ) {
+        setErro("Email ou senha inválidos.");
+      } else {
+        setErro("Não foi possível entrar no sistema.");
+      }
     } finally {
       setCarregando(false);
     }
@@ -41,7 +124,6 @@ export default function LoginPage() {
 
   return (
     <main className="app-shell">
-      {/* TOPO PADRONIZADO */}
       <header className="topbar">
         <div className="topbar-inner">
           <div className="brand">
@@ -60,7 +142,6 @@ export default function LoginPage() {
         </div>
       </header>
 
-      {/* CONTEÚDO */}
       <section className="app-container">
         <div className="mx-auto max-w-md">
           <div className="card">
@@ -81,6 +162,7 @@ export default function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  disabled={carregando || verificandoSessao}
                 />
               </div>
 
@@ -93,6 +175,7 @@ export default function LoginPage() {
                   value={senha}
                   onChange={(e) => setSenha(e.target.value)}
                   required
+                  disabled={carregando || verificandoSessao}
                 />
               </div>
 
@@ -110,9 +193,13 @@ export default function LoginPage() {
               <button
                 type="submit"
                 className="btn-primary w-full"
-                disabled={carregando}
+                disabled={carregando || verificandoSessao}
               >
-                {carregando ? "Entrando..." : "Entrar"}
+                {verificandoSessao
+                  ? "Verificando acesso..."
+                  : carregando
+                  ? "Entrando..."
+                  : "Entrar"}
               </button>
             </form>
           </div>

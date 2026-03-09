@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { onAuthStateChanged, User } from 'firebase/auth'
+import { doc, getDoc } from 'firebase/firestore'
 import { getBytes, getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import * as XLSX from 'xlsx'
 
-import { auth, storage } from '@/lib/firebase'
+import { auth, db, storage } from '@/lib/firebase'
 
 type CertRow = {
   cnpj: string
@@ -33,6 +34,14 @@ function formatCPF(v: any) {
   const d = digitsOnly(v).padStart(11, '0').slice(0, 11)
   if (d.length !== 11) return toStr(v)
   return d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4')
+}
+
+function maskCPF(v: any) {
+  const d = digitsOnly(v).padStart(11, '0').slice(0, 11)
+  if (d.length !== 11) return toStr(v)
+
+  const inicio = d.slice(0, 3)
+  return `${inicio}.***.***-**`
 }
 
 function formatCNPJ(v: any) {
@@ -67,10 +76,8 @@ function parseDateToPtBR(v: any) {
   const raw = toStr(v)
   if (!raw) return ''
 
-  // já vem pt-BR?
   if (/^\d{2}\/\d{2}\/\d{4}/.test(raw)) return raw
 
-  // excel serial date
   const n = Number(raw)
   if (Number.isFinite(n) && n > 20000 && n < 90000) {
     const d = XLSX.SSF.parse_date_code(n)
@@ -80,7 +87,6 @@ function parseDateToPtBR(v: any) {
     }
   }
 
-  // tenta Date
   const dt = new Date(raw)
   if (!Number.isNaN(dt.getTime())) {
     return new Intl.DateTimeFormat('pt-BR', {
@@ -169,12 +175,14 @@ function LightButton({
   )
 }
 
-function buildWhatsAppMessage(r: CertRow) {
+function buildWhatsAppMessage(r: CertRow, canViewFullCpf: boolean) {
+  const cpfExibido = canViewFullCpf ? r.cpfCandidato : maskCPF(r.cpfCandidato)
+
   return [
     '🪪 *Consulta de Certificação*',
     '',
     `👤 *Candidato:* ${r.nomeCandidato || '—'}`,
-    `🆔 *CPF:* ${r.cpfCandidato || '—'}`,
+    `🆔 *CPF:* ${cpfExibido || '—'}`,
     `🏪 *Chave Loja:* ${r.chaveLoja || '—'}`,
     `🧾 *CNPJ:* ${r.cnpj || '—'}`,
     `🏢 *Correspondente:* ${r.correspondente || '—'}`,
@@ -191,7 +199,7 @@ export default function PessoaCertificadaPage() {
   const router = useRouter()
 
   const ADMIN_EMAIL = 'marcelo@treinexpresso.com.br'
-  const CSV_PATH = 'pessoa-certificada/certificados.csv' // ✅ caminho fixo no Storage
+  const CSV_PATH = 'pessoa-certificada/certificados.csv'
 
   const [user, setUser] = useState<User | null>(null)
   const [checkingAuth, setCheckingAuth] = useState(true)
@@ -207,6 +215,34 @@ export default function PessoaCertificadaPage() {
   const [q, setQ] = useState('')
 
   const [csvFile, setCsvFile] = useState<File | null>(null)
+  const [cpfVisivelMap, setCpfVisivelMap] = useState<Record<string, boolean>>({})
+
+  async function resolveIsAdmin(u: User) {
+    const legacyAdmin = (u.email || '').toLowerCase() === ADMIN_EMAIL.toLowerCase()
+    if (legacyAdmin) return true
+
+    try {
+      const snap = await getDoc(doc(db, 'users', u.uid))
+      if (!snap.exists()) return false
+
+      const data = snap.data() as any
+      return data?.ativo === true && data?.role === 'admin'
+    } catch (e) {
+      console.error('resolveIsAdmin error:', e)
+      return false
+    }
+  }
+
+  function makeCpfKey(r: CertRow, idx?: number) {
+    return `${r.chaveLoja}__${r.cpfCandidato}__${r.nomeCandidato}__${idx ?? ''}`
+  }
+
+  function toggleCpfVisivel(key: string) {
+    setCpfVisivelMap((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }))
+  }
 
   async function loadCsv() {
     if (!auth.currentUser) {
@@ -224,7 +260,6 @@ export default function PessoaCertificadaPage() {
 
       const text = new TextDecoder('utf-8').decode(u8)
 
-      // XLSX lê CSV bem
       const wb = XLSX.read(text, { type: 'string' })
       const ws = wb.Sheets[wb.SheetNames[0]]
       const raw: Record<string, any>[] = XLSX.utils.sheet_to_json(ws, { defval: '' })
@@ -262,6 +297,7 @@ export default function PessoaCertificadaPage() {
       })
 
       setRows(mapped)
+      setCpfVisivelMap({})
       setInfo('CSV carregado ✅')
     } catch (e: any) {
       console.error('loadCsv error:', e)
@@ -321,9 +357,9 @@ export default function PessoaCertificadaPage() {
     }
   }
 
-  async function copyWhatsApp(r: CertRow) {
+  async function copyWhatsApp(r: CertRow, cpfVisivel: boolean) {
     try {
-      const msg = buildWhatsAppMessage(r)
+      const msg = buildWhatsAppMessage(r, cpfVisivel)
       await navigator.clipboard.writeText(msg)
       setInfo('Mensagem copiada ✅ (cole no WhatsApp)')
       setError(null)
@@ -334,7 +370,7 @@ export default function PessoaCertificadaPage() {
   }
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
+    const unsub = onAuthStateChanged(auth, async (u) => {
       setUser(u)
       setCheckingAuth(false)
 
@@ -344,12 +380,12 @@ export default function PessoaCertificadaPage() {
         return
       }
 
-      setIsAdmin((u.email || '').toLowerCase() === ADMIN_EMAIL.toLowerCase())
+      const admin = await resolveIsAdmin(u)
+      setIsAdmin(admin)
       loadCsv()
     })
 
     return () => unsub()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router])
 
   const term = q.trim().toLowerCase()
@@ -385,14 +421,12 @@ export default function PessoaCertificadaPage() {
         </p>
       </div>
 
-      {/* CONTROLES */}
       <div className="card" style={{ display: 'grid', gap: '1rem' }}>
         <div style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
           <button className="btn-primary" onClick={loadCsv} disabled={loading || checkingAuth}>
             {checkingAuth ? 'Verificando login...' : loading ? 'Carregando...' : 'Recarregar CSV'}
           </button>
 
-          {/* ✅ Baixar CSV só para ADMIN */}
           {isAdmin && (
             <LightButton onClick={openDownloadCsv} title="Baixar o CSV atual">
               Baixar CSV
@@ -400,6 +434,7 @@ export default function PessoaCertificadaPage() {
           )}
 
           {isAdmin && <span className="pill">Admin</span>}
+          {!isAdmin && <span className="pill">CPF mascarado</span>}
           {info && <span className="pill">{info}</span>}
         </div>
 
@@ -413,7 +448,6 @@ export default function PessoaCertificadaPage() {
           />
         </label>
 
-        {/* ADMIN: UPLOAD CSV */}
         {isAdmin && (
           <div className="card-soft" style={{ display: 'grid', gap: '.85rem' }}>
             <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -449,7 +483,6 @@ export default function PessoaCertificadaPage() {
         )}
       </div>
 
-      {/* ✅ Só mostra resultados quando houver busca */}
       {hasSearch && (
         <>
           <div className="card" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -467,85 +500,114 @@ export default function PessoaCertificadaPage() {
                 gap: '1rem',
               }}
             >
-              {filtered.map((r, idx) => (
-                <div
-                  key={`${r.chaveLoja}-${r.cpfCandidato}-${idx}`}
-                  className="card"
-                  style={{ display: 'grid', gap: '.65rem' }}
-                >
+              {filtered.map((r, idx) => {
+                const cpfKey = makeCpfKey(r, idx)
+                const cpfVisivel = isAdmin && !!cpfVisivelMap[cpfKey]
+                const cpfExibido = cpfVisivel ? r.cpfCandidato : maskCPF(r.cpfCandidato)
+
+                return (
                   <div
-                    className="card-soft"
-                    style={{
-                      display: 'flex',
-                      gap: '.6rem',
-                      flexWrap: 'wrap',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '.8rem .95rem',
-                    }}
+                    key={`${r.chaveLoja}-${r.cpfCandidato}-${idx}`}
+                    className="card"
+                    style={{ display: 'grid', gap: '.65rem' }}
                   >
-                    <div style={{ fontWeight: 900, fontSize: '1.02rem' }}>{r.nomeCandidato || '—'}</div>
-                    <StatusPill status={r.statusProva} />
-                  </div>
-
-                  <div style={{ display: 'grid', gap: '.25rem' }}>
-                    <div className="p-muted" style={{ fontSize: 12 }}>
-                      Correspondente
+                    <div
+                      className="card-soft"
+                      style={{
+                        display: 'flex',
+                        gap: '.6rem',
+                        flexWrap: 'wrap',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '.8rem .95rem',
+                      }}
+                    >
+                      <div style={{ fontWeight: 900, fontSize: '1.02rem' }}>{r.nomeCandidato || '—'}</div>
+                      <StatusPill status={r.statusProva} />
                     </div>
-                    <div style={{ fontWeight: 900 }}>{r.correspondente || '—'}</div>
-                  </div>
 
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
-                      gap: '.6rem',
-                    }}
-                  >
-                    <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
+                    <div style={{ display: 'grid', gap: '.25rem' }}>
                       <div className="p-muted" style={{ fontSize: 12 }}>
-                        CNPJ
+                        Correspondente
                       </div>
-                      <div style={{ fontWeight: 900 }}>{r.cnpj || '—'}</div>
+                      <div style={{ fontWeight: 900 }}>{r.correspondente || '—'}</div>
                     </div>
 
-                    <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
-                      <div className="p-muted" style={{ fontSize: 12 }}>
-                        Chave Loja
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+                        gap: '.6rem',
+                      }}
+                    >
+                      <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
+                        <div className="p-muted" style={{ fontSize: 12 }}>
+                          CNPJ
+                        </div>
+                        <div style={{ fontWeight: 900 }}>{r.cnpj || '—'}</div>
                       </div>
-                      <div style={{ fontWeight: 900 }}>{r.chaveLoja || '—'}</div>
+
+                      <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
+                        <div className="p-muted" style={{ fontSize: 12 }}>
+                          Chave Loja
+                        </div>
+                        <div style={{ fontWeight: 900 }}>{r.chaveLoja || '—'}</div>
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+                        gap: '.6rem',
+                      }}
+                    >
+                      <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
+                        <div className="p-muted" style={{ fontSize: 12, marginBottom: '.3rem' }}>
+                          CPF Candidato
+                        </div>
+
+                        <div
+                          style={{
+                            display: 'flex',
+                            gap: '.5rem',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            flexWrap: 'wrap',
+                          }}
+                        >
+                          <div style={{ fontWeight: 900 }}>{cpfExibido || '—'}</div>
+
+                          {isAdmin && (
+                            <LightButton
+                              onClick={() => toggleCpfVisivel(cpfKey)}
+                              title={cpfVisivel ? 'Ocultar CPF' : 'Mostrar CPF'}
+                            >
+                              {cpfVisivel ? '🙈 Ocultar' : '👁 Mostrar'}
+                            </LightButton>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
+                        <div className="p-muted" style={{ fontSize: 12 }}>
+                          Data realização
+                        </div>
+                        <div style={{ fontWeight: 900 }}>{r.dataRealizacao || '—'}</div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                      <LightButton
+                        onClick={() => copyWhatsApp(r, cpfVisivel)}
+                        title="Copiar mensagem para WhatsApp"
+                      >
+                        📤 Copiar WhatsApp
+                      </LightButton>
                     </div>
                   </div>
-
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
-                      gap: '.6rem',
-                    }}
-                  >
-                    <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
-                      <div className="p-muted" style={{ fontSize: 12 }}>
-                        CPF Candidato
-                      </div>
-                      <div style={{ fontWeight: 900 }}>{r.cpfCandidato || '—'}</div>
-                    </div>
-
-                    <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
-                      <div className="p-muted" style={{ fontSize: 12 }}>
-                        Data realização
-                      </div>
-                      <div style={{ fontWeight: 900 }}>{r.dataRealizacao || '—'}</div>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                    <LightButton onClick={() => copyWhatsApp(r)} title="Copiar mensagem para WhatsApp">
-                      📤 Copiar WhatsApp
-                    </LightButton>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           ) : (
             <div className="card-soft">
@@ -564,6 +626,7 @@ export default function PessoaCertificadaPage() {
       {!checkingAuth && user && (
         <p className="p-muted" style={{ marginTop: '.25rem' }}>
           Logado como: <b>{user.email}</b>
+          {isAdmin ? ' (Admin)' : ''}
         </p>
       )}
     </section>
