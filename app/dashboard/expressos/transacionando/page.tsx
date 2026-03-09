@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useRouter } from 'next/navigation'
 import { onAuthStateChanged } from 'firebase/auth'
 import { getBytes, ref } from 'firebase/storage'
 import * as XLSX from 'xlsx'
@@ -48,14 +49,65 @@ function statusBucket(statusRaw: string): 'transacional' | 'treinado' | 'outro' 
   return 'outro'
 }
 
+function LightButton({
+  children,
+  onClick,
+  disabled,
+  title,
+}: {
+  children: ReactNode
+  onClick?: () => void
+  disabled?: boolean
+  title?: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      style={{
+        borderRadius: 999,
+        padding: '.52rem .75rem',
+        fontSize: '.85rem',
+        fontWeight: 900,
+        border: '1px solid rgba(15,15,25,.18)',
+        background: 'rgba(255,255,255,.88)',
+        color: 'rgba(16,16,24,.92)',
+        boxShadow: '0 10px 18px rgba(10,10,20,.06)',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.65 : 1,
+      }}
+    >
+      {children}
+    </button>
+  )
+}
+
+function buildWhatsAppMessage(e: ExpressoContabil) {
+  return [
+    '📊 *Expresso Somente Transacionando*',
+    '',
+    `🏪 *Nome:* ${e.nome || '—'}`,
+    `🔑 *Chave:* ${e.chave || '—'}`,
+    `📍 *Município:* ${e.municipio || '—'}`,
+    `🏦 *Agência/PACB:* ${e.agencia || '—'} / ${e.pacb || '—'}`,
+    '',
+    `💳 *TRX Contábil:* ${String(e.trx ?? 0)}`,
+    `✅ *Status:* ${e.status || '—'}`,
+  ].join('\n')
+}
+
 /* =========================
    PAGE
    ========================= */
 export default function TransacionandoPage() {
+  const router = useRouter()
   const CSV_PATH = 'base-lojas/banco.csv'
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [info, setInfo] = useState('')
 
   const [expressos, setExpressos] = useState<ExpressoContabil[]>([])
 
@@ -65,12 +117,44 @@ export default function TransacionandoPage() {
   const [q, setQ] = useState('')
 
   /* =========================
+     AÇÕES
+     ========================= */
+  function irParaReportar(e: ExpressoContabil) {
+    const params = new URLSearchParams({
+      chaveLoja: e.chave || '',
+      nomeExpresso: e.nome || '',
+      agencia: e.agencia || '',
+      pacb: e.pacb || '',
+      status: e.status || '',
+    })
+
+    router.push(`/dashboard/reportar?${params.toString()}`)
+  }
+
+  function irParaArvoreCronologica(e: ExpressoContabil) {
+    router.push(`/dashboard/arvorecronologica/${encodeURIComponent(e.chave)}`)
+  }
+
+  async function copyWhatsApp(e: ExpressoContabil) {
+    try {
+      const msg = buildWhatsAppMessage(e)
+      await navigator.clipboard.writeText(msg)
+      setInfo('Mensagem copiada ✅ (cole no WhatsApp)')
+      setError(null)
+    } catch (err) {
+      console.error(err)
+      setError('Não consegui copiar a mensagem.')
+    }
+  }
+
+  /* =========================
      LOAD CSV
      ========================= */
   async function loadBase() {
     try {
       setLoading(true)
       setError(null)
+      setInfo('')
 
       const bytes = await getBytes(ref(storage, CSV_PATH))
       const wb = XLSX.read(toUint8(bytes), { type: 'array' })
@@ -146,7 +230,6 @@ export default function TransacionandoPage() {
       if (u) loadBase()
     })
     return () => unsub()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const agencias = useMemo(() => {
@@ -212,6 +295,12 @@ export default function TransacionandoPage() {
           </div>
           <div style={{ fontWeight: 900, fontSize: '1.4rem' }}>{totalFiltrado}</div>
         </div>
+
+        {info && (
+          <div style={{ marginTop: '.85rem' }}>
+            <span className="pill">{info}</span>
+          </div>
+        )}
 
         {error && (
           <div className="card-soft" style={{ marginTop: '.85rem', borderColor: 'rgba(214,31,44,.25)' }}>
@@ -298,6 +387,20 @@ export default function TransacionandoPage() {
             <div style={{ marginTop: '.5rem', display: 'flex', gap: '.35rem', flexWrap: 'wrap' }}>
               <span className="pill">TRX Contábil: {e.trx}</span>
               <span className="pill">Status: {e.status || '—'}</span>
+            </div>
+
+            <div style={{ marginTop: '.85rem', display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
+              <LightButton onClick={() => irParaArvoreCronologica(e)} title="Árvore Cronológica">
+                🌳 Árvore
+              </LightButton>
+
+              <LightButton onClick={() => irParaReportar(e)} title="Reportar">
+                📕 Reportar
+              </LightButton>
+
+              <LightButton onClick={() => copyWhatsApp(e)} title="Copiar para WhatsApp">
+                📤 WhatsApp
+              </LightButton>
             </div>
           </div>
         ))}
