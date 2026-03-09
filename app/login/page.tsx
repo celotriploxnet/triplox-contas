@@ -20,6 +20,16 @@ type UserProfile = {
   ativo?: boolean;
 };
 
+type AccessValidation =
+  | {
+      ok: true;
+      profile: UserProfile;
+    }
+  | {
+      ok: false;
+      mensagem: string;
+    };
+
 export default function LoginPage() {
   const router = useRouter();
 
@@ -29,7 +39,7 @@ export default function LoginPage() {
   const [verificandoSessao, setVerificandoSessao] = useState(true);
   const [erro, setErro] = useState("");
 
-  async function validarAcesso(uid: string) {
+  async function validarAcesso(uid: string): Promise<AccessValidation> {
     const ref = doc(db, "users", uid);
     const snap = await getDoc(ref);
 
@@ -198,8 +208,8 @@ export default function LoginPage() {
                 {verificandoSessao
                   ? "Verificando acesso..."
                   : carregando
-                  ? "Entrando..."
-                  : "Entrar"}
+                    ? "Entrando..."
+                    : "Entrar"}
               </button>
             </form>
           </div>
