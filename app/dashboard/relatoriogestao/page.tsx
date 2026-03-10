@@ -228,6 +228,12 @@ function splitAgPacb(v: any) {
   return { agencia: ag, pacb }
 }
 
+function normalizeAgencia(cod: string) {
+  const clean = toStr(cod).replace(/\D/g, '')
+  if (!clean) return ''
+  return clean.padStart(4, '0')
+}
+
 function formatNum(n: number) {
   if (!Number.isFinite(n)) return '0'
   return new Intl.NumberFormat('pt-BR').format(n)
@@ -419,7 +425,8 @@ export default function RelatorioGestaoPage() {
         const municipio = toStr(getField(r, ['municipio', 'município']))
 
         const agpacb = getField(r, ['ag_pacb', 'agencia/pacb', 'agência/pacb'])
-        const { agencia, pacb } = splitAgPacb(agpacb)
+        let { agencia, pacb } = splitAgPacb(agpacb)
+        agencia = normalizeAgencia(agencia)
 
         const statusAnalise = toStr(getField(r, ['status_analise', 'status analise', 'status']))
 
@@ -494,8 +501,10 @@ export default function RelatorioGestaoPage() {
       const gestao: Record<string, GestaoAgencia> = {}
       gestaoSnap.forEach((d) => {
         const data = d.data() as any
-        gestao[d.id] = {
-          codAg: d.id,
+        const codAgNormalizado = normalizeAgencia(d.id)
+
+        gestao[codAgNormalizado] = {
+          codAg: codAgNormalizado,
           nomeAg: toStr(data.nomeAg || data.NOME_AG),
           tipo: toStr(data.tipo || data.TIPO),
           supervisor: toStr(data.supervisor || data.SUPERVISOR),
