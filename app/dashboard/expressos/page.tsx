@@ -4,6 +4,7 @@ import Link from 'next/link'
 
 export default function ExpressosMenuPage() {
   const cards = [
+    // GERAL
     {
       title: '📊 Expresso Geral (visão completa)',
       desc: 'Resumo geral, filtros e contadores (transacional, treinado, certificação).',
@@ -11,13 +12,49 @@ export default function ExpressosMenuPage() {
       enabled: true,
       pill: 'Geral',
     },
+
+    // PRODUÇÃO
+    {
+      title: '📘 Expressos Treinados e Zerados',
+      desc: 'Expresso com Status de treinado e com produção zerada.',
+      href: '/dashboard/expressos/treinados-zerados',
+      enabled: true,
+      pill: 'Produção',
+    },
+    {
+      title: '🧾 Liberados para Microsseguro',
+      desc: 'Expressos ativos para vendas do Microsseguro.',
+      href: '/dashboard/expressos/liberados-microsseguro',
+      enabled: true,
+      pill: 'Produção',
+    },
+    {
+      title: '🚀 Acelerador (próximos da faixa)',
+      desc: 'Ranking dos expressos mais próximos de subir o percentual.',
+      href: '/dashboard/expressos/acelerador',
+      enabled: true,
+      pill: 'Produção',
+    },
+
+    // TRANSAÇÃO
     {
       title: '💳 Expressos Somente Transacionando',
       desc: 'Expressos que transacionam, mas não realizam produtos.',
       href: '/dashboard/expressos/transacionando',
       enabled: true,
-      pill: 'Transações',
+      pill: 'Transação',
     },
+
+    // GESTÃO
+    {
+      title: '📊 Regional, Agência e Supervisão',
+      desc: 'Relatório agrupado por regional, agência e supervisão, com detalhamento dos expressos.',
+      href: '/dashboard/relatoriogestao',
+      enabled: true,
+      pill: 'Gestão',
+    },
+
+    // CERTIFICAÇÃO
     {
       title: '👤 Consultar Pessoa Certificada',
       desc: 'Consulta por colaborador que realizou a certificação dos expressos.',
@@ -32,35 +69,14 @@ export default function ExpressosMenuPage() {
       enabled: true,
       pill: 'Certificação',
     },
-    {
-      title: '📘 Expressos Treinados e Zerados',
-      desc: 'Expresso com Status de treinado e com produção zerada.',
-      href: '/dashboard/expressos/treinados-zerados',
-      enabled: true,
-      pill: 'Produção',
-    },
-    {
-      title: '🧾 Liberados para Microsseguro',
-      desc: 'Expressos ativos para vendas do Microsseguro',
-      href: '/dashboard/expressos/liberados-microsseguro',
-      enabled: true,
-      pill: 'Produção',
-    },
-    // ✅ NOVO BLOCO (Simulador)
+
+    // SIMULADOR
     {
       title: '🧮 Simulador de Comissão',
       desc: 'Previsão de ganho por venda de cada produto.',
       href: '/dashboard/simulador',
       enabled: true,
       pill: 'Simulador',
-    },
-    // ✅ NOVO BLOCO (ACELERADOR) — ÚNICA ADIÇÃO PEDIDA AGORA
-    {
-      title: '🚀 Acelerador (próximos da faixa)',
-      desc: 'Ranking dos expressos mais próximos de subir o percentual.',
-      href: '/dashboard/expressos/acelerador',
-      enabled: true,
-      pill: 'Produção',
     },
   ]
 
