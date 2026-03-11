@@ -1,6 +1,12 @@
 'use client'
 
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react'
 import { useRouter } from 'next/navigation'
 import { onAuthStateChanged, type User } from 'firebase/auth'
 import { getBytes, ref } from 'firebase/storage'
@@ -51,9 +57,9 @@ type RowBase = {
   pontos: number
 }
 
-type CertGroup = 'vencida' | 'proxima' | 'ok' | 'nao_certificado'
 type StatusExpressoFilter = 'Todos' | 'Treinado' | 'Transacional'
 type CertViewFilter = 'Todas' | 'Vencidas' | 'Proximas'
+type CertGroup = 'vencida' | 'proxima' | 'ok' | 'nao_certificado'
 
 /* =========================
    HELPERS
@@ -308,6 +314,11 @@ function addMonthsSafe(date: Date, months: number) {
   return base
 }
 
+function diffDays(a: Date, b: Date) {
+  const ms = startOfDay(a).getTime() - startOfDay(b).getTime()
+  return Math.floor(ms / 86400000)
+}
+
 function formatPtBRDate(dt: Date | null) {
   if (!dt) return '—'
   return new Intl.DateTimeFormat('pt-BR', {
@@ -315,11 +326,6 @@ function formatPtBRDate(dt: Date | null) {
     month: '2-digit',
     year: 'numeric',
   }).format(dt)
-}
-
-function diffDays(a: Date, b: Date) {
-  const ms = startOfDay(a).getTime() - startOfDay(b).getTime()
-  return Math.floor(ms / 86400000)
 }
 
 function classifyCert(dt: Date | null): { group: CertGroup; expiry: Date | null } {
@@ -462,7 +468,9 @@ function buildWhatsAppMessage(args: {
       ? 'Certificação vencida'
       : args.certGroup === 'proxima'
         ? 'Próxima do vencimento'
-        : 'Certificação ok'
+        : args.certGroup === 'ok'
+          ? 'Certificação ok'
+          : 'Sem certificação'
 
   return [
     '📌 *Expresso — Certificação*',
@@ -481,9 +489,6 @@ function buildWhatsAppMessage(args: {
   ].join('\n')
 }
 
-/* =========================
-   PAGE
-   ========================= */
 export default function CertificacaoVencidaPage() {
   const router = useRouter()
 
@@ -707,9 +712,15 @@ export default function CertificacaoVencidaPage() {
       const atividade = calcAtividade(r)
       const hasMovimento = atividade > 0
 
-      const diasPassados = cert.expiry && cert.group === 'vencida' ? diffDays(hoje, cert.expiry) : -1
+      const diasPassados =
+        cert.expiry && cert.group === 'vencida'
+          ? diffDays(hoje, cert.expiry)
+          : -1
+
       const diasParaVencer =
-        cert.expiry && cert.group === 'proxima' ? diffDays(cert.expiry, hoje) : Number.MAX_SAFE_INTEGER
+        cert.expiry && cert.group === 'proxima'
+          ? diffDays(cert.expiry, hoje)
+          : Number.MAX_SAFE_INTEGER
 
       return {
         r,
@@ -723,7 +734,9 @@ export default function CertificacaoVencidaPage() {
       }
     })
 
-    const alvo = list.filter((x) => x.certGroup === 'vencida' || x.certGroup === 'proxima')
+    const alvo = list.filter(
+      (x) => x.certGroup === 'vencida' || x.certGroup === 'proxima'
+    )
 
     return {
       list,
@@ -766,33 +779,35 @@ export default function CertificacaoVencidaPage() {
     }
 
     list.sort((a, b) => {
-      // 1) vencidas antes das próximas
       if (a.certGroup !== b.certGroup) {
         if (a.certGroup === 'vencida') return -1
         if (b.certGroup === 'vencida') return 1
       }
 
-      // 2) dentro das vencidas: mais tempo vencida primeiro
-      if (a.certGroup === 'vencida' && b.certGroup === 'vencida' && a.diasPassados !== b.diasPassados) {
+      if (
+        a.certGroup === 'vencida' &&
+        b.certGroup === 'vencida' &&
+        a.diasPassados !== b.diasPassados
+      ) {
         return b.diasPassados - a.diasPassados
       }
 
-      // 3) dentro das próximas: vence antes primeiro
-      if (a.certGroup === 'proxima' && b.certGroup === 'proxima' && a.diasParaVencer !== b.diasParaVencer) {
+      if (
+        a.certGroup === 'proxima' &&
+        b.certGroup === 'proxima' &&
+        a.diasParaVencer !== b.diasParaVencer
+      ) {
         return a.diasParaVencer - b.diasParaVencer
       }
 
-      // 4) com alguma movimentação primeiro
       if (a.hasMovimento !== b.hasMovimento) {
         return a.hasMovimento ? -1 : 1
       }
 
-      // 5) maior trx
       if ((b.r.trx || 0) !== (a.r.trx || 0)) {
         return (b.r.trx || 0) - (a.r.trx || 0)
       }
 
-      // 6) maior pontos/produção
       if ((b.r.pontos || 0) !== (a.r.pontos || 0)) {
         return (b.r.pontos || 0) - (a.r.pontos || 0)
       }
@@ -856,7 +871,7 @@ export default function CertificacaoVencidaPage() {
           🚨 Expressos com Certificação Vencida / a Vencer
         </h1>
         <p className="p-muted" style={{ marginTop: '.35rem' }}>
-          Ordenação prioriza os mais urgentes: vencidos há mais tempo e com maior movimentação.
+          Agora a página considera todos os expressos da base e você escolhe o status no filtro.
         </p>
       </div>
 
@@ -1089,41 +1104,6 @@ export default function CertificacaoVencidaPage() {
                     <div style={{ fontWeight: 900 }}>{formatPtBRDate(expiry)}</div>
                   </div>
                 </div>
-
-                {aberto && (
-                  <div className="card-soft" style={{ padding: '.9rem .95rem', display: 'grid', gap: '.55rem' }}>
-                    <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                      <span className="pill">Indicadores</span>
-                    </div>
-
-                    <div
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-                        gap: '.6rem',
-                      }}
-                    >
-                      <Indicador label="Contas sem Depósito" value={formatNum(r.qtdContas)} />
-                      <Indicador label="Contas com Depósito" value={formatNum(r.qtdContasComDeposito)} />
-                      <Indicador label="Cestas de Serviços" value={formatNum(r.qtdCestaServ)} />
-                      <Indicador label="Super Protegido" value={formatNum(r.qtdSuperProtegido)} />
-                      <Indicador label="Mobilidade" value={formatNum(r.qtdMobilidade)} />
-                      <Indicador label="Cartão Emitido" value={formatNum(r.qtdCartaoEmitido)} />
-                      <Indicador label="Ches Contratado" value={formatNum(r.qtdChesContratado)} />
-                      <Indicador label="Lime na conta" value={formatNum(r.qtdLimeAbConta)} />
-                      <Indicador label="Lime Contratado" value={formatNum(r.qtdLime)} />
-                      <Indicador label="Consignado" value={formatNum(r.qtdConsignado)} />
-                      <Indicador label="Crédito Parcelado" value={formatNum(r.qtdCreditoParcelado)} />
-                      <Indicador label="Microsseguros" value={formatNum(r.qtdMicrosseguro)} />
-                      <Indicador label="Viva Vida" value={formatNum(r.qtdVivaVida)} />
-                      <Indicador label="Dental" value={formatNum(r.qtdPlanoOdonto)} />
-                      <Indicador label="Residencial" value={formatNum(r.qtdSegResidencial)} />
-                      <Indicador label="Seguro Cartão Débito" value={formatNum(r.qtdSegCartaoDeb)} />
-                      <Indicador label="VLR Exp. Sorte" value={formatNum(r.vlrExpSorte)} />
-                      <Indicador label="EXPRESSO REFERÊNCIA?" value={r.referencia || '—'} />
-                    </div>
-                  </div>
-                )}
               </div>
             )
           })}
@@ -1141,16 +1121,5 @@ export default function CertificacaoVencidaPage() {
         </p>
       )}
     </section>
-  )
-}
-
-function Indicador({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
-      <div className="p-muted" style={{ fontSize: 12 }}>
-        {label}
-      </div>
-      <div style={{ fontWeight: 900 }}>{value}</div>
-    </div>
   )
 }
