@@ -93,79 +93,6 @@ function parseCSVText(u8: Uint8Array) {
   return new TextDecoder('utf-8').decode(u8)
 }
 
-function detectDelimiter(headerLine: string) {
-  const candidates = [',', ';', '\t']
-  let best = ','
-  let bestCount = -1
-
-  for (const delimiter of candidates) {
-    const count = (headerLine.match(new RegExp(`\\${delimiter}`, 'g')) || []).length
-    if (count > bestCount) {
-      best = delimiter
-      bestCount = count
-    }
-  }
-
-  return best
-}
-
-function parseDelimitedLine(line: string, delimiter: string) {
-  const result: string[] = []
-  let current = ''
-  let inQuotes = false
-
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i]
-    const next = line[i + 1]
-
-    if (ch === '"') {
-      if (inQuotes && next === '"') {
-        current += '"'
-        i++
-      } else {
-        inQuotes = !inQuotes
-      }
-      continue
-    }
-
-    if (ch === delimiter && !inQuotes) {
-      result.push(current)
-      current = ''
-      continue
-    }
-
-    current += ch
-  }
-
-  result.push(current)
-  return result
-}
-
-function parseCsvRows(text: string): Record<string, string>[] {
-  const cleaned = text.replace(/^\uFEFF/, '')
-  const lines = cleaned
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    .split('\n')
-    .filter((line) => line.trim().length > 0)
-
-  if (!lines.length) return []
-
-  const delimiter = detectDelimiter(lines[0])
-  const headers = parseDelimitedLine(lines[0], delimiter).map((h) => h.trim())
-
-  return lines.slice(1).map((line) => {
-    const values = parseDelimitedLine(line, delimiter)
-    const row: Record<string, string> = {}
-
-    headers.forEach((header, idx) => {
-      row[header] = (values[idx] ?? '').trim()
-    })
-
-    return row
-  })
-}
-
 function parseNumber(v: any) {
   const s = toStr(v).replace(/\./g, '').replace(',', '.')
   const n = Number(s)
@@ -190,44 +117,78 @@ function isTransacional(status: string) {
 }
 
 function parseDateFlexible(v: any): Date | null {
-  const raw = toStr(v)
-  if (!raw) return null
+  if (v === null || v === undefined || v === '') return null
 
-  const mBR = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
-  if (mBR) {
-    const dd = Number(mBR[1])
-    const mm = Number(mBR[2])
-    const yy = Number(mBR[3])
-    const dt = new Date(yy, mm - 1, dd)
-    return Number.isNaN(dt.getTime()) ? null : dt
+  if (v instanceof Date && !Number.isNaN(v.getTime())) {
+    return new Date(v.getFullYear(), v.getMonth(), v.getDate())
   }
 
-  const mISO = raw.match(/^(\d{4})-(\d{2})-(\d{2})/)
-  if (mISO) {
-    const yy = Number(mISO[1])
-    const mm = Number(mISO[2])
-    const dd = Number(mISO[3])
-    const dt = new Date(yy, mm - 1, dd)
-    return Number.isNaN(dt.getTime()) ? null : dt
-  }
-
-  const n = Number(raw)
-  if (Number.isFinite(n) && n > 20000 && n < 90000) {
-    const d = XLSX.SSF.parse_date_code(n)
+  if (typeof v === 'number' && Number.isFinite(v) && v > 20000 && v < 90000) {
+    const d = XLSX.SSF.parse_date_code(v)
     if (d?.y && d?.m && d?.d) {
       const dt = new Date(d.y, d.m - 1, d.d)
       return Number.isNaN(dt.getTime()) ? null : dt
     }
   }
 
+  const raw = toStr(v)
+  if (!raw) return null
+
+  const onlyDate = raw.split(' ')[0]
+
+  const mBR = onlyDate.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  if (mBR) {
+    const dd = Number(mBR[1])
+    const mm = Number(mBR[2])
+    const yy = Number(mBR[3])
+
+    if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return null
+
+    const dt = new Date(yy, mm - 1, dd)
+    return Number.isNaN(dt.getTime()) ? null : dt
+  }
+
+  const mISO = onlyDate.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (mISO) {
+    const yy = Number(mISO[1])
+    const mm = Number(mISO[2])
+    const dd = Number(mISO[3])
+
+    if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return null
+
+    const dt = new Date(yy, mm - 1, dd)
+    return Number.isNaN(dt.getTime()) ? null : dt
+  }
+
   return null
 }
 
 function formatCertificacaoValue(v: any) {
-  const raw = toStr(v)
-  if (!raw) return '—'
+  if (v === null || v === undefined || v === '') return ''
 
-  const slash = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  if (v instanceof Date && !Number.isNaN(v.getTime())) {
+    const dd = String(v.getDate()).padStart(2, '0')
+    const mm = String(v.getMonth() + 1).padStart(2, '0')
+    const yyyy = String(v.getFullYear())
+    return `${dd}/${mm}/${yyyy}`
+  }
+
+  if (typeof v === 'number' && Number.isFinite(v) && v > 20000 && v < 90000) {
+    const d = XLSX.SSF.parse_date_code(v)
+    if (d?.y && d?.m && d?.d) {
+      const dd = String(d.d).padStart(2, '0')
+      const mm = String(d.m).padStart(2, '0')
+      const yyyy = String(d.y)
+      return `${dd}/${mm}/${yyyy}`
+    }
+  }
+
+  const raw = toStr(v)
+  if (!raw) return ''
+
+  const onlyDate = raw.split(' ')[0]
+
+  const slash = onlyDate.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
   if (slash) {
     const dd = String(Number(slash[1])).padStart(2, '0')
     const mm = String(Number(slash[2])).padStart(2, '0')
@@ -235,20 +196,9 @@ function formatCertificacaoValue(v: any) {
     return `${dd}/${mm}/${yyyy}`
   }
 
-  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  const iso = onlyDate.match(/^(\d{4})-(\d{2})-(\d{2})$/)
   if (iso) {
     return `${iso[3]}/${iso[2]}/${iso[1]}`
-  }
-
-  const n = Number(raw)
-  if (Number.isFinite(n) && n > 20000 && n < 90000) {
-    const d = XLSX.SSF.parse_date_code(n)
-    if (d?.y && d?.m && d?.d) {
-      const dd = String(d.d).padStart(2, '0')
-      const mm = String(d.m).padStart(2, '0')
-      const yyyy = String(d.y)
-      return `${dd}/${mm}/${yyyy}`
-    }
   }
 
   return raw
@@ -260,6 +210,15 @@ function isCertVencida(certDate: Date | null) {
   const expiry = new Date(certDate)
   expiry.setFullYear(expiry.getFullYear() + 5)
   return expiry < now
+}
+
+function formatPtBRDate(dt: Date | null) {
+  if (!dt) return '—'
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(dt)
 }
 
 function formatNum(n: number) {
@@ -315,11 +274,7 @@ function calcPontos(r: {
 /* =========================
    SEMÁFORO / AÇÃO
    ========================= */
-function gerarSinalizacoes(
-  r: RowBase,
-  semCert: boolean,
-  vencida: boolean
-) {
+function gerarSinalizacoes(r: RowBase, semCert: boolean, vencida: boolean) {
   const sinais: { texto: string; estilo?: CSSProperties }[] = []
 
   if (semCert) {
@@ -380,11 +335,7 @@ function gerarSinalizacoes(
   return sinais
 }
 
-function acaoRecomendada(
-  r: RowBase,
-  semCert: boolean,
-  vencida: boolean
-) {
+function acaoRecomendada(r: RowBase, semCert: boolean, vencida: boolean) {
   if (semCert) return 'Regularizar certificação'
   if (vencida) return 'Atualizar certificação'
   if ((r.trx || 0) === 0) return 'Incentivar movimentação'
@@ -550,7 +501,10 @@ export default function ExpressoGeralPage() {
 
       const bytesAny = await getBytes(ref(storage, CSV_PATH))
       const text = parseCSVText(toUint8(bytesAny))
-      const raw = parseCsvRows(text)
+
+      const wb = XLSX.read(text, { type: 'string' })
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      const raw: Record<string, any>[] = XLSX.utils.sheet_to_json(ws, { defval: '' })
 
       const normalized = raw.map((obj) => {
         const out: Record<string, any> = {}
@@ -567,9 +521,15 @@ export default function ExpressoGeralPage() {
         const { agencia, pacb } = splitAgPacb(agpacb)
 
         const statusAnalise = toStr(r['status_analise'] || r['status analise'] || r['status'])
-        const dtCertificacao = toStr(
-          r['dt_certificacao'] || r['dt certificacao'] || r['certificacao'] || r['certificação']
-        )
+
+        const rawCertificacao =
+          r['dt_certificacao'] ??
+          r['dt certificacao'] ??
+          r['certificacao'] ??
+          r['certificação'] ??
+          ''
+
+        const dtCertificacao = formatCertificacaoValue(rawCertificacao)
 
         const trx = parseNumber(
           r['qtd_trxcontabil'] || r['qtd_trx_contabil'] || r['qtd trxcontabil'] || r['qtd_trx']
@@ -780,7 +740,7 @@ export default function ExpressoGeralPage() {
 
   async function copyWhatsApp(
     r: RowBase,
-    _certDate: Date | null,
+    certDate: Date | null,
     semCert: boolean,
     vencida: boolean
   ) {
@@ -791,7 +751,7 @@ export default function ExpressoGeralPage() {
           ? 'Certificação vencida'
           : 'Certificado'
 
-      const certDatePt = formatCertificacaoValue(r.dtCertificacao)
+      const certDatePt = formatPtBRDate(certDate)
 
       const msg = buildWhatsAppMessage({
         nome: r.nome,
@@ -1122,7 +1082,7 @@ export default function ExpressoGeralPage() {
                     <div className="p-muted" style={{ fontSize: 12 }}>
                       dt_certificacao
                     </div>
-                    <div style={{ fontWeight: 900 }}>{formatCertificacaoValue(r.dtCertificacao)}</div>
+                    <div style={{ fontWeight: 900 }}>{r.dtCertificacao || '—'}</div>
                   </div>
                 </div>
 
