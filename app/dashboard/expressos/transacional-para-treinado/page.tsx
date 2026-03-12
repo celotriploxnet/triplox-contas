@@ -13,7 +13,6 @@ import { getBytes, ref } from 'firebase/storage'
 import * as XLSX from 'xlsx'
 
 import { auth, storage } from '@/lib/firebase'
-import { calcPontosContasExpressoGeral, calcPontosExpressoGeral } from '@/lib/pontuacao'
 
 /* =========================
    CONFIG
@@ -246,6 +245,44 @@ function formatPontos(n: number) {
   const rounded = Math.round(n * 10) / 10
   const isInt = Math.abs(rounded - Math.round(rounded)) < 1e-9
   return isInt ? String(Math.round(rounded)) : rounded.toFixed(1).replace('.', ',')
+}
+
+/* =========================
+   PONTUAÇÃO
+   ========================= */
+function calcPontos(r: {
+  qtdContasComDeposito: number
+  qtdContasSemDeposito: number
+  qtdCestaServ: number
+  qtdSuperProtegido: number
+  qtdMobilidade: number
+  qtdLime: number
+  qtdConsignado: number
+  qtdCreditoParcelado: number
+  qtdMicrosseguro: number
+  qtdVivaVida: number
+  qtdPlanoOdonto: number
+  qtdSegCartaoDeb: number
+  vlrExpSorte: number
+}) {
+  const expSortePts = Math.floor((r.vlrExpSorte || 0) / 50)
+
+  const pontos =
+    (r.qtdContasComDeposito || 0) * 7 +
+    (r.qtdContasSemDeposito || 0) * 3 +
+    (r.qtdCestaServ || 0) * 3 +
+    (r.qtdSuperProtegido || 0) * 1 +
+    (r.qtdMobilidade || 0) * 0.5 +
+    (r.qtdLime || 0) * 6.5 +
+    (r.qtdConsignado || 0) * 5.5 +
+    (r.qtdCreditoParcelado || 0) * 6.5 +
+    (r.qtdMicrosseguro || 0) * 1 +
+    (r.qtdVivaVida || 0) * 1 +
+    (r.qtdPlanoOdonto || 0) * 1 +
+    (r.qtdSegCartaoDeb || 0) * 1 +
+    expSortePts
+
+  return pontos
 }
 
 /* =========================
@@ -587,7 +624,7 @@ export default function ExpressoGeralPage() {
             r['expresso referencia?']
         )
 
-        const pontos = calcPontosExpressoGeral({
+        const pontos = calcPontos({
           qtdContasComDeposito,
           qtdContasSemDeposito,
           qtdCestaServ,
@@ -1108,15 +1145,6 @@ export default function ExpressoGeralPage() {
                       <Indicador label="Contas abertas (total)" value={formatNum(r.qtdContas)} />
                       <Indicador label="Contas com Depósito" value={formatNum(r.qtdContasComDeposito)} />
                       <Indicador label="Contas sem Depósito" value={formatNum(r.qtdContasSemDeposito)} />
-                      <Indicador
-                        label="Pontos de Contas (7x com depósito + 3x sem depósito)"
-                        value={formatPontos(
-                          calcPontosContasExpressoGeral({
-                            qtdContasComDeposito: r.qtdContasComDeposito,
-                            qtdContasSemDeposito: r.qtdContasSemDeposito,
-                          })
-                        )}
-                      />
                       <Indicador label="Cestas de Serviços" value={formatNum(r.qtdCestaServ)} />
                       <Indicador label="Super Protegido" value={formatNum(r.qtdSuperProtegido)} />
                       <Indicador label="Mobilidade" value={formatNum(r.qtdMobilidade)} />

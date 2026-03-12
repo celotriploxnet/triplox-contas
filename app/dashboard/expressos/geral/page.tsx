@@ -13,6 +13,7 @@ import { getBytes, ref } from 'firebase/storage'
 import * as XLSX from 'xlsx'
 
 import { auth, storage } from '@/lib/firebase'
+import { calcPontosContasExpressoGeral, calcPontosExpressoGeral } from '@/lib/pontuacao'
 
 /* =========================
    CONFIG
@@ -36,6 +37,7 @@ type RowBase = {
 
   qtdContas: number
   qtdContasComDeposito: number
+  qtdContasSemDeposito: number
   qtdCestaServ: number
   qtdSuperProtegido: number
   qtdMobilidade: number
@@ -106,6 +108,19 @@ function splitAgPacb(v: any) {
   const ag = toStr(parts[0])
   const pacb = toStr(parts[1])
   return { agencia: ag, pacb }
+}
+
+function normalizeContas(qtdContasRaw: any, qtdContasComDepositoRaw: any) {
+  const qtdContas = Math.max(parseNumber(qtdContasRaw), 0)
+  const qtdContasComDeposito = Math.max(parseNumber(qtdContasComDepositoRaw), 0)
+  const qtdContasComDepositoAjustada = Math.min(qtdContasComDeposito, qtdContas)
+  const qtdContasSemDeposito = Math.max(qtdContas - qtdContasComDepositoAjustada, 0)
+
+  return {
+    qtdContas,
+    qtdContasComDeposito: qtdContasComDepositoAjustada,
+    qtdContasSemDeposito,
+  }
 }
 
 function isTreinado(status: string) {
@@ -231,44 +246,6 @@ function formatPontos(n: number) {
   const rounded = Math.round(n * 10) / 10
   const isInt = Math.abs(rounded - Math.round(rounded)) < 1e-9
   return isInt ? String(Math.round(rounded)) : rounded.toFixed(1).replace('.', ',')
-}
-
-/* =========================
-   PONTUAÇÃO
-   ========================= */
-function calcPontos(r: {
-  qtdContasComDeposito: number
-  qtdContas: number
-  qtdCestaServ: number
-  qtdSuperProtegido: number
-  qtdMobilidade: number
-  qtdLime: number
-  qtdConsignado: number
-  qtdCreditoParcelado: number
-  qtdMicrosseguro: number
-  qtdVivaVida: number
-  qtdPlanoOdonto: number
-  qtdSegCartaoDeb: number
-  vlrExpSorte: number
-}) {
-  const expSortePts = Math.floor((r.vlrExpSorte || 0) / 50)
-
-  const pontos =
-    (r.qtdContasComDeposito || 0) * 7 +
-    (r.qtdContas || 0) * 3 +
-    (r.qtdCestaServ || 0) * 3 +
-    (r.qtdSuperProtegido || 0) * 1 +
-    (r.qtdMobilidade || 0) * 0.5 +
-    (r.qtdLime || 0) * 6.5 +
-    (r.qtdConsignado || 0) * 5.5 +
-    (r.qtdCreditoParcelado || 0) * 6.5 +
-    (r.qtdMicrosseguro || 0) * 1 +
-    (r.qtdVivaVida || 0) * 1 +
-    (r.qtdPlanoOdonto || 0) * 1 +
-    (r.qtdSegCartaoDeb || 0) * 1 +
-    expSortePts
-
-  return pontos
 }
 
 /* =========================
@@ -410,6 +387,7 @@ function buildWhatsAppMessage(args: {
 
   qtdContas: number
   qtdContasComDeposito: number
+  qtdContasSemDeposito: number
   qtdCestaServ: number
   qtdMobilidade: number
   qtdCartaoEmitido: number
@@ -440,8 +418,9 @@ function buildWhatsAppMessage(args: {
     `📅 *dt_certificacao:* ${a.certDatePt || '—'}`,
     '',
     '📌 *Indicadores (base)*',
-    `• Contas sem Depósito: ${formatNum(a.qtdContas)}`,
+    `• Contas abertas (total): ${formatNum(a.qtdContas)}`,
     `• Contas com Depósito: ${formatNum(a.qtdContasComDeposito)}`,
+    `• Contas sem Depósito: ${formatNum(a.qtdContasSemDeposito)}`,
     `• Cestas de Serviços: ${formatNum(a.qtdCestaServ)}`,
     `• Mobilidade: ${formatNum(a.qtdMobilidade)}`,
     `• Cartão Emitido: ${formatNum(a.qtdCartaoEmitido)}`,
@@ -535,10 +514,15 @@ export default function ExpressoGeralPage() {
           r['qtd_trxcontabil'] || r['qtd_trx_contabil'] || r['qtd trxcontabil'] || r['qtd_trx']
         )
 
-        const qtdContas = parseNumber(r['qtd_contas'] || r['qtd contas'])
-        const qtdContasComDeposito = parseNumber(
+        const {
+          qtdContas,
+          qtdContasComDeposito,
+          qtdContasSemDeposito,
+        } = normalizeContas(
+          r['qtd_contas'] || r['qtd contas'],
           r['qtd_contas_com_deposito'] || r['qtd contas com deposito']
         )
+
         const qtdCestaServ = parseNumber(r['qtd_cesta_serv'] || r['qtd cesta serv'])
 
         const qtdSuperProtegido = parseNumber(
@@ -603,9 +587,9 @@ export default function ExpressoGeralPage() {
             r['expresso referencia?']
         )
 
-        const pontos = calcPontos({
+        const pontos = calcPontosExpressoGeral({
           qtdContasComDeposito,
-          qtdContas,
+          qtdContasSemDeposito,
           qtdCestaServ,
           qtdSuperProtegido,
           qtdMobilidade,
@@ -630,6 +614,7 @@ export default function ExpressoGeralPage() {
           trx,
           qtdContas,
           qtdContasComDeposito,
+          qtdContasSemDeposito,
           qtdCestaServ,
           qtdSuperProtegido,
           qtdMobilidade,
@@ -765,6 +750,7 @@ export default function ExpressoGeralPage() {
         certDatePt,
         qtdContas: r.qtdContas,
         qtdContasComDeposito: r.qtdContasComDeposito,
+        qtdContasSemDeposito: r.qtdContasSemDeposito,
         qtdCestaServ: r.qtdCestaServ,
         qtdMobilidade: r.qtdMobilidade,
         qtdCartaoEmitido: r.qtdCartaoEmitido,
@@ -1119,8 +1105,18 @@ export default function ExpressoGeralPage() {
                         gap: '.6rem',
                       }}
                     >
-                      <Indicador label="Contas sem Depósito" value={formatNum(r.qtdContas)} />
+                      <Indicador label="Contas abertas (total)" value={formatNum(r.qtdContas)} />
                       <Indicador label="Contas com Depósito" value={formatNum(r.qtdContasComDeposito)} />
+                      <Indicador label="Contas sem Depósito" value={formatNum(r.qtdContasSemDeposito)} />
+                      <Indicador
+                        label="Pontos de Contas (7x com depósito + 3x sem depósito)"
+                        value={formatPontos(
+                          calcPontosContasExpressoGeral({
+                            qtdContasComDeposito: r.qtdContasComDeposito,
+                            qtdContasSemDeposito: r.qtdContasSemDeposito,
+                          })
+                        )}
+                      />
                       <Indicador label="Cestas de Serviços" value={formatNum(r.qtdCestaServ)} />
                       <Indicador label="Super Protegido" value={formatNum(r.qtdSuperProtegido)} />
                       <Indicador label="Mobilidade" value={formatNum(r.qtdMobilidade)} />
