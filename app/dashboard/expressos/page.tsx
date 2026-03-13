@@ -54,6 +54,15 @@ export default function ExpressosMenuPage() {
       pill: 'Gestão',
     },
 
+    // 🔴 NOVO BLOCO
+    {
+      title: '📈 Mudança de Status Transacional para Treinados',
+      desc: 'Expressos transacionais que atingiram pontuação para mudança de status para treinado.',
+      href: '/dashboard/expressos/transacional-para-treinado',
+      enabled: true,
+      pill: 'Gestão',
+    },
+
     // CERTIFICAÇÃO
     {
       title: '👤 Consultar Pessoa Certificada',
@@ -69,75 +78,51 @@ export default function ExpressosMenuPage() {
       enabled: true,
       pill: 'Certificação',
     },
-
-    // SIMULADOR
-    {
-      title: '🧮 Simulador de Comissão',
-      desc: 'Previsão de ganho por venda de cada produto.',
-      href: '/dashboard/simulador',
-      enabled: true,
-      pill: 'Simulador',
-    },
   ]
 
   return (
     <section style={{ display: 'grid', gap: '1.25rem' }}>
       <div>
         <span className="pill">Expressos</span>
-        <h1 className="h1" style={{ marginTop: '.75rem' }}>
-          Menu de Expressos
-        </h1>
-        <p className="p-muted" style={{ marginTop: '.35rem' }}>
-          Selecione um painel para análise e acompanhamento.
+        <h1 className="h1">Relatórios de Expressos</h1>
+        <p className="p-muted" style={{ marginTop: '.25rem' }}>
+          Acesse os relatórios operacionais e de gestão dos expressos.
         </p>
       </div>
 
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
           gap: '1rem',
         }}
       >
-        {cards.map((c) => (
-          <div key={c.title} className="card" style={{ display: 'grid', gap: '.6rem' }}>
-            <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-              <span className="pill">{c.pill}</span>
+        {cards.map((card, i) => (
+          <Link key={i} href={card.href} className="card">
+            <div className="card-soft" style={{ padding: '1rem' }}>
+              <span className="pill">{card.pill}</span>
 
-              {!c.enabled && (
-                <span
-                  className="pill"
-                  style={{
-                    background: 'rgba(15,15,25,.06)',
-                    border: '1px solid rgba(15,15,25,.10)',
-                    color: 'rgba(16,16,24,.70)',
-                  }}
-                >
-                  Em breve
-                </span>
-              )}
+              <div
+                style={{
+                  fontWeight: 900,
+                  fontSize: '1.05rem',
+                  marginTop: '.35rem',
+                }}
+              >
+                {card.title}
+              </div>
+
+              <p
+                className="p-muted"
+                style={{
+                  marginTop: '.35rem',
+                  fontSize: '.9rem',
+                }}
+              >
+                {card.desc}
+              </p>
             </div>
-
-            <div style={{ fontWeight: 900, fontSize: '1.05rem', letterSpacing: '-0.01em' }}>
-              {c.title}
-            </div>
-
-            <p className="p-muted" style={{ marginTop: '-.1rem' }}>
-              {c.desc}
-            </p>
-
-            <div style={{ marginTop: '.35rem' }}>
-              {c.enabled ? (
-                <Link href={c.href} className="btn-primary" style={{ textDecoration: 'none' }}>
-                  Acessar <span>➜</span>
-                </Link>
-              ) : (
-                <button className="btn-primary" disabled style={{ opacity: 0.65, cursor: 'not-allowed' }}>
-                  Em breve
-                </button>
-              )}
-            </div>
-          </div>
+          </Link>
         ))}
       </div>
     </section>

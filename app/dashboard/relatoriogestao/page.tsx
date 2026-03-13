@@ -7,66 +7,97 @@ import {
   type CSSProperties,
   type ReactNode,
 } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { onAuthStateChanged, type User } from 'firebase/auth'
+import { collection, doc, getDoc, getDocs, orderBy, query } from 'firebase/firestore'
 import { getBytes, ref } from 'firebase/storage'
-import * as XLSX from 'xlsx'
 
-import { auth, storage } from '@/lib/firebase'
-import { calcPontosContasExpressoGeral, calcPontosExpressoGeral } from '@/lib/pontuacao'
+import { auth, db, storage } from '@/lib/firebase'
 
-/* =========================
-   CONFIG
-   ========================= */
-const ADMIN_EMAIL = 'marcelo@treinexpresso.com.br'
 const CSV_PATH = 'base-lojas/banco.csv'
-const LIMIT_NO_SEARCH = 200
 
-/* =========================
-   TYPES
-   ========================= */
-type RowBase = {
+type AgruparPor = 'regional' | 'agencia' | 'supervisor'
+
+type AgenciaRow = {
+  codAg: string
+  nomeAg: string
+  tipo: string
+  supervisor: string
+  contatoSupervisor: string
+  gerenteAg: string
+  telGerente1: string
+  emailGerente: string
+  regional: string
+  nomeDiretorRegional: string
+  telefoneRegional: string
+  createdAt?: any
+  createdBy?: string
+  updatedAt?: any
+  updatedBy?: string
+}
+
+type ExpressoRow = {
   chave: string
   nome: string
   municipio: string
   agencia: string
   pacb: string
+  agenciaLabel: string
+  regional: string
+  supervisor: string
   statusAnalise: string
-  dtCertificacao: string
-  trx: number
+  tipoAgencia: string
 
   qtdContas: number
   qtdContasComDeposito: number
-  qtdContasSemDeposito: number
-  qtdCestaServ: number
-  qtdSuperProtegido: number
-  qtdMobilidade: number
-  qtdCartaoEmitido: number
-  qtdChesContratado: number
-  qtdLimeAbConta: number
   qtdLime: number
   qtdConsignado: number
-  qtdCreditoParcelado: number
   qtdMicrosseguro: number
   qtdVivaVida: number
   qtdPlanoOdonto: number
   qtdSegResidencial: number
+  qtdCartaoEmitido: number
+  qtdCreditoParcelado: number
+  qtdCestaServ: number
+  qtdSuperProtegido: number
+  qtdMobilidade: number
   qtdSegCartaoDeb: number
+  qtdExpSorte: number
   vlrExpSorte: number
-  qtdExpSorte?: number
-  referencia: string
-
-  pontos: number
+  trx: number
 }
 
-type CertFilter = 'Todos' | 'NaoCertificado' | 'Certificado' | 'Vencida'
-type TrxFilter = 'Todos' | '0' | '1-199' | '200+'
+type GrupoResumo = {
+  nomeGrupo: string
+  regional: string
+  agencia: string
+  supervisor: string
 
-/* =========================
-   HELPERS
-   ========================= */
+  totalExpressos: number
+  transacionamEProduzem: number
+  trxZeradaEProduzem: number
+  somenteTransacionando: number
+  semMovimentoTotal: number
+
+  totalContas: number
+  totalLime: number
+  totalConsignado: number
+  totalVivaVidaMicro: number
+  totalResidencial: number
+  totalPontosExpSorte: number
+
+  rows: ExpressoRow[]
+}
+
 function toStr(v: any) {
   return v === null || v === undefined ? '' : String(v).trim()
+}
+
+function parseNumber(v: any) {
+  const s = toStr(v).replace(/\./g, '').replace(',', '.')
+  const n = Number(s)
+  return Number.isFinite(n) ? n : 0
 }
 
 function normalizeKey(k: string) {
@@ -95,245 +126,173 @@ function parseCSVText(u8: Uint8Array) {
   return new TextDecoder('utf-8').decode(u8)
 }
 
-function parseNumber(v: any) {
-  const s = toStr(v).replace(/\./g, '').replace(',', '.')
-  const n = Number(s)
-  return Number.isFinite(n) ? n : 0
+function detectDelimiter(headerLine: string) {
+  const candidates = [',', ';', '\t']
+  let best = ','
+  let bestCount = -1
+
+  for (const delimiter of candidates) {
+    const escaped = delimiter === '\t' ? '\\t' : `\\${delimiter}`
+    const count = (headerLine.match(new RegExp(escaped, 'g')) || []).length
+    if (count > bestCount) {
+      best = delimiter
+      bestCount = count
+    }
+  }
+
+  return best
+}
+
+function parseDelimitedLine(line: string, delimiter: string) {
+  const result: string[] = []
+  let current = ''
+  let inQuotes = false
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]
+    const next = line[i + 1]
+
+    if (ch === '"') {
+      if (inQuotes && next === '"') {
+        current += '"'
+        i++
+      } else {
+        inQuotes = !inQuotes
+      }
+      continue
+    }
+
+    if (ch === delimiter && !inQuotes) {
+      result.push(current)
+      current = ''
+      continue
+    }
+
+    current += ch
+  }
+
+  result.push(current)
+  return result
+}
+
+function parseCsvRows(text: string): Record<string, string>[] {
+  const cleaned = text.replace(/^\uFEFF/, '')
+  const lines = cleaned
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .filter((line) => line.trim().length > 0)
+
+  if (!lines.length) return []
+
+  const delimiter = detectDelimiter(lines[0])
+  const headers = parseDelimitedLine(lines[0], delimiter).map((h) => h.trim())
+
+  return lines.slice(1).map((line) => {
+    const values = parseDelimitedLine(line, delimiter)
+    const row: Record<string, string> = {}
+
+    headers.forEach((header, idx) => {
+      row[header] = (values[idx] ?? '').trim()
+    })
+
+    return row
+  })
+}
+
+function normalizeAgencyCode(v: any) {
+  const raw = toStr(v)
+  if (!raw) return ''
+
+  const digits = raw.replace(/\D/g, '')
+  if (!digits) return raw
+
+  if (digits.length <= 4) return digits.padStart(4, '0')
+  return digits
 }
 
 function splitAgPacb(v: any) {
   const raw = toStr(v)
   if (!raw) return { agencia: '', pacb: '' }
-  const parts = raw.split('/')
-  const ag = toStr(parts[0])
-  const pacb = toStr(parts[1])
-  return { agencia: ag, pacb }
-}
 
-function normalizeContas(qtdContasRaw: any, qtdContasComDepositoRaw: any) {
-  const qtdContas = Math.max(parseNumber(qtdContasRaw), 0)
-  const qtdContasComDeposito = Math.max(parseNumber(qtdContasComDepositoRaw), 0)
-  const qtdContasComDepositoAjustada = Math.min(qtdContasComDeposito, qtdContas)
-  const qtdContasSemDeposito = Math.max(qtdContas - qtdContasComDepositoAjustada, 0)
+  const parts = raw.split('/')
 
   return {
-    qtdContas,
-    qtdContasComDeposito: qtdContasComDepositoAjustada,
-    qtdContasSemDeposito,
+    agencia: normalizeAgencyCode(parts[0]),
+    pacb: toStr(parts[1]),
   }
-}
-
-function isTreinado(status: string) {
-  return toStr(status).toLowerCase().includes('trein')
-}
-
-function isTransacional(status: string) {
-  return toStr(status).toLowerCase().includes('trans')
-}
-
-function parseDateFlexible(v: any): Date | null {
-  if (v === null || v === undefined || v === '') return null
-
-  if (v instanceof Date && !Number.isNaN(v.getTime())) {
-    return new Date(v.getFullYear(), v.getMonth(), v.getDate())
-  }
-
-  if (typeof v === 'number' && Number.isFinite(v) && v > 20000 && v < 90000) {
-    const d = XLSX.SSF.parse_date_code(v)
-    if (d?.y && d?.m && d?.d) {
-      const dt = new Date(d.y, d.m - 1, d.d)
-      return Number.isNaN(dt.getTime()) ? null : dt
-    }
-  }
-
-  const raw = toStr(v)
-  if (!raw) return null
-
-  const onlyDate = raw.split(' ')[0]
-
-  const mBR = onlyDate.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
-  if (mBR) {
-    const dd = Number(mBR[1])
-    const mm = Number(mBR[2])
-    const yy = Number(mBR[3])
-
-    if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return null
-
-    const dt = new Date(yy, mm - 1, dd)
-    return Number.isNaN(dt.getTime()) ? null : dt
-  }
-
-  const mISO = onlyDate.match(/^(\d{4})-(\d{2})-(\d{2})$/)
-  if (mISO) {
-    const yy = Number(mISO[1])
-    const mm = Number(mISO[2])
-    const dd = Number(mISO[3])
-
-    if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return null
-
-    const dt = new Date(yy, mm - 1, dd)
-    return Number.isNaN(dt.getTime()) ? null : dt
-  }
-
-  return null
-}
-
-function formatCertificacaoValue(v: any) {
-  if (v === null || v === undefined || v === '') return ''
-
-  if (v instanceof Date && !Number.isNaN(v.getTime())) {
-    const dd = String(v.getDate()).padStart(2, '0')
-    const mm = String(v.getMonth() + 1).padStart(2, '0')
-    const yyyy = String(v.getFullYear())
-    return `${dd}/${mm}/${yyyy}`
-  }
-
-  if (typeof v === 'number' && Number.isFinite(v) && v > 20000 && v < 90000) {
-    const d = XLSX.SSF.parse_date_code(v)
-    if (d?.y && d?.m && d?.d) {
-      const dd = String(d.d).padStart(2, '0')
-      const mm = String(d.m).padStart(2, '0')
-      const yyyy = String(d.y)
-      return `${dd}/${mm}/${yyyy}`
-    }
-  }
-
-  const raw = toStr(v)
-  if (!raw) return ''
-
-  const onlyDate = raw.split(' ')[0]
-
-  const slash = onlyDate.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
-  if (slash) {
-    const dd = String(Number(slash[1])).padStart(2, '0')
-    const mm = String(Number(slash[2])).padStart(2, '0')
-    const yyyy = slash[3]
-    return `${dd}/${mm}/${yyyy}`
-  }
-
-  const iso = onlyDate.match(/^(\d{4})-(\d{2})-(\d{2})$/)
-  if (iso) {
-    return `${iso[3]}/${iso[2]}/${iso[1]}`
-  }
-
-  return raw
-}
-
-function isCertVencida(certDate: Date | null) {
-  if (!certDate) return false
-  const now = new Date()
-  const expiry = new Date(certDate)
-  expiry.setFullYear(expiry.getFullYear() + 5)
-  return expiry < now
-}
-
-function formatPtBRDate(dt: Date | null) {
-  if (!dt) return '—'
-  return new Intl.DateTimeFormat('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  }).format(dt)
 }
 
 function formatNum(n: number) {
-  if (!Number.isFinite(n)) return '0'
-  return String(n)
+  return new Intl.NumberFormat('pt-BR').format(Number(n || 0))
 }
 
 function formatPontos(n: number) {
-  if (!Number.isFinite(n)) return '0'
-  const rounded = Math.round(n * 10) / 10
+  const rounded = Math.round((Number(n || 0) + Number.EPSILON) * 10) / 10
   const isInt = Math.abs(rounded - Math.round(rounded)) < 1e-9
   return isInt ? String(Math.round(rounded)) : rounded.toFixed(1).replace('.', ',')
 }
 
-/* =========================
-   SEMÁFORO / AÇÃO
-   ========================= */
-function gerarSinalizacoes(r: RowBase, semCert: boolean, vencida: boolean) {
-  const sinais: { texto: string; estilo?: CSSProperties }[] = []
-
-  if (semCert) {
-    sinais.push({
-      texto: '🔴 Sem certificação',
-      estilo: {
-        background: 'rgba(214,31,44,.10)',
-        border: '1px solid rgba(214,31,44,.20)',
-        color: 'rgba(214,31,44,.95)',
-      },
-    })
-  }
-
-  if (vencida) {
-    sinais.push({
-      texto: '🔴 Certificação vencida',
-      estilo: {
-        background: 'rgba(214,31,44,.10)',
-        border: '1px solid rgba(214,31,44,.20)',
-        color: 'rgba(214,31,44,.95)',
-      },
-    })
-  }
-
-  if ((r.trx || 0) === 0) {
-    sinais.push({
-      texto: '🟠 TRX zerada',
-      estilo: {
-        background: 'rgba(245,158,11,.10)',
-        border: '1px solid rgba(245,158,11,.22)',
-        color: 'rgba(180,83,9,.98)',
-      },
-    })
-  }
-
-  if ((r.pontos || 0) < 10) {
-    sinais.push({
-      texto: '🟠 Baixa pontuação',
-      estilo: {
-        background: 'rgba(245,158,11,.10)',
-        border: '1px solid rgba(245,158,11,.22)',
-        color: 'rgba(180,83,9,.98)',
-      },
-    })
-  }
-
-  if (!semCert && !vencida && (r.trx || 0) >= 200 && (r.pontos || 0) >= 10) {
-    sinais.push({
-      texto: '🟢 Expresso saudável',
-      estilo: {
-        background: 'rgba(34,197,94,.10)',
-        border: '1px solid rgba(34,197,94,.20)',
-        color: 'rgba(21,128,61,.95)',
-      },
-    })
-  }
-
-  return sinais
+function getContaSemDeposito(qtdContas: number, qtdContasComDeposito: number) {
+  return Math.max(0, Number(qtdContas || 0) - Number(qtdContasComDeposito || 0))
 }
 
-function acaoRecomendada(r: RowBase, semCert: boolean, vencida: boolean) {
-  if (semCert) return 'Regularizar certificação'
-  if (vencida) return 'Atualizar certificação'
-  if ((r.trx || 0) === 0) return 'Incentivar movimentação'
-  if ((r.pontos || 0) < 10) return 'Incentivar produção'
-  return 'Acompanhar expresso'
+function getPontosExpSorte(vlrExpSorte: number, qtdExpSorte: number) {
+  const valor = Number(vlrExpSorte || 0)
+  const qtd = Number(qtdExpSorte || 0)
+  return valor > 0 ? Math.floor(valor / 50) : qtd
 }
 
-/* =========================
-   UI
-   ========================= */
+function calcPontos(r: ExpressoRow) {
+  const contaSemDeposito = getContaSemDeposito(r.qtdContas, r.qtdContasComDeposito)
+
+  return (
+    contaSemDeposito * 3 +
+    (r.qtdContasComDeposito || 0) * 7 +
+    (r.qtdLime || 0) * 6.5 +
+    (r.qtdConsignado || 0) * 5.5 +
+    (r.qtdCreditoParcelado || 0) * 6.5 +
+    (r.qtdMicrosseguro || 0) * 1 +
+    (r.qtdVivaVida || 0) * 1 +
+    (r.qtdPlanoOdonto || 0) * 1 +
+    (r.qtdSegResidencial || 0) * 1 +
+    (r.qtdCartaoEmitido || 0) * 1 +
+    (r.qtdCestaServ || 0) * 3 +
+    (r.qtdSuperProtegido || 0) * 1 +
+    (r.qtdMobilidade || 0) * 0.5 +
+    (r.qtdSegCartaoDeb || 0) * 1 +
+    getPontosExpSorte(r.vlrExpSorte, r.qtdExpSorte)
+  )
+}
+
+function getTotalProduzido(r: ExpressoRow) {
+  return (
+    (r.qtdContas || 0) +
+    (r.qtdLime || 0) +
+    (r.qtdConsignado || 0) +
+    (r.qtdMicrosseguro || 0) +
+    (r.qtdVivaVida || 0) +
+    (r.qtdPlanoOdonto || 0) +
+    (r.qtdSegResidencial || 0) +
+    (r.qtdCartaoEmitido || 0) +
+    (r.qtdCreditoParcelado || 0) +
+    (r.qtdCestaServ || 0) +
+    (r.qtdSuperProtegido || 0) +
+    (r.qtdMobilidade || 0) +
+    (r.qtdSegCartaoDeb || 0) +
+    getPontosExpSorte(r.vlrExpSorte, r.qtdExpSorte)
+  )
+}
+
 function Pill({
   children,
   style,
-  title,
 }: {
   children: ReactNode
   style?: CSSProperties
-  title?: string
 }) {
   return (
-    <span className="pill" style={style} title={title}>
+    <span className="pill" style={style}>
       {children}
     </span>
   )
@@ -342,31 +301,23 @@ function Pill({
 function LightButton({
   children,
   onClick,
-  disabled,
-  title,
 }: {
   children: ReactNode
   onClick?: () => void
-  disabled?: boolean
-  title?: string
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      disabled={disabled}
-      title={title}
       style={{
         borderRadius: 999,
-        padding: '.52rem .75rem',
-        fontSize: '.85rem',
+        padding: '.42rem .72rem',
         fontWeight: 900,
-        border: '1px solid rgba(15,15,25,.18)',
-        background: 'rgba(255,255,255,.88)',
+        fontSize: '.8rem',
+        border: '1px solid rgba(15,15,25,.15)',
+        background: 'rgba(255,255,255,.92)',
         color: 'rgba(16,16,24,.92)',
-        boxShadow: '0 10px 18px rgba(10,10,20,.06)',
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        opacity: disabled ? 0.65 : 1,
+        cursor: 'pointer',
       }}
     >
       {children}
@@ -374,100 +325,61 @@ function LightButton({
   )
 }
 
-function buildWhatsAppMessage(args: {
-  nome: string
-  chave: string
-  municipio: string
-  agencia: string
-  pacb: string
-  status: string
-  trx: number
-  certLabel: string
-  certDatePt: string
-
-  qtdContas: number
-  qtdContasComDeposito: number
-  qtdContasSemDeposito: number
-  qtdCestaServ: number
-  qtdMobilidade: number
-  qtdCartaoEmitido: number
-  qtdChesContratado: number
-  qtdLimeAbConta: number
-  qtdLime: number
-  qtdConsignado: number
-  qtdCreditoParcelado: number
-  qtdMicrosseguro: number
-  qtdVivaVida: number
-  qtdPlanoOdonto: number
-  qtdSegResidencial: number
-  qtdExpSorte: number
-  referencia: string
+function SummaryCard({
+  label,
+  value,
+}: {
+  label: string
+  value: string | number
 }) {
-  const a = args
-  return [
-    '📊 *Expresso — Visão Geral*',
-    '',
-    `🏪 *Nome:* ${a.nome || '—'}`,
-    `🔑 *Chave:* ${a.chave || '—'}`,
-    `📍 *Município:* ${a.municipio || '—'}`,
-    `🏦 *Agência/PACB:* ${a.agencia || '—'} / ${a.pacb || '—'}`,
-    '',
-    `✅ *Status:* ${a.status || '—'}`,
-    `💳 *TRX Contábil:* ${String(a.trx ?? 0)}`,
-    `🪪 *Certificação:* ${a.certLabel}`,
-    `📅 *dt_certificacao:* ${a.certDatePt || '—'}`,
-    '',
-    '📌 *Indicadores (base)*',
-    `• Contas abertas (total): ${formatNum(a.qtdContas)}`,
-    `• Contas com Depósito: ${formatNum(a.qtdContasComDeposito)}`,
-    `• Contas sem Depósito: ${formatNum(a.qtdContasSemDeposito)}`,
-    `• Cestas de Serviços: ${formatNum(a.qtdCestaServ)}`,
-    `• Mobilidade: ${formatNum(a.qtdMobilidade)}`,
-    `• Cartão Emitido: ${formatNum(a.qtdCartaoEmitido)}`,
-    `• Ches Contratado: ${formatNum(a.qtdChesContratado)}`,
-    `• Lime na conta: ${formatNum(a.qtdLimeAbConta)}`,
-    `• Lime Contratado: ${formatNum(a.qtdLime)}`,
-    `• Consignado: ${formatNum(a.qtdConsignado)}`,
-    `• Crédito Parcelado: ${formatNum(a.qtdCreditoParcelado)}`,
-    `• Microsseguros: ${formatNum(a.qtdMicrosseguro)}`,
-    `• Viva Vida: ${formatNum(a.qtdVivaVida)}`,
-    `• Dental: ${formatNum(a.qtdPlanoOdonto)}`,
-    `• Residencial: ${formatNum(a.qtdSegResidencial)}`,
-    `• SORTE EXPRESSA: ${formatNum(a.qtdExpSorte)}`,
-    `• EXPRESSO REFERÊNCIA?: ${a.referencia || '—'}`,
-  ].join('\n')
+  return (
+    <div className="card-soft" style={{ padding: '.68rem .75rem', minHeight: 80 }}>
+      <div className="p-muted" style={{ fontSize: 11, lineHeight: 1.15 }}>
+        {label}
+      </div>
+      <div style={{ marginTop: '.22rem', fontSize: '1.22rem', fontWeight: 900, lineHeight: 1.05 }}>
+        {value}
+      </div>
+    </div>
+  )
 }
 
-/* =========================
-   PAGE
-   ========================= */
-export default function ExpressoGeralPage() {
+async function resolveIsAdmin(u: User) {
+  try {
+    const snap = await getDoc(doc(db, 'users', u.uid))
+    if (!snap.exists()) return false
+
+    const data = snap.data() as any
+    return data?.ativo === true && data?.role === 'admin'
+  } catch (e) {
+    console.error('resolveIsAdmin error:', e)
+    return false
+  }
+}
+
+export default function RelatorioGestaoPage() {
   const router = useRouter()
 
   const [user, setUser] = useState<User | null>(null)
-  const [checkingAuth, setCheckingAuth] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [checkingAuth, setCheckingAuth] = useState(true)
+
+  const [rows, setRows] = useState<ExpressoRow[]>([])
+  const [agenciasBase, setAgenciasBase] = useState<AgenciaRow[]>([])
 
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState('')
+  const [error, setError] = useState<string | null>(null)
 
-  const [rows, setRows] = useState<RowBase[]>([])
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
-
-  const [q, setQ] = useState('')
+  const [agruparPor, setAgruparPor] = useState<AgruparPor>('supervisor')
+  const [busca, setBusca] = useState('')
+  const [fRegional, setFRegional] = useState('Todos')
   const [fAgencia, setFAgencia] = useState('Todos')
-  const [fCert, setFCert] = useState<CertFilter>('Todos')
-  const [fTrx, setFTrx] = useState<TrxFilter>('Todos')
+  const [fSupervisor, setFSupervisor] = useState('Todos')
 
-  function toggleExpand(key: string) {
-    setExpanded((prev) => ({
-      ...prev,
-      [key]: !prev[key],
-    }))
-  }
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
 
-  async function loadCsv() {
+  async function loadAll() {
     if (!auth.currentUser) {
       setError('Você precisa estar logado.')
       return
@@ -478,12 +390,39 @@ export default function ExpressoGeralPage() {
       setError(null)
       setInfo('')
 
-      const bytesAny = await getBytes(ref(storage, CSV_PATH))
-      const text = parseCSVText(toUint8(bytesAny))
+      const [bytesAny, gestaoSnap] = await Promise.all([
+        getBytes(ref(storage, CSV_PATH)),
+        getDocs(query(collection(db, 'gestao_agencias'), orderBy('nomeAg'))),
+      ])
 
-      const wb = XLSX.read(text, { type: 'string' })
-      const ws = wb.Sheets[wb.SheetNames[0]]
-      const raw: Record<string, any>[] = XLSX.utils.sheet_to_json(ws, { defval: '' })
+      const agenciasList: AgenciaRow[] = gestaoSnap.docs.map((d) => {
+        const data = d.data() as any
+        return {
+          codAg: normalizeAgencyCode(data.codAg || d.id),
+          nomeAg: toStr(data.nomeAg),
+          tipo: toStr(data.tipo),
+          supervisor: toStr(data.supervisor),
+          contatoSupervisor: toStr(data.contatoSupervisor),
+          gerenteAg: toStr(data.gerenteAg),
+          telGerente1: toStr(data.telGerente1),
+          emailGerente: toStr(data.emailGerente),
+          regional: toStr(data.regional),
+          nomeDiretorRegional: toStr(data.nomeDiretorRegional),
+          telefoneRegional: toStr(data.telefoneRegional),
+          createdAt: data.createdAt,
+          createdBy: data.createdBy,
+          updatedAt: data.updatedAt,
+          updatedBy: data.updatedBy,
+        }
+      })
+
+      const agenciaMap = new Map<string, AgenciaRow>()
+      agenciasList.forEach((ag) => {
+        if (ag.codAg) agenciaMap.set(ag.codAg, ag)
+      })
+
+      const text = parseCSVText(toUint8(bytesAny))
+      const raw = parseCsvRows(text)
 
       const normalized = raw.map((obj) => {
         const out: Record<string, any> = {}
@@ -491,7 +430,7 @@ export default function ExpressoGeralPage() {
         return out
       })
 
-      const mapped: RowBase[] = normalized.map((r) => {
+      const mappedRows: ExpressoRow[] = normalized.map((r) => {
         const chave = toStr(r['chave_loja'] || r['chave loja'] || r['chave'])
         const nome = toStr(r['nome_loja'] || r['nome da loja'] || r['nome'])
         const municipio = toStr(r['municipio'] || r['município'])
@@ -499,109 +438,24 @@ export default function ExpressoGeralPage() {
         const agpacb = r['ag_pacb'] || r['agencia/pacb'] || r['agência/pacb']
         const { agencia, pacb } = splitAgPacb(agpacb)
 
-        const statusAnalise = toStr(r['status_analise'] || r['status analise'] || r['status'])
+        const agInfo = agenciaMap.get(agencia)
 
-        const rawCertificacao =
-          r['dt_certificacao'] ??
-          r['dt certificacao'] ??
-          r['certificacao'] ??
-          r['certificação'] ??
-          ''
-
-        const dtCertificacao = formatCertificacaoValue(rawCertificacao)
-
-        const trx = parseNumber(
-          r['qtd_trxcontabil'] || r['qtd_trx_contabil'] || r['qtd trxcontabil'] || r['qtd_trx']
+        const nomeAg = toStr(agInfo?.nomeAg)
+        const regional = toStr(
+          agInfo?.regional ||
+            r['regional'] ||
+            r['nome_regional'] ||
+            r['regiao'] ||
+            r['região']
         )
-
-        const {
-          qtdContas,
-          qtdContasComDeposito,
-          qtdContasSemDeposito,
-        } = normalizeContas(
-          r['qtd_contas'] || r['qtd contas'],
-          r['qtd_contas_com_deposito'] || r['qtd contas com deposito']
+        const supervisor = toStr(
+          agInfo?.supervisor ||
+            r['supervisor'] ||
+            r['nome_supervisor'] ||
+            r['supervisao'] ||
+            r['supervisão']
         )
-
-        const qtdCestaServ = parseNumber(r['qtd_cesta_serv'] || r['qtd cesta serv'])
-
-        const qtdSuperProtegido = parseNumber(
-          r['qtd_super_protegido'] ||
-            r['qtd super protegido'] ||
-            r['qtd_superprotegido'] ||
-            r['super protegido'] ||
-            r['qtdsuperprotegido']
-        )
-
-        const qtdMobilidade = parseNumber(r['qtd_mobilidade'] || r['qtd mobilidade'])
-        const qtdCartaoEmitido = parseNumber(r['qtd_cartao_emitido'] || r['qtd cartao emitido'])
-        const qtdChesContratado = parseNumber(
-          r['qtd_chesp_contratado'] || r['qtd chesp contratado']
-        )
-        const qtdLimeAbConta = parseNumber(r['qtd_lime_ab_conta'] || r['qtd lime ab conta'])
-        const qtdLime = parseNumber(r['qtd_lime'] || r['qtd lime'])
-        const qtdConsignado = parseNumber(r['qtd_consignado'] || r['qtd consignado'])
-
-        const qtdCreditoParcelado = parseNumber(
-          r['qtd_credito_parcel_dtlhes'] ||
-            r['qtd_credito_parcelado_dtlhes'] ||
-            r['qtd_credito_parcel'] ||
-            r['credito parcelado'] ||
-            r['qtd_credito_parcel_dtlh'] ||
-            r['qtd_credito_parcel_detalhes']
-        )
-
-        const qtdMicrosseguro = parseNumber(r['qtd_microsseguro'] || r['qtd microsseguro'])
-        const qtdVivaVida = parseNumber(
-          r['qtd_micro_vivavida'] || r['qtd micro vivavida'] || r['viva vida']
-        )
-        const qtdPlanoOdonto = parseNumber(
-          r['qtd_plano_odonto'] || r['qtd plano odonto'] || r['odonto']
-        )
-        const qtdSegResidencial = parseNumber(
-          r['qtd_seg_residencial'] || r['qtd seg residencial']
-        )
-
-        const qtdSegCartaoDeb = parseNumber(
-          r['qtd_seg_cartao_deb'] ||
-            r['qtd seg cartao deb'] ||
-            r['qtd_seg_cartao'] ||
-            r['seg cartao deb'] ||
-            r['qtd_seg_cartao_debito']
-        )
-
-        const vlrExpSorte = parseNumber(
-          r['vlr_exp_sorte'] ||
-            r['vlr exp sorte'] ||
-            r['valor exp sorte'] ||
-            r['vlr_expsorte'] ||
-            0
-        )
-
-        const qtdExpSorte = parseNumber(r['qtd_exp_sorte'] || r['qtd exp sorte'])
-
-        const referencia = toStr(
-          r['referencia'] ||
-            r['referência'] ||
-            r['expresso referência?'] ||
-            r['expresso referencia?']
-        )
-
-        const pontos = calcPontosExpressoGeral({
-          qtdContasComDeposito,
-          qtdContasSemDeposito,
-          qtdCestaServ,
-          qtdSuperProtegido,
-          qtdMobilidade,
-          qtdLime,
-          qtdConsignado,
-          qtdCreditoParcelado,
-          qtdMicrosseguro,
-          qtdVivaVida,
-          qtdPlanoOdonto,
-          qtdSegCartaoDeb,
-          vlrExpSorte,
-        })
+        const tipoAgencia = toStr(agInfo?.tipo)
 
         return {
           chave,
@@ -609,45 +463,77 @@ export default function ExpressoGeralPage() {
           municipio,
           agencia,
           pacb,
-          statusAnalise,
-          dtCertificacao,
-          trx,
-          qtdContas,
-          qtdContasComDeposito,
-          qtdContasSemDeposito,
-          qtdCestaServ,
-          qtdSuperProtegido,
-          qtdMobilidade,
-          qtdCartaoEmitido,
-          qtdChesContratado,
-          qtdLimeAbConta,
-          qtdLime,
-          qtdConsignado,
-          qtdCreditoParcelado,
-          qtdMicrosseguro,
-          qtdVivaVida,
-          qtdPlanoOdonto,
-          qtdSegResidencial,
-          qtdSegCartaoDeb,
-          vlrExpSorte,
-          qtdExpSorte,
-          referencia,
-          pontos,
+          agenciaLabel: agencia ? `${agencia}${nomeAg ? ' - ' + nomeAg : ''}` : '',
+          regional,
+          supervisor,
+          statusAnalise: toStr(
+            r['status_analise'] || r['status analise'] || r['status']
+          ),
+          tipoAgencia,
+
+          qtdContas: parseNumber(r['qtd_contas'] || r['qtd contas']),
+          qtdContasComDeposito: parseNumber(
+            r['qtd_contas_com_deposito'] || r['qtd contas com deposito']
+          ),
+          qtdLime: parseNumber(r['qtd_lime'] || r['qtd lime']),
+          qtdConsignado: parseNumber(r['qtd_consignado'] || r['qtd consignado']),
+          qtdMicrosseguro: parseNumber(r['qtd_microsseguro'] || r['qtd microsseguro']),
+          qtdVivaVida: parseNumber(
+            r['qtd_micro_vivavida'] || r['qtd viva vida'] || r['qtd_viva_vida']
+          ),
+          qtdPlanoOdonto: parseNumber(
+            r['qtd_plano_odonto'] || r['qtd plano odonto'] || r['odonto']
+          ),
+          qtdSegResidencial: parseNumber(
+            r['qtd_seg_residencial'] || r['qtd seg residencial']
+          ),
+          qtdCartaoEmitido: parseNumber(
+            r['qtd_cartao_emitido'] || r['qtd cartao emitido'] || r['cartao']
+          ),
+          qtdCreditoParcelado: parseNumber(
+            r['qtd_credito_parcel_dtlhes'] ||
+              r['qtd_credito_parcelado_dtlhes'] ||
+              r['qtd_credito_parcel'] ||
+              r['credito parcelado']
+          ),
+          qtdCestaServ: parseNumber(r['qtd_cesta_serv'] || r['qtd cesta serv']),
+          qtdSuperProtegido: parseNumber(
+            r['qtd_super_protegido'] ||
+              r['qtd super protegido'] ||
+              r['qtd_superprotegido']
+          ),
+          qtdMobilidade: parseNumber(r['qtd_mobilidade'] || r['qtd mobilidade']),
+          qtdSegCartaoDeb: parseNumber(
+            r['qtd_seg_cartao_deb'] ||
+              r['qtd seg cartao deb'] ||
+              r['qtd_seg_cartao_debito']
+          ),
+          qtdExpSorte: parseNumber(r['qtd_exp_sorte'] || r['qtd exp sorte']),
+          vlrExpSorte: parseNumber(
+            r['vlr_exp_sorte'] || r['vlr exp sorte'] || r['valor exp sorte']
+          ),
+          trx: parseNumber(
+            r['qtd_trxcontabil'] ||
+              r['qtd_trx_contabil'] ||
+              r['qtd trxcontabil'] ||
+              r['qtd_trx']
+          ),
         }
       })
 
-      setRows(mapped)
-      setInfo('Base carregada ✅')
+      setAgenciasBase(agenciasList)
+      setRows(mappedRows)
+      setInfo('Relatório carregado ✅')
     } catch (e: any) {
-      console.error('loadCsv error:', e)
-      setError(`Falha ao carregar CSV (${e?.code || 'sem-code'}): ${e?.message || 'erro'}`)
+      console.error('loadAll error:', e)
+      setError(`Não foi possível carregar o relatório. (${e?.code || 'sem-code'})`)
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
+    const unsub = onAuthStateChanged(auth, async (u) => {
       setUser(u)
       setCheckingAuth(false)
 
@@ -657,234 +543,274 @@ export default function ExpressoGeralPage() {
         return
       }
 
-      setIsAdmin((u.email || '').toLowerCase() === ADMIN_EMAIL.toLowerCase())
-      loadCsv()
+      const admin = await resolveIsAdmin(u)
+      setIsAdmin(admin)
+
+      await loadAll()
     })
 
     return () => unsub()
   }, [router])
 
-  const computed = useMemo(() => {
-    const list = rows.map((r) => {
-      const certDate = parseDateFlexible(r.dtCertificacao)
-      const semCert = !certDate
-      const vencida = isCertVencida(certDate)
-      return { r, certDate, semCert, vencida }
+  const regionais = useMemo(() => {
+    const set = new Set<string>()
+
+    agenciasBase.forEach((r) => {
+      if (r.regional) set.add(r.regional)
     })
 
-    const total = list.length
-    const transacional = list.filter((x) => isTransacional(x.r.statusAnalise)).length
-    const treinado = list.filter((x) => isTreinado(x.r.statusAnalise)).length
-    const semCert = list.filter((x) => x.semCert).length
-    const vencida = list.filter((x) => x.vencida).length
+    rows.forEach((r) => {
+      if (r.regional) set.add(r.regional)
+    })
 
-    return { list, total, transacional, treinado, semCert, vencida }
-  }, [rows])
+    return ['Todos', ...Array.from(set).sort((a, b) => a.localeCompare(b))]
+  }, [agenciasBase, rows])
 
   const agencias = useMemo(() => {
+    const map = new Map<string, string>()
+
+    agenciasBase
+      .filter((a) => toStr(a.tipo).toUpperCase() === 'AG')
+      .forEach((a) => {
+        const label = a.codAg ? `${a.codAg}${a.nomeAg ? ' - ' + a.nomeAg : ''}` : ''
+        if (label) map.set(label, label)
+      })
+
+    return ['Todos', ...Array.from(map.values()).sort((a, b) => a.localeCompare(b))]
+  }, [agenciasBase])
+
+  const supervisores = useMemo(() => {
     const set = new Set<string>()
-    computed.list.forEach(({ r }) => r.agencia && set.add(r.agencia))
+
+    agenciasBase.forEach((a) => {
+      if (a.supervisor) set.add(a.supervisor)
+    })
+
+    rows.forEach((r) => {
+      if (r.supervisor) set.add(r.supervisor)
+    })
+
     return ['Todos', ...Array.from(set).sort((a, b) => a.localeCompare(b))]
-  }, [computed.list])
+  }, [agenciasBase, rows])
 
-  const filtered = useMemo(() => {
-    const term = q.trim().toLowerCase()
+  const filteredRows = useMemo(() => {
+    const term = busca.trim().toLowerCase()
 
-    let list = computed.list.filter(({ r, semCert, vencida }) => {
-      if (fAgencia !== 'Todos' && r.agencia !== fAgencia) return false
+    return rows.filter((r) => {
+      if (fRegional !== 'Todos' && r.regional !== fRegional) return false
 
-      if (fCert !== 'Todos') {
-        if (fCert === 'NaoCertificado' && !semCert) return false
-        if (fCert === 'Certificado' && semCert) return false
-        if (fCert === 'Vencida' && !vencida) return false
+      if (fAgencia !== 'Todos') {
+        if (toStr(r.tipoAgencia).toUpperCase() !== 'AG') return false
+        if (r.agenciaLabel !== fAgencia) return false
       }
 
-      if (fTrx !== 'Todos') {
-        const trx = r.trx || 0
-        if (fTrx === '0' && trx !== 0) return false
-        if (fTrx === '1-199' && !(trx >= 1 && trx <= 199)) return false
-        if (fTrx === '200+' && trx < 200) return false
+      if (fSupervisor !== 'Todos' && r.supervisor !== fSupervisor) return false
+
+      if (!term) return true
+
+      const texto = [
+        r.chave,
+        r.nome,
+        r.municipio,
+        r.agencia,
+        r.pacb,
+        r.agenciaLabel,
+        r.regional,
+        r.supervisor,
+        r.statusAnalise,
+      ]
+        .join(' ')
+        .toLowerCase()
+
+      return texto.includes(term)
+    })
+  }, [rows, busca, fRegional, fAgencia, fSupervisor])
+
+  const grupos = useMemo(() => {
+    const map = new Map<string, ExpressoRow[]>()
+
+    for (const row of filteredRows) {
+      const key =
+        agruparPor === 'regional'
+          ? row.regional || 'SEM REGIONAL'
+          : agruparPor === 'agencia'
+            ? row.agenciaLabel || 'SEM AGÊNCIA'
+            : row.supervisor || 'SEM SUPERVISOR'
+
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(row)
+    }
+
+    const result: GrupoResumo[] = Array.from(map.entries()).map(([nomeGrupo, list]) => {
+      const ordered = [...list].sort((a, b) => {
+        const pontosB = calcPontos(b)
+        const pontosA = calcPontos(a)
+
+        if (pontosB !== pontosA) return pontosB - pontosA
+        if ((b.trx || 0) !== (a.trx || 0)) return (b.trx || 0) - (a.trx || 0)
+
+        return a.nome.localeCompare(b.nome)
+      })
+
+      return {
+        nomeGrupo,
+        regional: ordered[0]?.regional || '',
+        agencia: ordered[0]?.agenciaLabel || '',
+        supervisor: ordered[0]?.supervisor || '',
+
+        totalExpressos: ordered.length,
+        transacionamEProduzem: ordered.filter(
+          (r) => (r.trx || 0) > 0 && getTotalProduzido(r) > 0
+        ).length,
+        trxZeradaEProduzem: ordered.filter(
+          (r) => (r.trx || 0) <= 0 && getTotalProduzido(r) > 0
+        ).length,
+        somenteTransacionando: ordered.filter(
+          (r) => (r.trx || 0) > 0 && getTotalProduzido(r) <= 0
+        ).length,
+        semMovimentoTotal: ordered.filter(
+          (r) => (r.trx || 0) <= 0 && getTotalProduzido(r) <= 0
+        ).length,
+
+        totalContas: ordered.reduce((acc, r) => acc + (r.qtdContas || 0), 0),
+        totalLime: ordered.reduce((acc, r) => acc + (r.qtdLime || 0), 0),
+        totalConsignado: ordered.reduce((acc, r) => acc + (r.qtdConsignado || 0), 0),
+        totalVivaVidaMicro: ordered.reduce(
+          (acc, r) => acc + (r.qtdVivaVida || 0) + (r.qtdMicrosseguro || 0),
+          0
+        ),
+        totalResidencial: ordered.reduce(
+          (acc, r) => acc + (r.qtdSegResidencial || 0),
+          0
+        ),
+        totalPontosExpSorte: ordered.reduce(
+          (acc, r) => acc + getPontosExpSorte(r.vlrExpSorte, r.qtdExpSorte),
+          0
+        ),
+
+        rows: ordered,
       }
-
-      return true
     })
 
-    if (term) {
-      list = list.filter(({ r }) => {
-        const hay = [r.nome, r.chave, r.municipio, r.agencia, r.pacb, r.statusAnalise]
-          .join(' ')
-          .toLowerCase()
-        return hay.includes(term)
-      })
-    } else {
-      list = list.slice(0, LIMIT_NO_SEARCH)
-    }
+    return result.sort((a, b) => a.nomeGrupo.localeCompare(b.nomeGrupo))
+  }, [filteredRows, agruparPor])
 
-    return list
-  }, [computed.list, q, fAgencia, fCert, fTrx])
-
-  async function copyWhatsApp(
-    r: RowBase,
-    certDate: Date | null,
-    semCert: boolean,
-    vencida: boolean
-  ) {
-    try {
-      const certLabel = semCert
-        ? 'Sem certificação'
-        : vencida
-          ? 'Certificação vencida'
-          : 'Certificado'
-
-      const certDatePt = formatPtBRDate(certDate)
-
-      const msg = buildWhatsAppMessage({
-        nome: r.nome,
-        chave: r.chave,
-        municipio: r.municipio,
-        agencia: r.agencia,
-        pacb: r.pacb,
-        status: r.statusAnalise,
-        trx: r.trx || 0,
-        certLabel,
-        certDatePt,
-        qtdContas: r.qtdContas,
-        qtdContasComDeposito: r.qtdContasComDeposito,
-        qtdContasSemDeposito: r.qtdContasSemDeposito,
-        qtdCestaServ: r.qtdCestaServ,
-        qtdMobilidade: r.qtdMobilidade,
-        qtdCartaoEmitido: r.qtdCartaoEmitido,
-        qtdChesContratado: r.qtdChesContratado,
-        qtdLimeAbConta: r.qtdLimeAbConta,
-        qtdLime: r.qtdLime,
-        qtdConsignado: r.qtdConsignado,
-        qtdCreditoParcelado: r.qtdCreditoParcelado,
-        qtdMicrosseguro: r.qtdMicrosseguro,
-        qtdVivaVida: r.qtdVivaVida,
-        qtdPlanoOdonto: r.qtdPlanoOdonto,
-        qtdSegResidencial: r.qtdSegResidencial,
-        qtdExpSorte: r.qtdExpSorte || 0,
-        referencia: r.referencia,
-      })
-
-      await navigator.clipboard.writeText(msg)
-      setInfo('Mensagem copiada ✅ (cole no WhatsApp)')
-      setError(null)
-    } catch (e) {
-      console.error(e)
-      setError('Não consegui copiar a mensagem.')
-    }
-  }
-
-  function irParaReportar(r: RowBase) {
-    const params = new URLSearchParams({
-      chaveLoja: r.chave || '',
-      nomeExpresso: r.nome || '',
-      agencia: r.agencia || '',
-      pacb: r.pacb || '',
-      status: r.statusAnalise || '',
-    })
-
-    router.push(`/dashboard/reportar?${params.toString()}`)
-  }
-
-  function irParaArvoreCronologica(r: RowBase) {
-    router.push(`/dashboard/arvorecronologica/${encodeURIComponent(r.chave)}`)
+  function toggleGroup(nomeGrupo: string) {
+    setExpandedGroups((prev) => ({
+      ...prev,
+      [nomeGrupo]: !prev[nomeGrupo],
+    }))
   }
 
   return (
-    <section style={{ display: 'grid', gap: '1.25rem' }}>
+    <section
+      style={{
+        display: 'grid',
+        gap: '.9rem',
+        width: '100%',
+        maxWidth: '100%',
+        fontSize: '0.88rem',
+      }}
+    >
       <div>
-        <span className="pill">Geral</span>
-        <h1 className="h1" style={{ marginTop: '.75rem' }}>
-          📊 Expresso Geral (visão completa)
-        </h1>
+        <span className="pill">Gestão</span>
+        <h1 className="h1">Regional, Agência e Supervisão</h1>
+        <p className="p-muted" style={{ marginTop: '.2rem', fontSize: '.86rem' }}>
+          Relatório agrupado com base em <b>gestao_agencias</b>.
+        </p>
       </div>
 
-      <div
-        className="card"
-        style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}
-      >
-        <Pill>Total: {computed.total}</Pill>
-        <Pill>Transacional: {computed.transacional}</Pill>
-        <Pill>Treinado: {computed.treinado}</Pill>
-        <Pill>Sem certificação: {computed.semCert}</Pill>
-        <Pill
-          style={{
-            background: 'rgba(214,31,44,.10)',
-            border: '1px solid rgba(214,31,44,.20)',
-            color: 'rgba(214,31,44,.95)',
-          }}
-        >
-          Certificação vencida: {computed.vencida}
-        </Pill>
-
-        <button
-          className="btn-primary"
-          onClick={loadCsv}
-          disabled={loading || checkingAuth}
-          style={{ marginLeft: 'auto' }}
-        >
-          {checkingAuth ? 'Verificando login...' : loading ? 'Carregando...' : 'Recarregar base'}
-        </button>
-      </div>
-
-      <div className="card" style={{ display: 'grid', gap: '1rem' }}>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="card" style={{ display: 'grid', gap: '.75rem', padding: '.9rem' }}>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <label>
-            <div className="label">Buscar (opcional)</div>
-            <input
+            <div className="label">Agrupar por</div>
+            <select
               className="input"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Nome ou chave..."
-            />
-            <div className="p-muted" style={{ marginTop: '.35rem', fontSize: 12 }}>
-              Sem busca, mostra até <b>{LIMIT_NO_SEARCH}</b> resultados.
-            </div>
+              value={agruparPor}
+              onChange={(e) => setAgruparPor(e.target.value as AgruparPor)}
+            >
+              <option value="regional">Regional</option>
+              <option value="agencia">Agência</option>
+              <option value="supervisor">Supervisor</option>
+            </select>
           </label>
 
           <label>
-            <div className="label">Agência</div>
-            <select className="input" value={fAgencia} onChange={(e) => setFAgencia(e.target.value)}>
-              {agencias.map((a) => (
-                <option key={a} value={a}>
-                  {a}
+            <div className="label">Regional</div>
+            <select
+              className="input"
+              value={fRegional}
+              onChange={(e) => setFRegional(e.target.value)}
+            >
+              {regionais.map((item) => (
+                <option key={item} value={item}>
+                  {item}
                 </option>
               ))}
             </select>
           </label>
 
           <label>
-            <div className="label">Certificação</div>
+            <div className="label">Agência</div>
             <select
               className="input"
-              value={fCert}
-              onChange={(e) => setFCert(e.target.value as CertFilter)}
+              value={fAgencia}
+              onChange={(e) => setFAgencia(e.target.value)}
             >
-              <option value="Todos">Todos</option>
-              <option value="NaoCertificado">Não certificado</option>
-              <option value="Certificado">Certificado</option>
-              <option value="Vencida">Certificação vencida (5 anos)</option>
+              {agencias.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
             </select>
           </label>
 
           <label>
-            <div className="label">Transações (qtd_TrxContabil)</div>
-            <select className="input" value={fTrx} onChange={(e) => setFTrx(e.target.value as TrxFilter)}>
-              <option value="Todos">Todos</option>
-              <option value="0">0</option>
-              <option value="1-199">1–199</option>
-              <option value="200+">200+</option>
+            <div className="label">Supervisor</div>
+            <select
+              className="input"
+              value={fSupervisor}
+              onChange={(e) => setFSupervisor(e.target.value)}
+            >
+              {supervisores.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
             </select>
           </label>
         </div>
 
-        {info && (
-          <div>
-            <span className="pill">{info}</span>
+        <div
+          style={{
+            display: 'grid',
+            gap: '.65rem',
+            gridTemplateColumns: 'minmax(220px, 1fr) auto',
+            alignItems: 'end',
+          }}
+        >
+          <label>
+            <div className="label">Buscar no relatório</div>
+            <input
+              className="input"
+              placeholder="Buscar..."
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+            />
+          </label>
+
+          <div style={{ display: 'flex', gap: '.45rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            {info && <Pill>{info}</Pill>}
+
+            <button
+              className="btn-primary"
+              onClick={loadAll}
+              disabled={loading || checkingAuth}
+            >
+              {checkingAuth ? 'Verificando login...' : loading ? 'Carregando...' : 'Atualizar relatório'}
+            </button>
           </div>
-        )}
+        </div>
 
         {error && (
           <div className="card-soft" style={{ borderColor: 'rgba(214,31,44,.25)' }}>
@@ -895,245 +821,127 @@ export default function ExpressoGeralPage() {
         )}
       </div>
 
-      <div
-        className="card"
-        style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}
-      >
-        <Pill>Mostrando: {filtered.length}</Pill>
-        {q.trim() && (
-          <span className="p-muted">
-            Busca: <b>{q}</b>
-          </span>
-        )}
-      </div>
-
-      {filtered.length > 0 ? (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-            gap: '1rem',
-          }}
-        >
-          {filtered.map(({ r, certDate, vencida, semCert }) => {
-            const pontos = r.pontos || 0
-            const pontosOk = pontos >= 10
-            const expandKey = `${r.chave}-${r.agencia}-${r.pacb}`
-            const aberto = !!expanded[expandKey]
-
-            const pontosPillStyle: CSSProperties = pontosOk
-              ? {
-                  background: 'rgba(37,99,235,.12)',
-                  border: '1px solid rgba(37,99,235,.25)',
-                  color: 'rgba(37,99,235,.98)',
-                }
-              : {
-                  background: 'rgba(214,31,44,.10)',
-                  border: '1px solid rgba(214,31,44,.20)',
-                  color: 'rgba(214,31,44,.95)',
-                }
-
-            const certLabel = semCert
-              ? 'Sem certificação'
-              : vencida
-                ? 'Certificação vencida'
-                : 'Certificado'
-
-            const sinais = gerarSinalizacoes(r, semCert, vencida)
-            const recomendacao = acaoRecomendada(r, semCert, vencida)
+      {grupos.length > 0 ? (
+        <div style={{ display: 'grid', gap: '.75rem' }}>
+          {grupos.map((grupo) => {
+            const expanded = !!expandedGroups[grupo.nomeGrupo]
 
             return (
-              <div
-                key={`${r.chave}-${r.agencia}-${r.pacb}-${r.nome}`}
-                className="card"
-                style={{ display: 'grid', gap: '.75rem' }}
-              >
+              <div key={grupo.nomeGrupo} className="card" style={{ display: 'grid', gap: '.65rem', padding: '.8rem' }}>
                 <div
                   className="card-soft"
                   style={{
                     display: 'flex',
-                    gap: '.6rem',
-                    flexWrap: 'wrap',
-                    alignItems: 'center',
                     justifyContent: 'space-between',
-                    padding: '.8rem .95rem',
+                    alignItems: 'center',
+                    gap: '.7rem',
+                    flexWrap: 'wrap',
+                    padding: '.72rem .82rem',
                   }}
                 >
-                  <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                    <Pill
-                      style={
-                        certLabel === 'Certificação vencida'
-                          ? {
-                              background: 'rgba(214,31,44,.10)',
-                              border: '1px solid rgba(214,31,44,.20)',
-                              color: 'rgba(214,31,44,.95)',
-                            }
-                          : certLabel === 'Certificado'
-                            ? {
-                                background: 'rgba(34,197,94,.10)',
-                                border: '1px solid rgba(34,197,94,.20)',
-                                color: 'rgba(21,128,61,.95)',
-                              }
-                            : {
-                                background: 'rgba(15,15,25,.06)',
-                                border: '1px solid rgba(15,15,25,.10)',
-                                color: 'rgba(16,16,24,.70)',
-                              }
-                      }
-                    >
-                      {certLabel}
-                    </Pill>
+                  <div>
+                    <div style={{ fontSize: '1.18rem', fontWeight: 900, lineHeight: 1.05 }}>
+                      {grupo.nomeGrupo}
+                    </div>
 
-                    <Pill>TRX: {String(r.trx || 0)}</Pill>
-
-                    <Pill style={pontosPillStyle} title="Ativo se Pontos >= 10">
-                      Pontos: {formatPontos(pontos)}
-                    </Pill>
+                    <div className="p-muted" style={{ marginTop: '.15rem', fontSize: '.78rem' }}>
+                      {agruparPor === 'regional'
+                        ? 'Regional'
+                        : agruparPor === 'agencia'
+                          ? 'Agência'
+                          : 'Supervisor'}
+                      : —
+                    </div>
                   </div>
 
-                  <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
-                    <LightButton
-                      onClick={() => irParaArvoreCronologica(r)}
-                      title="Árvore Cronológica"
-                    >
-                      🌳 Árvore
-                    </LightButton>
-                    <LightButton onClick={() => irParaReportar(r)} title="Reportar">
-                      📕 Reportar
-                    </LightButton>
-
-                    <LightButton
-                      onClick={() => copyWhatsApp(r, certDate, semCert, vencida)}
-                      title="Copiar para WhatsApp"
-                    >
-                      📤 WhatsApp
-                    </LightButton>
-
-                    <LightButton
-                      onClick={() => toggleExpand(expandKey)}
-                      title={aberto ? 'Ocultar produção' : 'Ver produção'}
-                    >
-                      {aberto ? '📊 Ocultar produção' : '📊 Ver produção'}
-                    </LightButton>
-                  </div>
-                </div>
-
-                <div>
-                  <div className="p-muted" style={{ fontSize: 12 }}>
-                    Nome do Expresso
-                  </div>
-                  <div style={{ fontWeight: 900, fontSize: '1.08rem', marginTop: '.15rem' }}>
-                    {r.nome || '—'}
-                  </div>
+                  <LightButton onClick={() => toggleGroup(grupo.nomeGrupo)}>
+                    {expanded ? '▢ Ocultar' : '▣ Detalhar'}
+                  </LightButton>
                 </div>
 
                 <div
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
-                    gap: '.6rem',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(135px, 1fr))',
+                    gap: '.45rem',
                   }}
                 >
-                  <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
-                    <div className="p-muted" style={{ fontSize: 12 }}>
-                      Chave Loja
-                    </div>
-                    <div style={{ fontWeight: 900 }}>{r.chave || '—'}</div>
-                  </div>
-
-                  <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
-                    <div className="p-muted" style={{ fontSize: 12 }}>
-                      Agência / PACB
-                    </div>
-                    <div style={{ fontWeight: 900 }}>
-                      {r.agencia || '—'} / {r.pacb || '—'}
-                    </div>
-                  </div>
-
-                  <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
-                    <div className="p-muted" style={{ fontSize: 12 }}>
-                      Município
-                    </div>
-                    <div style={{ fontWeight: 900 }}>{r.municipio || '—'}</div>
-                  </div>
-
-                  <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
-                    <div className="p-muted" style={{ fontSize: 12 }}>
-                      STATUS_ANALISE
-                    </div>
-                    <div style={{ fontWeight: 900 }}>{r.statusAnalise || '—'}</div>
-                  </div>
-
-                  <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
-                    <div className="p-muted" style={{ fontSize: 12 }}>
-                      dt_certificacao
-                    </div>
-                    <div style={{ fontWeight: 900 }}>{r.dtCertificacao || '—'}</div>
-                  </div>
+                  <SummaryCard label="1 - Total de Expressos" value={formatNum(grupo.totalExpressos)} />
+                  <SummaryCard label="2 - Transacionam e Produzem" value={formatNum(grupo.transacionamEProduzem)} />
+                  <SummaryCard label="3 - TRX Zerada + Produzem" value={formatNum(grupo.trxZeradaEProduzem)} />
+                  <SummaryCard label="4 - Somente Transacionando" value={formatNum(grupo.somenteTransacionando)} />
+                  <SummaryCard label="5 - Sem Movimento Total" value={formatNum(grupo.semMovimentoTotal)} />
+                  <SummaryCard label="Total Contas (com + sem depósito)" value={formatNum(grupo.totalContas)} />
+                  <SummaryCard label="Total Lime" value={formatNum(grupo.totalLime)} />
+                  <SummaryCard label="Total Consignado" value={formatNum(grupo.totalConsignado)} />
+                  <SummaryCard label="Total Viva Vida + Microsseguro" value={formatNum(grupo.totalVivaVidaMicro)} />
+                  <SummaryCard label="Total Residencial" value={formatNum(grupo.totalResidencial)} />
+                  <SummaryCard label="Total VLR Exp. Sorte (pontos a cada 50)" value={formatNum(grupo.totalPontosExpSorte)} />
                 </div>
 
-                {sinais.length > 0 && (
-                  <div className="card-soft" style={{ padding: '.9rem .95rem' }}>
-                    <div className="p-muted" style={{ fontSize: 12, marginBottom: '.45rem' }}>
-                      Sinalizações
+                {expanded && (
+                  <div className="card-soft" style={{ padding: '.7rem .75rem' }}>
+                    <div style={{ fontWeight: 900, fontSize: '.98rem', marginBottom: '.65rem' }}>
+                      Expressos detalhados (maior produtor → menor)
                     </div>
 
-                    <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
-                      {sinais.map((sinal, idx) => (
-                        <Pill key={`${expandKey}-sinal-${idx}`} style={sinal.estilo}>
-                          {sinal.texto}
-                        </Pill>
-                      ))}
-                    </div>
-
-                    <div style={{ marginTop: '.7rem', fontSize: 14 }}>
-                      <b>Ação recomendada:</b> {recomendacao}
-                    </div>
-                  </div>
-                )}
-
-                {aberto && (
-                  <div className="card-soft" style={{ padding: '.9rem .95rem', display: 'grid', gap: '.55rem' }}>
-                    <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                      <span className="pill">Indicadores</span>
-                    </div>
-
-                    <div
+                    <table
                       style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-                        gap: '.6rem',
+                        width: '100%',
+                        borderCollapse: 'collapse',
+                        tableLayout: 'fixed',
                       }}
                     >
-                      <Indicador label="Contas abertas (total)" value={formatNum(r.qtdContas)} />
-                      <Indicador label="Contas com Depósito" value={formatNum(r.qtdContasComDeposito)} />
-                      <Indicador label="Contas sem Depósito" value={formatNum(r.qtdContasSemDeposito)} />
-                      <Indicador
-                        label="Pontos de Contas (7x com depósito + 3x sem depósito)"
-                        value={formatPontos(
-                          calcPontosContasExpressoGeral({
-                            qtdContasComDeposito: r.qtdContasComDeposito,
-                            qtdContasSemDeposito: r.qtdContasSemDeposito,
-                          })
-                        )}
-                      />
-                      <Indicador label="Cestas de Serviços" value={formatNum(r.qtdCestaServ)} />
-                      <Indicador label="Super Protegido" value={formatNum(r.qtdSuperProtegido)} />
-                      <Indicador label="Mobilidade" value={formatNum(r.qtdMobilidade)} />
-                      <Indicador label="Cartão Emitido" value={formatNum(r.qtdCartaoEmitido)} />
-                      <Indicador label="Ches Contratado" value={formatNum(r.qtdChesContratado)} />
-                      <Indicador label="Lime na conta" value={formatNum(r.qtdLimeAbConta)} />
-                      <Indicador label="Lime Contratado" value={formatNum(r.qtdLime)} />
-                      <Indicador label="Consignado" value={formatNum(r.qtdConsignado)} />
-                      <Indicador label="Crédito Parcelado" value={formatNum(r.qtdCreditoParcelado)} />
-                      <Indicador label="Microsseguros" value={formatNum(r.qtdMicrosseguro)} />
-                      <Indicador label="Viva Vida" value={formatNum(r.qtdVivaVida)} />
-                      <Indicador label="Dental" value={formatNum(r.qtdPlanoOdonto)} />
-                      <Indicador label="Residencial" value={formatNum(r.qtdSegResidencial)} />
-                      <Indicador label="Seguro Cartão Débito" value={formatNum(r.qtdSegCartaoDeb)} />
-                      <Indicador label="VLR Exp. Sorte (pontos a cada 50)" value={formatNum(r.vlrExpSorte)} />
-                      <Indicador label="EXPRESSO REFERÊNCIA?" value={r.referencia || '—'} />
-                    </div>
+                      <thead>
+                        <tr style={{ textAlign: 'left', borderBottom: '1px solid rgba(15,15,25,.08)' }}>
+                          <th style={{ ...thStyle, width: '7%' }}>chave_loja</th>
+                          <th style={{ ...thStyle, width: '29%' }}>nome_loja</th>
+                          <th style={{ ...thStyle, width: '8%' }}>transacao</th>
+                          <th style={{ ...thStyle, width: '8%' }}>qtd contas</th>
+                          <th style={{ ...thStyle, width: '8%' }}>consignado</th>
+                          <th style={{ ...thStyle, width: '12%' }}>viva vida + micro</th>
+                          <th style={{ ...thStyle, width: '6%' }}>dental</th>
+                          <th style={{ ...thStyle, width: '6%' }}>lime</th>
+                          <th style={{ ...thStyle, width: '7%' }}>residencial</th>
+                          <th style={{ ...thStyle, width: '5%' }}>valor sorte</th>
+                          <th style={{ ...thStyle, width: '4%' }}>pontos</th>
+                        </tr>
+                      </thead>
+
+                      <tbody>
+                        {grupo.rows.map((r) => (
+                          <tr
+                            key={`${grupo.nomeGrupo}-${r.chave}`}
+                            style={{ borderBottom: '1px solid rgba(15,15,25,.06)' }}
+                          >
+                            <td style={tdKeyStyle}>
+                              <Link
+                                href={`/dashboard/arvorecronologica/${encodeURIComponent(r.chave)}`}
+                                style={{
+                                  color: '#a30f1b',
+                                  textDecoration: 'none',
+                                  fontWeight: 900,
+                                }}
+                              >
+                                {r.chave || '—'}
+                              </Link>
+                            </td>
+                            <td style={tdNomeStyle}>{r.nome || '—'}</td>
+                            <td style={tdStyle}>{formatNum(r.trx || 0)}</td>
+                            <td style={tdStyle}>{formatNum(r.qtdContas || 0)}</td>
+                            <td style={tdStyle}>{formatNum(r.qtdConsignado || 0)}</td>
+                            <td style={tdStyle}>
+                              {formatNum((r.qtdVivaVida || 0) + (r.qtdMicrosseguro || 0))}
+                            </td>
+                            <td style={tdStyle}>{formatNum(r.qtdPlanoOdonto || 0)}</td>
+                            <td style={tdStyle}>{formatNum(r.qtdLime || 0)}</td>
+                            <td style={tdStyle}>{formatNum(r.qtdSegResidencial || 0)}</td>
+                            <td style={tdStyle}>{formatNum(r.vlrExpSorte || 0)}</td>
+                            <td style={tdStyle}>{formatPontos(calcPontos(r))}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </div>
@@ -1142,12 +950,12 @@ export default function ExpressoGeralPage() {
         </div>
       ) : (
         <div className="card-soft">
-          <p className="p-muted">Nenhum expresso encontrado com os filtros atuais.</p>
+          <p className="p-muted">Nenhum grupo encontrado com os filtros atuais.</p>
         </div>
       )}
 
       {!checkingAuth && user && (
-        <p className="p-muted" style={{ marginTop: '.25rem' }}>
+        <p className="p-muted" style={{ marginTop: '.2rem', fontSize: '.82rem' }}>
           Logado como: <b>{user.email}</b>
           {isAdmin ? ' (Admin)' : ''}
         </p>
@@ -1156,13 +964,31 @@ export default function ExpressoGeralPage() {
   )
 }
 
-function Indicador({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
-      <div className="p-muted" style={{ fontSize: 12 }}>
-        {label}
-      </div>
-      <div style={{ fontWeight: 900 }}>{value}</div>
-    </div>
-  )
+const thStyle: CSSProperties = {
+  padding: '.5rem .35rem',
+  fontSize: 11,
+  fontWeight: 900,
+  lineHeight: 1.1,
+  whiteSpace: 'normal',
+  wordBreak: 'break-word',
+}
+
+const tdStyle: CSSProperties = {
+  padding: '.46rem .35rem',
+  fontSize: 11,
+  lineHeight: 1.15,
+  textAlign: 'center',
+  whiteSpace: 'normal',
+  wordBreak: 'break-word',
+}
+
+const tdNomeStyle: CSSProperties = {
+  ...tdStyle,
+  textAlign: 'left',
+}
+
+const tdKeyStyle: CSSProperties = {
+  ...tdStyle,
+  fontWeight: 900,
+  color: '#a30f1b',
 }
