@@ -84,6 +84,7 @@ type GrupoResumo = {
   totalLime: number
   totalConsignado: number
   totalVivaVidaMicro: number
+  totalPlanoOdonto: number
   totalResidencial: number
   totalPontosExpSorte: number
 
@@ -679,6 +680,10 @@ export default function RelatorioGestaoPage() {
           (acc, r) => acc + (r.qtdVivaVida || 0) + (r.qtdMicrosseguro || 0),
           0
         ),
+        totalPlanoOdonto: ordered.reduce(
+          (acc, r) => acc + (r.qtdPlanoOdonto || 0),
+          0
+        ),
         totalResidencial: ordered.reduce(
           (acc, r) => acc + (r.qtdSegResidencial || 0),
           0
@@ -875,6 +880,7 @@ export default function RelatorioGestaoPage() {
                   <SummaryCard label="Total Lime" value={formatNum(grupo.totalLime)} />
                   <SummaryCard label="Total Consignado" value={formatNum(grupo.totalConsignado)} />
                   <SummaryCard label="Total Viva Vida + Microsseguro" value={formatNum(grupo.totalVivaVidaMicro)} />
+                  <SummaryCard label="Total Plano Odontológico" value={formatNum(grupo.totalPlanoOdonto)} />
                   <SummaryCard label="Total Residencial" value={formatNum(grupo.totalResidencial)} />
                   <SummaryCard label="Total VLR Exp. Sorte (pontos a cada 50)" value={formatNum(grupo.totalPontosExpSorte)} />
                 </div>
