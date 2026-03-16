@@ -83,6 +83,44 @@ function emptyForm(): FormState {
   }
 }
 
+function normalizeAgencyCode(v: any) {
+  const raw = toStr(v)
+  if (!raw) return ''
+
+  const digits = raw.replace(/\D/g, '')
+  if (!digits) return raw
+
+  if (digits.length <= 4) return digits.padStart(4, '0')
+  return digits
+}
+
+function isAgenciaTipoAG(tipo: string) {
+  return toStr(tipo).toUpperCase() === 'AG'
+}
+
+function buildAgencyOptionLabel(row: AgenciaRow) {
+  const code = normalizeAgencyCode(row.codAg)
+  const nome = toStr(row.nomeAg)
+  return `${code}${nome ? ` - ${nome}` : ''}`
+}
+
+function extractAgencyCodeFromSearch(value: string) {
+  const raw = toStr(value)
+  if (!raw) return ''
+
+  const digitsOnly = raw.replace(/\D/g, '')
+  if (/^\d+$/.test(raw) && digitsOnly) {
+    return normalizeAgencyCode(digitsOnly)
+  }
+
+  const match = raw.match(/^(\d{1,})\s*-/)
+  if (match?.[1]) {
+    return normalizeAgencyCode(match[1])
+  }
+
+  return ''
+}
+
 function Pill({
   children,
   style,
@@ -498,15 +536,48 @@ export default function GestaoAgenciasPage() {
     return () => unsub()
   }, [router])
 
+  const agenciaOptions = useMemo(() => {
+    return [...rows]
+      .filter((r) => isAgenciaTipoAG(r.tipo))
+      .sort((a, b) => buildAgencyOptionLabel(a).localeCompare(buildAgencyOptionLabel(b)))
+      .map((r) => buildAgencyOptionLabel(r))
+  }, [rows])
+
   const filtered = useMemo(() => {
-    const term = q.trim().toLowerCase()
+    const rawTerm = q.trim()
+    const term = rawTerm.toLowerCase()
     const list = [...rows].sort((a, b) => a.nomeAg.localeCompare(b.nomeAg))
 
     if (!term) return list
 
+    const selectedCode = extractAgencyCodeFromSearch(rawTerm)
+    const typedOnlyDigits = /^\d+$/.test(rawTerm)
+    const looksLikeAgencySelection = typedOnlyDigits || rawTerm.includes(' - ') || !!selectedCode
+
+    if (looksLikeAgencySelection) {
+      return list.filter((r) => {
+        if (!isAgenciaTipoAG(r.tipo)) return false
+
+        const normalizedCode = normalizeAgencyCode(r.codAg)
+        const label = buildAgencyOptionLabel(r).toLowerCase()
+        const nome = toStr(r.nomeAg).toLowerCase()
+
+        if (selectedCode) {
+          return normalizedCode === selectedCode
+        }
+
+        return (
+          normalizedCode.includes(normalizeAgencyCode(rawTerm)) ||
+          label.includes(term) ||
+          nome.includes(term)
+        )
+      })
+    }
+
     return list.filter((r) =>
       [
         r.codAg,
+        normalizeAgencyCode(r.codAg),
         r.nomeAg,
         r.tipo,
         r.supervisor,
@@ -517,6 +588,7 @@ export default function GestaoAgenciasPage() {
         r.regional,
         r.nomeDiretorRegional,
         r.telefoneRegional,
+        isAgenciaTipoAG(r.tipo) ? buildAgencyOptionLabel(r) : '',
       ]
         .join(' ')
         .toLowerCase()
@@ -566,10 +638,16 @@ export default function GestaoAgenciasPage() {
             <div className="label">Buscar agência</div>
             <input
               className="input"
+              list="agencias-ag-list"
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Código, nome, supervisor, gerente, regional..."
+              placeholder="Digite ou escolha: 0000 - Nome da agência"
             />
+            <datalist id="agencias-ag-list">
+              {agenciaOptions.map((option) => (
+                <option key={option} value={option} />
+              ))}
+            </datalist>
           </div>
 
           {isAdmin && (

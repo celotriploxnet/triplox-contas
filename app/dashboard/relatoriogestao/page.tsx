@@ -234,6 +234,23 @@ function formatPontos(n: number) {
   return isInt ? String(Math.round(rounded)) : rounded.toFixed(1).replace('.', ',')
 }
 
+function formatPhone(v: any) {
+  const raw = toStr(v)
+  if (!raw) return '—'
+
+  const digits = raw.replace(/\D/g, '')
+
+  if (digits.length === 11) {
+    return `(${digits.slice(0, 2)})${digits.slice(2, 7)}-${digits.slice(7)}`
+  }
+
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 2)})${digits.slice(2, 6)}-${digits.slice(6)}`
+  }
+
+  return raw
+}
+
 function getContaSemDeposito(qtdContas: number, qtdContasComDeposito: number) {
   return Math.max(0, Number(qtdContas || 0) - Number(qtdContasComDeposito || 0))
 }
@@ -338,7 +355,14 @@ function SummaryCard({
       <div className="p-muted" style={{ fontSize: 11, lineHeight: 1.15 }}>
         {label}
       </div>
-      <div style={{ marginTop: '.22rem', fontSize: '1.22rem', fontWeight: 900, lineHeight: 1.05 }}>
+      <div
+        style={{
+          marginTop: '.22rem',
+          fontSize: '1.22rem',
+          fontWeight: 900,
+          lineHeight: 1.05,
+        }}
+      >
         {value}
       </div>
     </div>
@@ -594,6 +618,18 @@ export default function RelatorioGestaoPage() {
     return ['Todos', ...Array.from(set).sort((a, b) => a.localeCompare(b))]
   }, [agenciasBase, rows])
 
+  const agenciaSelecionadaInfo = useMemo(() => {
+    if (fAgencia === 'Todos') return null
+
+    return (
+      agenciasBase.find((a) => {
+        if (toStr(a.tipo).toUpperCase() !== 'AG') return false
+        const label = a.codAg ? `${a.codAg}${a.nomeAg ? ' - ' + a.nomeAg : ''}` : ''
+        return label === fAgencia
+      }) || null
+    )
+  }, [agenciasBase, fAgencia])
+
   const filteredRows = useMemo(() => {
     const term = busca.trim().toLowerCase()
 
@@ -700,6 +736,18 @@ export default function RelatorioGestaoPage() {
     return result.sort((a, b) => a.nomeGrupo.localeCompare(b.nomeGrupo))
   }, [filteredRows, agruparPor])
 
+  const grupoAgenciaInfoMap = useMemo(() => {
+    const map = new Map<string, AgenciaRow>()
+
+    agenciasBase.forEach((ag) => {
+      if (toStr(ag.tipo).toUpperCase() !== 'AG') return
+      const label = ag.codAg ? `${ag.codAg}${ag.nomeAg ? ' - ' + ag.nomeAg : ''}` : ''
+      if (label) map.set(label, ag)
+    })
+
+    return map
+  }, [agenciasBase])
+
   function toggleGroup(nomeGrupo: string) {
     setExpandedGroups((prev) => ({
       ...prev,
@@ -719,10 +767,7 @@ export default function RelatorioGestaoPage() {
     >
       <div>
         <span className="pill">Gestão</span>
-        <h1 className="h1">Regional, Agência e Supervisão</h1>
-        <p className="p-muted" style={{ marginTop: '.2rem', fontSize: '.86rem' }}>
-          Relatório agrupado com base em <b>gestao_agencias</b>.
-        </p>
+        <h1 className="h1">Agência, Supervisor ou Regional</h1>
       </div>
 
       <div className="card" style={{ display: 'grid', gap: '.75rem', padding: '.9rem' }}>
@@ -817,6 +862,78 @@ export default function RelatorioGestaoPage() {
           </div>
         </div>
 
+        {agenciaSelecionadaInfo && (
+          <div
+            className="card-soft"
+            style={{
+              display: 'grid',
+              gap: '.55rem',
+              padding: '.85rem',
+              border: '1px solid rgba(214,31,44,.14)',
+            }}
+          >
+            <div style={{ fontWeight: 900, fontSize: '.96rem' }}>
+              Dados da agência selecionada
+            </div>
+
+            <div
+              style={{
+                display: 'grid',
+                gap: '.55rem',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              }}
+            >
+              <div>
+                <div className="p-muted" style={{ fontSize: 11 }}>
+                  Agência
+                </div>
+                <div style={{ fontWeight: 800 }}>
+                  {agenciaSelecionadaInfo.codAg}
+                  {agenciaSelecionadaInfo.nomeAg
+                    ? ` - ${agenciaSelecionadaInfo.nomeAg}`
+                    : ''}
+                </div>
+              </div>
+
+              <div>
+                <div className="p-muted" style={{ fontSize: 11 }}>
+                  Gerente
+                </div>
+                <div style={{ fontWeight: 800 }}>
+                  {agenciaSelecionadaInfo.gerenteAg || '—'}
+                </div>
+              </div>
+
+              <div>
+                <div className="p-muted" style={{ fontSize: 11 }}>
+                  Telefone Gerente
+                </div>
+                <div style={{ fontWeight: 800 }}>
+                  {formatPhone(agenciaSelecionadaInfo.telGerente1)}
+                </div>
+              </div>
+
+              <div>
+                <div className="p-muted" style={{ fontSize: 11 }}>
+                  Supervisor
+                </div>
+                <div style={{ fontWeight: 800 }}>
+                  {agenciaSelecionadaInfo.supervisor || '—'}
+                </div>
+              </div>
+
+              <div>
+                <div className="p-muted" style={{ fontSize: 11 }}>
+                  Telefone Supervisor
+                </div>
+                <div style={{ fontWeight: 800 }}>
+                  {formatPhone(agenciaSelecionadaInfo.contatoSupervisor)}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {error && (
           <div className="card-soft" style={{ borderColor: 'rgba(214,31,44,.25)' }}>
             <p className="p-muted" style={{ color: 'rgba(214,31,44,.95)', fontWeight: 800 }}>
@@ -830,9 +947,17 @@ export default function RelatorioGestaoPage() {
         <div style={{ display: 'grid', gap: '.75rem' }}>
           {grupos.map((grupo) => {
             const expanded = !!expandedGroups[grupo.nomeGrupo]
+            const grupoAgenciaInfo =
+              agruparPor === 'agencia'
+                ? grupoAgenciaInfoMap.get(grupo.nomeGrupo) || null
+                : null
 
             return (
-              <div key={grupo.nomeGrupo} className="card" style={{ display: 'grid', gap: '.65rem', padding: '.8rem' }}>
+              <div
+                key={grupo.nomeGrupo}
+                className="card"
+                style={{ display: 'grid', gap: '.65rem', padding: '.8rem' }}
+              >
                 <div
                   className="card-soft"
                   style={{
@@ -887,6 +1012,55 @@ export default function RelatorioGestaoPage() {
 
                 {expanded && (
                   <div className="card-soft" style={{ padding: '.7rem .75rem' }}>
+                    {agruparPor === 'agencia' && grupoAgenciaInfo && (
+                      <div
+                        style={{
+                          display: 'grid',
+                          gap: '.55rem',
+                          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                          marginBottom: '.7rem',
+                          paddingBottom: '.65rem',
+                          borderBottom: '1px solid rgba(15,15,25,.08)',
+                        }}
+                      >
+                        <div>
+                          <div className="p-muted" style={{ fontSize: 11 }}>
+                            Gerente
+                          </div>
+                          <div style={{ fontWeight: 800 }}>
+                            {grupoAgenciaInfo.gerenteAg || '—'}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="p-muted" style={{ fontSize: 11 }}>
+                            Telefone Gerente
+                          </div>
+                          <div style={{ fontWeight: 800 }}>
+                            {formatPhone(grupoAgenciaInfo.telGerente1)}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="p-muted" style={{ fontSize: 11 }}>
+                            Supervisor
+                          </div>
+                          <div style={{ fontWeight: 800 }}>
+                            {grupoAgenciaInfo.supervisor || '—'}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="p-muted" style={{ fontSize: 11 }}>
+                            Telefone Supervisor
+                          </div>
+                          <div style={{ fontWeight: 800 }}>
+                            {formatPhone(grupoAgenciaInfo.contatoSupervisor)}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     <div style={{ fontWeight: 900, fontSize: '.98rem', marginBottom: '.65rem' }}>
                       Expressos detalhados (maior produtor → menor)
                     </div>
