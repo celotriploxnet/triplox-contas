@@ -592,7 +592,19 @@ export default function TransacionalParaTreinadoPage() {
         >
           {filtrados.map((r) => {
             const total = totalProdutos(r)
-            const pontos = totalProdutos(r)
+
+            // ✅ CORREÇÃO AQUI
+            const qtdContasSemDeposito = Math.max(
+              (r.qtdContas || 0) - (r.qtdContasComDeposito || 0),
+              0
+            )
+
+            const pontos =
+              (r.qtdContasComDeposito || 0) * 7 +
+              qtdContasSemDeposito * 3 +
+              (r.qtdLime || 0) * 7 +
+              (r.qtdConsignado || 0) * 5.5
+
             const solicitado = !!solicitacoes[r.chave]?.solicitado
             const salvando = savingKey === r.chave
 
