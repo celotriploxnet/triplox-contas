@@ -955,7 +955,7 @@ export default function SimuladorAberturaConta() {
                         onChange={() => {
                           const novoValor = !maeNaoInformada
                           setMaeNaoInformada(novoValor)
-                          setNomeMae(novoValor ? '' : 'ODETE FERREIRA ROSA')
+                          setNomeMae(novoValor ? '' : 'AQUI JÁ VEM O NOME DA MAE')
                         }}
                         className="h-5 w-5 accent-[#35249b]"
                       />
