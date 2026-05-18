@@ -65,7 +65,7 @@ export default function SimuladorAberturaConta() {
   const [orgaoEmissor, setOrgaoEmissor] = useState('SSP')
   const [ufOrgaoEmissor, setUfOrgaoEmissor] = useState('')
   const [dataExpedicao, setDataExpedicao] = useState('')
-  const [nomeMae, setNomeMae] = useState('ODETE FERREIRA ROSA')
+  const [nomeMae, setNomeMae] = useState('Conferir nome da mãe')
   const [nomePai, setNomePai] = useState('')
   const [maeNaoInformada, setMaeNaoInformada] = useState(false)
 

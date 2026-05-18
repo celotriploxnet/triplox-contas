@@ -565,6 +565,16 @@ export default function DashboardPage() {
             {textoChamados}
           </p>
         </Link>
+
+        <Link href="/dashboard/simulador" className="card-soft">
+          <div className="h2">🧮 Simulador de Comissão</div>
+          <p className="p-muted mt-1">Simular comissão de produtos e resultados.</p>
+        </Link>
+
+        <Link href="/dashboard/simulador/abertura-conta" className="card-soft">
+          <div className="h2">🏦 Simulador Abertura de Conta</div>
+          <p className="p-muted mt-1">Treinar o fluxo de abertura de conta no simulador.</p>
+        </Link>
       </div>
 
       {isAdmin && (
