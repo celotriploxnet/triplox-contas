@@ -10,36 +10,17 @@ import {
 import { useRouter } from 'next/navigation'
 import { onAuthStateChanged, type User } from 'firebase/auth'
 import { getBytes, ref } from 'firebase/storage'
-import {
-  collection,
-  doc,
-  endAt,
-  getDoc,
-  getDocs,
-  limit,
-  orderBy,
-  query,
-  serverTimestamp,
-  setDoc,
-  startAt,
-  writeBatch,
-} from 'firebase/firestore'
 import * as XLSX from 'xlsx'
 
-import { auth, db, storage } from '@/lib/firebase'
-import {
-  calcPontosContasExpressoGeral,
-  calcPontosExpressoGeral,
-} from '@/lib/pontuacao'
+import { auth, storage } from '@/lib/firebase'
+import { calcPontosContasExpressoGeral, calcPontosExpressoGeral } from '@/lib/pontuacao'
 
 /* =========================
    CONFIG
    ========================= */
 const ADMIN_EMAIL = 'marcelo@treinexpresso.com.br'
 const CSV_PATH = 'base-lojas/banco.csv'
-const EXPRESSOS_COLLECTION = 'expressos_registro'
-const RESUMO_EXPRESSOS_DOC = 'resumo_expressos'
-const LIMIT_NO_SEARCH = 10
+const LIMIT_NO_SEARCH = 200
 
 /* =========================
    TYPES
@@ -75,20 +56,7 @@ type RowBase = {
   qtdExpSorte?: number
   referencia: string
 
-  responsavel?: string
-  telefoneResponsavel?: string
-  presenteNaUltimaBase?: boolean
-
   pontos: number
-}
-
-type ResumoExpressos = {
-  total: number
-  transacional: number
-  treinado: number
-  semCert: number
-  vencida: number
-  possivelBloqueado: number
 }
 
 type CertFilter = 'Todos' | 'NaoCertificado' | 'Certificado' | 'Vencida'
@@ -115,97 +83,6 @@ function normalizeKey(k: string) {
     .replaceAll('Â', '')
     .trim()
     .toLowerCase()
-}
-
-function formatarTelefoneBR(valor: string) {
-  const numeros = valor.replace(/\D/g, '').slice(0, 11)
-
-  if (numeros.length <= 2) return numeros
-
-  if (numeros.length <= 7) {
-    return numeros.replace(/(\d{2})(\d+)/, '($1) $2')
-  }
-
-  return numeros.replace(/(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3')
-}
-
-function safeDocId(value: string) {
-  return (
-    toStr(value)
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^\w.-]+/g, '_')
-      .replace(/^_+|_+$/g, '')
-      .slice(0, 120) || 'sem-chave'
-  )
-}
-
-function getExpressoDocId(
-  r: Pick<RowBase, 'chave' | 'agencia' | 'pacb' | 'nome'>
-) {
-  const base = r.chave || `${r.agencia}-${r.pacb}-${r.nome}`
-  return safeDocId(base)
-}
-
-function buildEmptyRowFromRegistro(data: any): RowBase {
-  const row: RowBase = {
-    chave: toStr(data.chave),
-    nome: toStr(data.nome),
-    municipio: toStr(data.municipio),
-    agencia: toStr(data.agencia),
-    pacb: toStr(data.pacb),
-    statusAnalise: toStr(data.statusAnalise),
-    dtCertificacao: toStr(data.dtCertificacao),
-    trx: parseNumber(data.trx),
-
-    qtdContas: parseNumber(data.qtdContas),
-    qtdContasComDeposito: parseNumber(data.qtdContasComDeposito),
-    qtdContasSemDeposito: parseNumber(data.qtdContasSemDeposito),
-    qtdCestaServ: parseNumber(data.qtdCestaServ),
-    qtdSuperProtegido: parseNumber(data.qtdSuperProtegido),
-    qtdMobilidade: parseNumber(data.qtdMobilidade),
-    qtdCartaoEmitido: parseNumber(data.qtdCartaoEmitido),
-    qtdChesContratado: parseNumber(data.qtdChesContratado),
-    qtdLimeAbConta: parseNumber(data.qtdLimeAbConta),
-    qtdLime: parseNumber(data.qtdLime),
-    qtdConsignado: parseNumber(data.qtdConsignado),
-    qtdCreditoParcelado: parseNumber(data.qtdCreditoParcelado),
-    qtdMicrosseguro: parseNumber(data.qtdMicrosseguro),
-    qtdVivaVida: parseNumber(data.qtdVivaVida),
-    qtdPlanoOdonto: parseNumber(data.qtdPlanoOdonto),
-    qtdSegResidencial: parseNumber(data.qtdSegResidencial),
-    qtdSegCartaoDeb: parseNumber(data.qtdSegCartaoDeb),
-    vlrExpSorte: parseNumber(data.vlrExpSorte),
-    qtdExpSorte: parseNumber(data.qtdExpSorte),
-    referencia: toStr(data.referencia),
-
-    responsavel: toStr(data.responsavel).toUpperCase(),
-    telefoneResponsavel: formatarTelefoneBR(toStr(data.telefoneResponsavel)),
-
-    presenteNaUltimaBase: data.presenteNaUltimaBase === false ? false : true,
-
-    pontos: parseNumber(data.pontos),
-  }
-
-  if (!row.pontos) {
-    row.pontos = calcPontosExpressoGeral({
-      qtdContasComDeposito: row.qtdContasComDeposito,
-      qtdContasSemDeposito: row.qtdContasSemDeposito,
-      qtdCestaServ: row.qtdCestaServ,
-      qtdSuperProtegido: row.qtdSuperProtegido,
-      qtdMobilidade: row.qtdMobilidade,
-      qtdLime: row.qtdLime,
-      qtdConsignado: row.qtdConsignado,
-      qtdCreditoParcelado: row.qtdCreditoParcelado,
-      qtdMicrosseguro: row.qtdMicrosseguro,
-      qtdVivaVida: row.qtdVivaVida,
-      qtdPlanoOdonto: row.qtdPlanoOdonto,
-      qtdSegCartaoDeb: row.qtdSegCartaoDeb,
-      vlrExpSorte: row.vlrExpSorte,
-    })
-  }
-
-  return row
 }
 
 function toUint8(bytes: any): Uint8Array {
@@ -235,18 +112,9 @@ function splitAgPacb(v: any) {
 
 function normalizeContas(qtdContasRaw: any, qtdContasComDepositoRaw: any) {
   const qtdContas = Math.max(parseNumber(qtdContasRaw), 0)
-  const qtdContasComDeposito = Math.max(
-    parseNumber(qtdContasComDepositoRaw),
-    0
-  )
-  const qtdContasComDepositoAjustada = Math.min(
-    qtdContasComDeposito,
-    qtdContas
-  )
-  const qtdContasSemDeposito = Math.max(
-    qtdContas - qtdContasComDepositoAjustada,
-    0
-  )
+  const qtdContasComDeposito = Math.max(parseNumber(qtdContasComDepositoRaw), 0)
+  const qtdContasComDepositoAjustada = Math.min(qtdContasComDeposito, qtdContas)
+  const qtdContasSemDeposito = Math.max(qtdContas - qtdContasComDepositoAjustada, 0)
 
   return {
     qtdContas,
@@ -359,26 +227,6 @@ function isCertVencida(certDate: Date | null) {
   return expiry < now
 }
 
-function calcularResumoExpressos(rows: RowBase[]): ResumoExpressos {
-  const list = rows.map((r) => {
-    const certDate = parseDateFlexible(r.dtCertificacao)
-    const semCert = !certDate
-    const vencida = isCertVencida(certDate)
-    return { r, semCert, vencida }
-  })
-
-  return {
-    total: list.length,
-    transacional: list.filter((x) => isTransacional(x.r.statusAnalise)).length,
-    treinado: list.filter((x) => isTreinado(x.r.statusAnalise)).length,
-    semCert: list.filter((x) => x.semCert).length,
-    vencida: list.filter((x) => x.vencida).length,
-    possivelBloqueado: list.filter(
-      (x) => x.r.presenteNaUltimaBase === false
-    ).length,
-  }
-}
-
 function formatPtBRDate(dt: Date | null) {
   if (!dt) return '—'
   return new Intl.DateTimeFormat('pt-BR', {
@@ -397,9 +245,7 @@ function formatPontos(n: number) {
   if (!Number.isFinite(n)) return '0'
   const rounded = Math.round(n * 10) / 10
   const isInt = Math.abs(rounded - Math.round(rounded)) < 1e-9
-  return isInt
-    ? String(Math.round(rounded))
-    : rounded.toFixed(1).replace('.', ',')
+  return isInt ? String(Math.round(rounded)) : rounded.toFixed(1).replace('.', ',')
 }
 
 /* =========================
@@ -607,12 +453,7 @@ export default function ExpressoGeralPage() {
   const [info, setInfo] = useState('')
 
   const [rows, setRows] = useState<RowBase[]>([])
-  const [resumoExpressos, setResumoExpressos] =
-    useState<ResumoExpressos | null>(null)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
-  const [contatosAbertos, setContatosAbertos] = useState<
-    Record<string, boolean>
-  >({})
 
   const [q, setQ] = useState('')
   const [fAgencia, setFAgencia] = useState('Todos')
@@ -624,154 +465,6 @@ export default function ExpressoGeralPage() {
       ...prev,
       [key]: !prev[key],
     }))
-  }
-
-  function toggleContato(key: string) {
-    setContatosAbertos((prev) => ({
-      ...prev,
-      [key]: !prev[key],
-    }))
-  }
-
-  async function carregarResumoExpressos() {
-    try {
-      const snap = await getDoc(doc(db, 'config', RESUMO_EXPRESSOS_DOC))
-
-      if (!snap.exists()) {
-        setResumoExpressos(null)
-        return
-      }
-
-      const data = snap.data() as Partial<ResumoExpressos>
-      setResumoExpressos({
-        total: Number(data.total || 0),
-        transacional: Number(data.transacional || 0),
-        treinado: Number(data.treinado || 0),
-        semCert: Number(data.semCert || 0),
-        vencida: Number(data.vencida || 0),
-        possivelBloqueado: Number(data.possivelBloqueado || 0),
-      })
-    } catch (e) {
-      console.error('Erro ao carregar resumo dos expressos:', e)
-      setResumoExpressos(null)
-    }
-  }
-
-  async function carregarPrimeirosRegistros() {
-    if (!auth.currentUser) {
-      setError('Você precisa estar logado.')
-      return
-    }
-
-    try {
-      setLoading(true)
-      setError(null)
-
-      const qRegistros = query(
-        collection(db, EXPRESSOS_COLLECTION),
-        orderBy('nome'),
-        limit(LIMIT_NO_SEARCH)
-      )
-
-      const snap = await getDocs(qRegistros)
-      const primeiros = snap.docs.map((docSnap) =>
-        buildEmptyRowFromRegistro(docSnap.data())
-      )
-
-      setRows(primeiros)
-      setInfo(`Carregando somente ${LIMIT_NO_SEARCH} registros iniciais ✅`)
-    } catch (e: any) {
-      console.error('Erro ao carregar registros iniciais:', e)
-      setError(
-        `Falha ao carregar registros (${e?.code || 'sem-code'}): ${
-          e?.message || 'erro'
-        }`
-      )
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function consultarRegistrosPorTermo(term: string) {
-    if (!auth.currentUser) {
-      setError('Você precisa estar logado.')
-      return
-    }
-
-    const termo = term.trim()
-
-    if (!termo) {
-      await carregarPrimeirosRegistros()
-      return
-    }
-
-    try {
-      setLoading(true)
-      setError(null)
-
-      const encontrados = new Map<string, RowBase>()
-
-      const direto = await getDoc(
-        doc(db, EXPRESSOS_COLLECTION, safeDocId(termo))
-      )
-
-      if (direto.exists()) {
-        const row = buildEmptyRowFromRegistro(direto.data())
-        encontrados.set(getExpressoDocId(row), row)
-      }
-
-      const porChave = query(
-        collection(db, EXPRESSOS_COLLECTION),
-        orderBy('chave'),
-        startAt(termo),
-        endAt(`${termo}\uf8ff`),
-        limit(20)
-      )
-
-      const snapChave = await getDocs(porChave)
-      snapChave.docs.forEach((docSnap) => {
-        const row = buildEmptyRowFromRegistro(docSnap.data())
-        encontrados.set(getExpressoDocId(row), row)
-      })
-
-      const termoNome = termo.toUpperCase()
-      const porNome = query(
-        collection(db, EXPRESSOS_COLLECTION),
-        orderBy('nome'),
-        startAt(termoNome),
-        endAt(`${termoNome}\uf8ff`),
-        limit(20)
-      )
-
-      const snapNome = await getDocs(porNome)
-      snapNome.docs.forEach((docSnap) => {
-        const row = buildEmptyRowFromRegistro(docSnap.data())
-        encontrados.set(getExpressoDocId(row), row)
-      })
-
-      const resultado = Array.from(encontrados.values())
-
-      setRows(resultado)
-      setInfo(
-        resultado.length
-          ? `Consulta concluída: ${resultado.length} registro(s) encontrado(s) ✅`
-          : 'Nenhum expresso encontrado nessa consulta.'
-      )
-    } catch (e: any) {
-      console.error('Erro ao consultar registros:', e)
-      setError(
-        `Falha ao consultar (${e?.code || 'sem-code'}): ${
-          e?.message || 'erro'
-        }`
-      )
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function recarregarTela() {
-    await carregarResumoExpressos()
-    await carregarPrimeirosRegistros()
   }
 
   async function loadCsv() {
@@ -790,9 +483,7 @@ export default function ExpressoGeralPage() {
 
       const wb = XLSX.read(text, { type: 'string' })
       const ws = wb.Sheets[wb.SheetNames[0]]
-      const raw: Record<string, any>[] = XLSX.utils.sheet_to_json(ws, {
-        defval: '',
-      })
+      const raw: Record<string, any>[] = XLSX.utils.sheet_to_json(ws, { defval: '' })
 
       const normalized = raw.map((obj) => {
         const out: Record<string, any> = {}
@@ -808,9 +499,7 @@ export default function ExpressoGeralPage() {
         const agpacb = r['ag_pacb'] || r['agencia/pacb'] || r['agência/pacb']
         const { agencia, pacb } = splitAgPacb(agpacb)
 
-        const statusAnalise = toStr(
-          r['status_analise'] || r['status analise'] || r['status']
-        )
+        const statusAnalise = toStr(r['status_analise'] || r['status analise'] || r['status'])
 
         const rawCertificacao =
           r['dt_certificacao'] ??
@@ -822,10 +511,7 @@ export default function ExpressoGeralPage() {
         const dtCertificacao = formatCertificacaoValue(rawCertificacao)
 
         const trx = parseNumber(
-          r['qtd_trxcontabil'] ||
-            r['qtd_trx_contabil'] ||
-            r['qtd trxcontabil'] ||
-            r['qtd_trx']
+          r['qtd_trxcontabil'] || r['qtd_trx_contabil'] || r['qtd trxcontabil'] || r['qtd_trx']
         )
 
         const {
@@ -837,9 +523,7 @@ export default function ExpressoGeralPage() {
           r['qtd_contas_com_deposito'] || r['qtd contas com deposito']
         )
 
-        const qtdCestaServ = parseNumber(
-          r['qtd_cesta_serv'] || r['qtd cesta serv']
-        )
+        const qtdCestaServ = parseNumber(r['qtd_cesta_serv'] || r['qtd cesta serv'])
 
         const qtdSuperProtegido = parseNumber(
           r['qtd_super_protegido'] ||
@@ -849,22 +533,14 @@ export default function ExpressoGeralPage() {
             r['qtdsuperprotegido']
         )
 
-        const qtdMobilidade = parseNumber(
-          r['qtd_mobilidade'] || r['qtd mobilidade']
-        )
-        const qtdCartaoEmitido = parseNumber(
-          r['qtd_cartao_emitido'] || r['qtd cartao emitido']
-        )
+        const qtdMobilidade = parseNumber(r['qtd_mobilidade'] || r['qtd mobilidade'])
+        const qtdCartaoEmitido = parseNumber(r['qtd_cartao_emitido'] || r['qtd cartao emitido'])
         const qtdChesContratado = parseNumber(
           r['qtd_chesp_contratado'] || r['qtd chesp contratado']
         )
-        const qtdLimeAbConta = parseNumber(
-          r['qtd_lime_ab_conta'] || r['qtd lime ab conta']
-        )
+        const qtdLimeAbConta = parseNumber(r['qtd_lime_ab_conta'] || r['qtd lime ab conta'])
         const qtdLime = parseNumber(r['qtd_lime'] || r['qtd lime'])
-        const qtdConsignado = parseNumber(
-          r['qtd_consignado'] || r['qtd consignado']
-        )
+        const qtdConsignado = parseNumber(r['qtd_consignado'] || r['qtd consignado'])
 
         const qtdCreditoParcelado = parseNumber(
           r['qtd_credito_parcel_dtlhes'] ||
@@ -875,9 +551,7 @@ export default function ExpressoGeralPage() {
             r['qtd_credito_parcel_detalhes']
         )
 
-        const qtdMicrosseguro = parseNumber(
-          r['qtd_microsseguro'] || r['qtd microsseguro']
-        )
+        const qtdMicrosseguro = parseNumber(r['qtd_microsseguro'] || r['qtd microsseguro'])
         const qtdVivaVida = parseNumber(
           r['qtd_micro_vivavida'] || r['qtd micro vivavida'] || r['viva vida']
         )
@@ -904,9 +578,7 @@ export default function ExpressoGeralPage() {
             0
         )
 
-        const qtdExpSorte = parseNumber(
-          r['qtd_exp_sorte'] || r['qtd exp sorte']
-        )
+        const qtdExpSorte = parseNumber(r['qtd_exp_sorte'] || r['qtd exp sorte'])
 
         const referencia = toStr(
           r['referencia'] ||
@@ -964,104 +636,11 @@ export default function ExpressoGeralPage() {
         }
       })
 
-      let finalRows = mapped.map((r) => ({
-        ...r,
-        responsavel: '',
-        telefoneResponsavel: '',
-        presenteNaUltimaBase: true,
-      }))
-
-      try {
-        const registrosRef = collection(db, EXPRESSOS_COLLECTION)
-        const snap = await getDocs(registrosRef)
-        const salvos = new Map<string, any>()
-
-        snap.forEach((docSnap) => {
-          salvos.set(docSnap.id, docSnap.data())
-        })
-
-        const idsDaBaseAtual = new Set<string>()
-        const batch = writeBatch(db)
-
-        finalRows = mapped.map((r) => {
-          const id = getExpressoDocId(r)
-          idsDaBaseAtual.add(id)
-
-          const salvo = salvos.get(id) || {}
-
-          const rowComRegistro: RowBase = {
-            ...r,
-            responsavel: toStr(salvo.responsavel).toUpperCase(),
-            telefoneResponsavel: formatarTelefoneBR(
-              toStr(salvo.telefoneResponsavel)
-            ),
-            presenteNaUltimaBase: true,
-          }
-
-          batch.set(
-            doc(db, EXPRESSOS_COLLECTION, id),
-            {
-              ...r,
-              responsavel: rowComRegistro.responsavel || '',
-              telefoneResponsavel: rowComRegistro.telefoneResponsavel || '',
-              presenteNaUltimaBase: true,
-              atualizadoNaUltimaCargaEm: serverTimestamp(),
-            },
-            { merge: true }
-          )
-
-          return rowComRegistro
-        })
-
-        salvos.forEach((data, id) => {
-          if (idsDaBaseAtual.has(id)) return
-
-          const rowAntigo = buildEmptyRowFromRegistro(data)
-          rowAntigo.presenteNaUltimaBase = false
-          finalRows.push(rowAntigo)
-
-          batch.set(
-            doc(db, EXPRESSOS_COLLECTION, id),
-            {
-              presenteNaUltimaBase: false,
-              ausenteNaUltimaCargaEm: serverTimestamp(),
-            },
-            { merge: true }
-          )
-        })
-
-        const resumoAtualizado = calcularResumoExpressos(finalRows)
-
-        batch.set(
-          doc(db, 'config', RESUMO_EXPRESSOS_DOC),
-          {
-            ...resumoAtualizado,
-            atualizadoEm: serverTimestamp(),
-          },
-          { merge: true }
-        )
-
-        await batch.commit()
-
-        setResumoExpressos(resumoAtualizado)
-        setRows(finalRows.slice(0, LIMIT_NO_SEARCH))
-        setInfo(
-          `Base carregada ✅ ${mapped.length} expressos na última base. ${
-            finalRows.length - mapped.length
-          } preservados do histórico.`
-        )
-      } catch (firestoreError) {
-        console.error('Erro ao sincronizar registro de expressos:', firestoreError)
-        setRows(finalRows)
-        setInfo('Base carregada ✅ mas o registro permanente não sincronizou agora.')
-      }
+      setRows(mapped)
+      setInfo('Base carregada ✅')
     } catch (e: any) {
       console.error('loadCsv error:', e)
-      setError(
-        `Falha ao carregar CSV (${e?.code || 'sem-code'}): ${
-          e?.message || 'erro'
-        }`
-      )
+      setError(`Falha ao carregar CSV (${e?.code || 'sem-code'}): ${e?.message || 'erro'}`)
     } finally {
       setLoading(false)
     }
@@ -1079,22 +658,11 @@ export default function ExpressoGeralPage() {
       }
 
       setIsAdmin((u.email || '').toLowerCase() === ADMIN_EMAIL.toLowerCase())
-      carregarResumoExpressos()
-      carregarPrimeirosRegistros()
+      loadCsv()
     })
 
     return () => unsub()
   }, [router])
-
-  useEffect(() => {
-    if (!user) return
-
-    const timer = window.setTimeout(() => {
-      consultarRegistrosPorTermo(q)
-    }, 450)
-
-    return () => window.clearTimeout(timer)
-  }, [q, user])
 
   const computed = useMemo(() => {
     const list = rows.map((r) => {
@@ -1105,20 +673,13 @@ export default function ExpressoGeralPage() {
     })
 
     const total = list.length
-    const transacional = list.filter((x) =>
-      isTransacional(x.r.statusAnalise)
-    ).length
+    const transacional = list.filter((x) => isTransacional(x.r.statusAnalise)).length
     const treinado = list.filter((x) => isTreinado(x.r.statusAnalise)).length
     const semCert = list.filter((x) => x.semCert).length
     const vencida = list.filter((x) => x.vencida).length
-    const possivelBloqueado = list.filter(
-      (x) => x.r.presenteNaUltimaBase === false
-    ).length
 
-    return { list, total, transacional, treinado, semCert, vencida, possivelBloqueado }
+    return { list, total, transacional, treinado, semCert, vencida }
   }, [rows])
-
-  const stats = resumoExpressos || computed
 
   const agencias = useMemo(() => {
     const set = new Set<string>()
@@ -1227,58 +788,6 @@ export default function ExpressoGeralPage() {
     router.push(`/dashboard/reportar?${params.toString()}`)
   }
 
-  function updateContatoLocal(
-    r: RowBase,
-    field: 'responsavel' | 'telefoneResponsavel',
-    value: string
-  ) {
-    const id = getExpressoDocId(r)
-
-    const valorFormatado =
-      field === 'telefoneResponsavel'
-        ? formatarTelefoneBR(value)
-        : value.toUpperCase()
-
-    setRows((prev) =>
-      prev.map((item) =>
-        getExpressoDocId(item) === id
-          ? {
-              ...item,
-              [field]: valorFormatado,
-            }
-          : item
-      )
-    )
-  }
-
-  async function salvarContatoExpresso(r: RowBase) {
-    try {
-      if (!auth.currentUser) {
-        setError('Você precisa estar logado para salvar o contato.')
-        return
-      }
-
-      const id = getExpressoDocId(r)
-
-      await setDoc(
-        doc(db, EXPRESSOS_COLLECTION, id),
-        {
-          responsavel: (r.responsavel || '').toUpperCase(),
-          telefoneResponsavel: formatarTelefoneBR(r.telefoneResponsavel || ''),
-          contatoAtualizadoEm: serverTimestamp(),
-        },
-        { merge: true }
-      )
-
-      setInfo('Contato salvo com sucesso ✅')
-      alert('Contato salvo com sucesso!')
-      setError(null)
-    } catch (e) {
-      console.error(e)
-      setError('Não consegui salvar o contato agora.')
-    }
-  }
-
   function irParaArvoreCronologica(r: RowBase) {
     router.push(`/dashboard/arvorecronologica/${encodeURIComponent(r.chave)}`)
   }
@@ -1296,11 +805,10 @@ export default function ExpressoGeralPage() {
         className="card"
         style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}
       >
-        <Pill>Total: {stats.total}</Pill>
-        <Pill>Transacional: {stats.transacional}</Pill>
-        <Pill>Treinado: {stats.treinado}</Pill>
-        <Pill>Sem certificação: {stats.semCert}</Pill>
-
+        <Pill>Total: {computed.total}</Pill>
+        <Pill>Transacional: {computed.transacional}</Pill>
+        <Pill>Treinado: {computed.treinado}</Pill>
+        <Pill>Sem certificação: {computed.semCert}</Pill>
         <Pill
           style={{
             background: 'rgba(214,31,44,.10)',
@@ -1308,32 +816,16 @@ export default function ExpressoGeralPage() {
             color: 'rgba(214,31,44,.95)',
           }}
         >
-          Certificação vencida: {stats.vencida}
-        </Pill>
-
-        <Pill
-          style={{
-            background: 'rgba(245,158,11,.14)',
-            border: '1px solid rgba(245,158,11,.28)',
-            color: 'rgba(146,64,14,.98)',
-          }}
-        >
-          Possível bloqueado: {stats.possivelBloqueado}
+          Certificação vencida: {computed.vencida}
         </Pill>
 
         <button
           className="btn-primary"
-          onClick={isAdmin ? loadCsv : recarregarTela}
+          onClick={loadCsv}
           disabled={loading || checkingAuth}
           style={{ marginLeft: 'auto' }}
         >
-          {checkingAuth
-            ? 'Verificando login...'
-            : loading
-              ? 'Carregando...'
-              : isAdmin
-                ? 'Sincronizar CSV'
-                : 'Atualizar lista'}
+          {checkingAuth ? 'Verificando login...' : loading ? 'Carregando...' : 'Recarregar base'}
         </button>
       </div>
 
@@ -1348,17 +840,13 @@ export default function ExpressoGeralPage() {
               placeholder="Nome ou chave..."
             />
             <div className="p-muted" style={{ marginTop: '.35rem', fontSize: 12 }}>
-              A página carrega inicialmente só <b>{LIMIT_NO_SEARCH}</b> registros para economizar tráfego.
+              Sem busca, mostra até <b>{LIMIT_NO_SEARCH}</b> resultados.
             </div>
           </label>
 
           <label>
             <div className="label">Agência</div>
-            <select
-              className="input"
-              value={fAgencia}
-              onChange={(e) => setFAgencia(e.target.value)}
-            >
+            <select className="input" value={fAgencia} onChange={(e) => setFAgencia(e.target.value)}>
               {agencias.map((a) => (
                 <option key={a} value={a}>
                   {a}
@@ -1383,11 +871,7 @@ export default function ExpressoGeralPage() {
 
           <label>
             <div className="label">Transações (qtd_TrxContabil)</div>
-            <select
-              className="input"
-              value={fTrx}
-              onChange={(e) => setFTrx(e.target.value as TrxFilter)}
-            >
+            <select className="input" value={fTrx} onChange={(e) => setFTrx(e.target.value as TrxFilter)}>
               <option value="Todos">Todos</option>
               <option value="0">0</option>
               <option value="1-199">1–199</option>
@@ -1436,7 +920,6 @@ export default function ExpressoGeralPage() {
             const pontosOk = pontos >= 10
             const expandKey = `${r.chave}-${r.agencia}-${r.pacb}`
             const aberto = !!expanded[expandKey]
-            const contatoAberto = !!contatosAbertos[expandKey]
 
             const pontosPillStyle: CSSProperties = pontosOk
               ? {
@@ -1506,19 +989,6 @@ export default function ExpressoGeralPage() {
                     <Pill style={pontosPillStyle} title="Ativo se Pontos >= 10">
                       Pontos: {formatPontos(pontos)}
                     </Pill>
-
-                    {r.presenteNaUltimaBase === false && (
-                      <Pill
-                        style={{
-                          background: 'rgba(245,158,11,.14)',
-                          border: '1px solid rgba(245,158,11,.28)',
-                          color: 'rgba(146,64,14,.98)',
-                        }}
-                        title="Esse expresso estava salvo, mas não veio na última base carregada."
-                      >
-                        EXPRESSO PODE TER SIDO BLOQUEADO
-                      </Pill>
-                    )}
                   </div>
 
                   <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
@@ -1528,16 +998,8 @@ export default function ExpressoGeralPage() {
                     >
                       🌳 Árvore
                     </LightButton>
-
                     <LightButton onClick={() => irParaReportar(r)} title="Reportar">
                       📕 Reportar
-                    </LightButton>
-
-                    <LightButton
-                      onClick={() => toggleContato(expandKey)}
-                      title={contatoAberto ? 'Ocultar contato' : 'Ver ou editar contato'}
-                    >
-                      {contatoAberto ? '☎️ Ocultar contato' : '☎️ Contato'}
                     </LightButton>
 
                     <LightButton
@@ -1610,72 +1072,6 @@ export default function ExpressoGeralPage() {
                   </div>
                 </div>
 
-                {contatoAberto && (
-                  <div
-                    className="card-soft"
-                    style={{ padding: '.9rem .95rem', display: 'grid', gap: '.75rem' }}
-                  >
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: '.75rem',
-                        flexWrap: 'wrap',
-                      }}
-                    >
-                      <div>
-                        <div style={{ fontWeight: 900 }}>Contato do Expresso</div>
-                        <div className="p-muted" style={{ fontSize: 12, marginTop: '.2rem' }}>
-                          Consulte ou atualize o responsável e telefone deste ponto.
-                        </div>
-                      </div>
-
-                      <LightButton onClick={() => salvarContatoExpresso(r)} title="Salvar contato">
-                        💾 Salvar contato
-                      </LightButton>
-                    </div>
-
-                    <div
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-                        gap: '.75rem',
-                      }}
-                    >
-                      <label>
-                        <div className="label">Pessoa de contato</div>
-                        <input
-                          className="input"
-                          value={r.responsavel || ''}
-                          onChange={(e) =>
-                            updateContatoLocal(r, 'responsavel', e.target.value)
-                          }
-                          placeholder="Digite o responsável"
-                        />
-                      </label>
-
-                      <label>
-                        <div className="label">Telefone</div>
-                        <input
-                          className="input"
-                          value={r.telefoneResponsavel || ''}
-                          onChange={(e) =>
-                            updateContatoLocal(
-                              r,
-                              'telefoneResponsavel',
-                              e.target.value
-                            )
-                          }
-                          placeholder="(00) 00000-0000"
-                          maxLength={15}
-                          inputMode="numeric"
-                        />
-                      </label>
-                    </div>
-                  </div>
-                )}
-
                 {sinais.length > 0 && (
                   <div className="card-soft" style={{ padding: '.9rem .95rem' }}>
                     <div className="p-muted" style={{ fontSize: 12, marginBottom: '.45rem' }}>
@@ -1697,10 +1093,7 @@ export default function ExpressoGeralPage() {
                 )}
 
                 {aberto && (
-                  <div
-                    className="card-soft"
-                    style={{ padding: '.9rem .95rem', display: 'grid', gap: '.55rem' }}
-                  >
+                  <div className="card-soft" style={{ padding: '.9rem .95rem', display: 'grid', gap: '.55rem' }}>
                     <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                       <span className="pill">Indicadores</span>
                     </div>
