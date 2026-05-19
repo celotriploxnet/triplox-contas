@@ -1348,7 +1348,7 @@ export default function ExpressoGeralPage() {
               placeholder="Nome ou chave..."
             />
             <div className="p-muted" style={{ marginTop: '.35rem', fontSize: 12 }}>
-              A página carrega inicialmente só <b>{LIMIT_NO_SEARCH}</b> registros para economizar tráfego.
+              A página carrega inicialmente só <b>{LIMIT_NO_SEARCH}</b> registros
             </div>
           </label>
 
