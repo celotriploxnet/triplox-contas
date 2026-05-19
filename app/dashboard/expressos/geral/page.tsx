@@ -32,18 +32,12 @@ import {
   calcPontosExpressoGeral,
 } from '@/lib/pontuacao'
 
-/* =========================
-   CONFIG
-   ========================= */
 const ADMIN_EMAIL = 'marcelo@treinexpresso.com.br'
 const CSV_PATH = 'base-lojas/banco.csv'
 const EXPRESSOS_COLLECTION = 'expressos_registro'
 const RESUMO_EXPRESSOS_DOC = 'resumo_expressos'
 const LIMIT_NO_SEARCH = 10
 
-/* =========================
-   TYPES
-   ========================= */
 type RowBase = {
   chave: string
   nome: string
@@ -94,9 +88,6 @@ type ResumoExpressos = {
 type CertFilter = 'Todos' | 'NaoCertificado' | 'Certificado' | 'Vencida'
 type TrxFilter = 'Todos' | '0' | '1-199' | '200+'
 
-/* =========================
-   HELPERS
-   ========================= */
 function toStr(v: any) {
   return v === null || v === undefined ? '' : String(v).trim()
 }
@@ -402,9 +393,6 @@ function formatPontos(n: number) {
     : rounded.toFixed(1).replace('.', ',')
 }
 
-/* =========================
-   SEMÁFORO / AÇÃO
-   ========================= */
 function gerarSinalizacoes(r: RowBase, semCert: boolean, vencida: boolean) {
   const sinais: { texto: string; estilo?: CSSProperties }[] = []
 
@@ -474,9 +462,6 @@ function acaoRecomendada(r: RowBase, semCert: boolean, vencida: boolean) {
   return 'Acompanhar expresso'
 }
 
-/* =========================
-   UI
-   ========================= */
 function Pill({
   children,
   style,
@@ -592,9 +577,6 @@ function buildWhatsAppMessage(args: {
   ].join('\n')
 }
 
-/* =========================
-   PAGE
-   ========================= */
 export default function ExpressoGeralPage() {
   const router = useRouter()
 
@@ -964,12 +946,14 @@ export default function ExpressoGeralPage() {
         }
       })
 
-      let finalRows = mapped.map((r) => ({
-        ...r,
-        responsavel: '',
-        telefoneResponsavel: '',
-        presenteNaUltimaBase: true,
-      }))
+      let finalRows: RowBase[] = mapped.map(
+        (r): RowBase => ({
+          ...r,
+          responsavel: '',
+          telefoneResponsavel: '',
+          presenteNaUltimaBase: true,
+        })
+      )
 
       try {
         const registrosRef = collection(db, EXPRESSOS_COLLECTION)
@@ -983,7 +967,7 @@ export default function ExpressoGeralPage() {
         const idsDaBaseAtual = new Set<string>()
         const batch = writeBatch(db)
 
-        finalRows = mapped.map((r) => {
+        finalRows = mapped.map((r): RowBase => {
           const id = getExpressoDocId(r)
           idsDaBaseAtual.add(id)
 
@@ -1348,7 +1332,7 @@ export default function ExpressoGeralPage() {
               placeholder="Nome ou chave..."
             />
             <div className="p-muted" style={{ marginTop: '.35rem', fontSize: 12 }}>
-              A página carrega inicialmente só <b>{LIMIT_NO_SEARCH}</b> registros para economizar tráfego.
+              A página carrega inicialmente só <b>{LIMIT_NO_SEARCH}</b> registros
             </div>
           </label>
 
