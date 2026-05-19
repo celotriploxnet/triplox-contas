@@ -138,6 +138,12 @@ function getExpressoDocId(
   return safeDocId(base)
 }
 
+function parseNumber(v: any) {
+  const s = toStr(v).replace(/\./g, '').replace(',', '.')
+  const n = Number(s)
+  return Number.isFinite(n) ? n : 0
+}
+
 function buildEmptyRowFromRegistro(data: any): RowBase {
   const row: RowBase = {
     chave: toStr(data.chave),
@@ -209,12 +215,6 @@ function parseCSVText(u8: Uint8Array) {
   return new TextDecoder('utf-8').decode(u8)
 }
 
-function parseNumber(v: any) {
-  const s = toStr(v).replace(/\./g, '').replace(',', '.')
-  const n = Number(s)
-  return Number.isFinite(n) ? n : 0
-}
-
 function splitAgPacb(v: any) {
   const raw = toStr(v)
   if (!raw) return { agencia: '', pacb: '' }
@@ -226,10 +226,7 @@ function splitAgPacb(v: any) {
 
 function normalizeContas(qtdContasRaw: any, qtdContasComDepositoRaw: any) {
   const qtdContas = Math.max(parseNumber(qtdContasRaw), 0)
-  const qtdContasComDeposito = Math.max(
-    parseNumber(qtdContasComDepositoRaw),
-    0
-  )
+  const qtdContasComDeposito = Math.max(parseNumber(qtdContasComDepositoRaw), 0)
   const qtdContasComDepositoAjustada = Math.min(
     qtdContasComDeposito,
     qtdContas
@@ -364,9 +361,8 @@ function calcularResumoExpressos(rows: RowBase[]): ResumoExpressos {
     treinado: list.filter((x) => isTreinado(x.r.statusAnalise)).length,
     semCert: list.filter((x) => x.semCert).length,
     vencida: list.filter((x) => x.vencida).length,
-    possivelBloqueado: list.filter(
-      (x) => x.r.presenteNaUltimaBase === false
-    ).length,
+    possivelBloqueado: list.filter((x) => x.r.presenteNaUltimaBase === false)
+      .length,
   }
 }
 
@@ -523,7 +519,6 @@ function buildWhatsAppMessage(args: {
   trx: number
   certLabel: string
   certDatePt: string
-
   qtdContas: number
   qtdContasComDeposito: number
   qtdContasSemDeposito: number
@@ -589,6 +584,7 @@ export default function ExpressoGeralPage() {
   const [info, setInfo] = useState('')
 
   const [rows, setRows] = useState<RowBase[]>([])
+  const [allRowsLoaded, setAllRowsLoaded] = useState(false)
   const [resumoExpressos, setResumoExpressos] =
     useState<ResumoExpressos | null>(null)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
@@ -661,11 +657,44 @@ export default function ExpressoGeralPage() {
       )
 
       setRows(primeiros)
+      setAllRowsLoaded(false)
       setInfo(`Carregando somente ${LIMIT_NO_SEARCH} registros iniciais ✅`)
     } catch (e: any) {
       console.error('Erro ao carregar registros iniciais:', e)
       setError(
         `Falha ao carregar registros (${e?.code || 'sem-code'}): ${
+          e?.message || 'erro'
+        }`
+      )
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function carregarTodosParaFiltro() {
+    if (!auth.currentUser) {
+      setError('Você precisa estar logado.')
+      return
+    }
+
+    if (allRowsLoaded) return
+
+    try {
+      setLoading(true)
+      setError(null)
+
+      const snap = await getDocs(collection(db, EXPRESSOS_COLLECTION))
+      const todos = snap.docs.map((docSnap) =>
+        buildEmptyRowFromRegistro(docSnap.data())
+      )
+
+      setRows(todos)
+      setAllRowsLoaded(true)
+      setInfo(`Filtro carregado com ${todos.length} registros ✅`)
+    } catch (e: any) {
+      console.error('Erro ao carregar todos registros:', e)
+      setError(
+        `Falha ao carregar filtro (${e?.code || 'sem-code'}): ${
           e?.message || 'erro'
         }`
       )
@@ -734,6 +763,7 @@ export default function ExpressoGeralPage() {
       const resultado = Array.from(encontrados.values())
 
       setRows(resultado)
+      setAllRowsLoaded(false)
       setInfo(
         resultado.length
           ? `Consulta concluída: ${resultado.length} registro(s) encontrado(s) ✅`
@@ -946,14 +976,12 @@ export default function ExpressoGeralPage() {
         }
       })
 
-      let finalRows: RowBase[] = mapped.map(
-        (r): RowBase => ({
-          ...r,
-          responsavel: '',
-          telefoneResponsavel: '',
-          presenteNaUltimaBase: true,
-        })
-      )
+      let finalRows: RowBase[] = mapped.map((r): RowBase => ({
+        ...r,
+        responsavel: '',
+        telefoneResponsavel: '',
+        presenteNaUltimaBase: true,
+      }))
 
       try {
         const registrosRef = collection(db, EXPRESSOS_COLLECTION)
@@ -1029,6 +1057,7 @@ export default function ExpressoGeralPage() {
 
         setResumoExpressos(resumoAtualizado)
         setRows(finalRows.slice(0, LIMIT_NO_SEARCH))
+        setAllRowsLoaded(false)
         setInfo(
           `Base carregada ✅ ${mapped.length} expressos na última base. ${
             finalRows.length - mapped.length
@@ -1037,6 +1066,7 @@ export default function ExpressoGeralPage() {
       } catch (firestoreError) {
         console.error('Erro ao sincronizar registro de expressos:', firestoreError)
         setRows(finalRows)
+        setAllRowsLoaded(true)
         setInfo('Base carregada ✅ mas o registro permanente não sincronizou agora.')
       }
     } catch (e: any) {
@@ -1073,12 +1103,20 @@ export default function ExpressoGeralPage() {
   useEffect(() => {
     if (!user) return
 
+    const temFiltro =
+      fAgencia !== 'Todos' || fCert !== 'Todos' || fTrx !== 'Todos'
+
+    if (temFiltro) {
+      carregarTodosParaFiltro()
+      return
+    }
+
     const timer = window.setTimeout(() => {
       consultarRegistrosPorTermo(q)
     }, 450)
 
     return () => window.clearTimeout(timer)
-  }, [q, user])
+  }, [q, user, fAgencia, fCert, fTrx])
 
   const computed = useMemo(() => {
     const list = rows.map((r) => {
@@ -1099,7 +1137,15 @@ export default function ExpressoGeralPage() {
       (x) => x.r.presenteNaUltimaBase === false
     ).length
 
-    return { list, total, transacional, treinado, semCert, vencida, possivelBloqueado }
+    return {
+      list,
+      total,
+      transacional,
+      treinado,
+      semCert,
+      vencida,
+      possivelBloqueado,
+    }
   }, [rows])
 
   const stats = resumoExpressos || computed
@@ -1134,17 +1180,24 @@ export default function ExpressoGeralPage() {
 
     if (term) {
       list = list.filter(({ r }) => {
-        const hay = [r.nome, r.chave, r.municipio, r.agencia, r.pacb, r.statusAnalise]
+        const hay = [
+          r.nome,
+          r.chave,
+          r.municipio,
+          r.agencia,
+          r.pacb,
+          r.statusAnalise,
+        ]
           .join(' ')
           .toLowerCase()
         return hay.includes(term)
       })
-    } else {
+    } else if (!allRowsLoaded) {
       list = list.slice(0, LIMIT_NO_SEARCH)
     }
 
     return list
-  }, [computed.list, q, fAgencia, fCert, fTrx])
+  }, [computed.list, q, fAgencia, fCert, fTrx, allRowsLoaded])
 
   async function copyWhatsApp(
     r: RowBase,
@@ -1278,7 +1331,12 @@ export default function ExpressoGeralPage() {
 
       <div
         className="card"
-        style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}
+        style={{
+          display: 'flex',
+          gap: '1rem',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+        }}
       >
         <Pill>Total: {stats.total}</Pill>
         <Pill>Transacional: {stats.transacional}</Pill>
@@ -1332,7 +1390,7 @@ export default function ExpressoGeralPage() {
               placeholder="Nome ou chave..."
             />
             <div className="p-muted" style={{ marginTop: '.35rem', fontSize: 12 }}>
-              A página carrega inicialmente só <b>{LIMIT_NO_SEARCH}</b> registros
+              A página carrega inicialmente só <b>{LIMIT_NO_SEARCH}</b> registros.
             </div>
           </label>
 
@@ -1388,7 +1446,10 @@ export default function ExpressoGeralPage() {
 
         {error && (
           <div className="card-soft" style={{ borderColor: 'rgba(214,31,44,.25)' }}>
-            <p className="p-muted" style={{ color: 'rgba(214,31,44,.95)', fontWeight: 800 }}>
+            <p
+              className="p-muted"
+              style={{ color: 'rgba(214,31,44,.95)', fontWeight: 800 }}
+            >
               {error}
             </p>
           </div>
@@ -1397,7 +1458,12 @@ export default function ExpressoGeralPage() {
 
       <div
         className="card"
-        style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}
+        style={{
+          display: 'flex',
+          gap: '1rem',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+        }}
       >
         <Pill>Mostrando: {filtered.length}</Pill>
         {q.trim() && (
@@ -1460,7 +1526,14 @@ export default function ExpressoGeralPage() {
                     padding: '.8rem .95rem',
                   }}
                 >
-                  <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      gap: '.5rem',
+                      flexWrap: 'wrap',
+                      alignItems: 'center',
+                    }}
+                  >
                     <Pill
                       style={
                         certLabel === 'Certificação vencida'
@@ -1544,7 +1617,13 @@ export default function ExpressoGeralPage() {
                   <div className="p-muted" style={{ fontSize: 12 }}>
                     Nome do Expresso
                   </div>
-                  <div style={{ fontWeight: 900, fontSize: '1.08rem', marginTop: '.15rem' }}>
+                  <div
+                    style={{
+                      fontWeight: 900,
+                      fontSize: '1.08rem',
+                      marginTop: '.15rem',
+                    }}
+                  >
                     {r.nome || '—'}
                   </div>
                 </div>
@@ -1597,7 +1676,11 @@ export default function ExpressoGeralPage() {
                 {contatoAberto && (
                   <div
                     className="card-soft"
-                    style={{ padding: '.9rem .95rem', display: 'grid', gap: '.75rem' }}
+                    style={{
+                      padding: '.9rem .95rem',
+                      display: 'grid',
+                      gap: '.75rem',
+                    }}
                   >
                     <div
                       style={{
@@ -1610,12 +1693,18 @@ export default function ExpressoGeralPage() {
                     >
                       <div>
                         <div style={{ fontWeight: 900 }}>Contato do Expresso</div>
-                        <div className="p-muted" style={{ fontSize: 12, marginTop: '.2rem' }}>
+                        <div
+                          className="p-muted"
+                          style={{ fontSize: 12, marginTop: '.2rem' }}
+                        >
                           Consulte ou atualize o responsável e telefone deste ponto.
                         </div>
                       </div>
 
-                      <LightButton onClick={() => salvarContatoExpresso(r)} title="Salvar contato">
+                      <LightButton
+                        onClick={() => salvarContatoExpresso(r)}
+                        title="Salvar contato"
+                      >
                         💾 Salvar contato
                       </LightButton>
                     </div>
@@ -1662,7 +1751,10 @@ export default function ExpressoGeralPage() {
 
                 {sinais.length > 0 && (
                   <div className="card-soft" style={{ padding: '.9rem .95rem' }}>
-                    <div className="p-muted" style={{ fontSize: 12, marginBottom: '.45rem' }}>
+                    <div
+                      className="p-muted"
+                      style={{ fontSize: 12, marginBottom: '.45rem' }}
+                    >
                       Sinalizações
                     </div>
 
@@ -1683,9 +1775,20 @@ export default function ExpressoGeralPage() {
                 {aberto && (
                   <div
                     className="card-soft"
-                    style={{ padding: '.9rem .95rem', display: 'grid', gap: '.55rem' }}
+                    style={{
+                      padding: '.9rem .95rem',
+                      display: 'grid',
+                      gap: '.55rem',
+                    }}
                   >
-                    <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        gap: '.5rem',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                      }}
+                    >
                       <span className="pill">Indicadores</span>
                     </div>
 
