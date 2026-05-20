@@ -519,23 +519,6 @@ function buildWhatsAppMessage(args: {
   trx: number
   certLabel: string
   certDatePt: string
-  qtdContas: number
-  qtdContasComDeposito: number
-  qtdContasSemDeposito: number
-  qtdCestaServ: number
-  qtdMobilidade: number
-  qtdCartaoEmitido: number
-  qtdChesContratado: number
-  qtdLimeAbConta: number
-  qtdLime: number
-  qtdConsignado: number
-  qtdCreditoParcelado: number
-  qtdMicrosseguro: number
-  qtdVivaVida: number
-  qtdPlanoOdonto: number
-  qtdSegResidencial: number
-  qtdExpSorte: number
-  referencia: string
 }) {
   const a = args
   return [
@@ -550,25 +533,6 @@ function buildWhatsAppMessage(args: {
     `💳 *TRX Contábil:* ${String(a.trx ?? 0)}`,
     `🪪 *Certificação:* ${a.certLabel}`,
     `📅 *dt_certificacao:* ${a.certDatePt || '—'}`,
-    '',
-    '📌 *Indicadores (base)*',
-    `• Contas abertas (total): ${formatNum(a.qtdContas)}`,
-    `• Contas com Depósito: ${formatNum(a.qtdContasComDeposito)}`,
-    `• Contas sem Depósito: ${formatNum(a.qtdContasSemDeposito)}`,
-    `• Cestas de Serviços: ${formatNum(a.qtdCestaServ)}`,
-    `• Mobilidade: ${formatNum(a.qtdMobilidade)}`,
-    `• Cartão Emitido: ${formatNum(a.qtdCartaoEmitido)}`,
-    `• Ches Contratado: ${formatNum(a.qtdChesContratado)}`,
-    `• Lime na conta: ${formatNum(a.qtdLimeAbConta)}`,
-    `• Lime Contratado: ${formatNum(a.qtdLime)}`,
-    `• Consignado: ${formatNum(a.qtdConsignado)}`,
-    `• Crédito Parcelado: ${formatNum(a.qtdCreditoParcelado)}`,
-    `• Microsseguros: ${formatNum(a.qtdMicrosseguro)}`,
-    `• Viva Vida: ${formatNum(a.qtdVivaVida)}`,
-    `• Dental: ${formatNum(a.qtdPlanoOdonto)}`,
-    `• Residencial: ${formatNum(a.qtdSegResidencial)}`,
-    `• SORTE EXPRESSA: ${formatNum(a.qtdExpSorte)}`,
-    `• EXPRESSO REFERÊNCIA?: ${a.referencia || '—'}`,
   ].join('\n')
 }
 
@@ -593,7 +557,6 @@ export default function ExpressoGeralPage() {
   >({})
 
   const [q, setQ] = useState('')
-  const [fAgencia, setFAgencia] = useState('Todos')
   const [fCert, setFCert] = useState<CertFilter>('Todos')
   const [fTrx, setFTrx] = useState<TrxFilter>('Todos')
 
@@ -756,6 +719,20 @@ export default function ExpressoGeralPage() {
 
       const snapNome = await getDocs(porNome)
       snapNome.docs.forEach((docSnap) => {
+        const row = buildEmptyRowFromRegistro(docSnap.data())
+        encontrados.set(getExpressoDocId(row), row)
+      })
+
+      const porAgencia = query(
+        collection(db, EXPRESSOS_COLLECTION),
+        orderBy('agencia'),
+        startAt(termo),
+        endAt(`${termo}\uf8ff`),
+        limit(50)
+      )
+
+      const snapAgencia = await getDocs(porAgencia)
+      snapAgencia.docs.forEach((docSnap) => {
         const row = buildEmptyRowFromRegistro(docSnap.data())
         encontrados.set(getExpressoDocId(row), row)
       })
@@ -1103,8 +1080,7 @@ export default function ExpressoGeralPage() {
   useEffect(() => {
     if (!user) return
 
-    const temFiltro =
-      fAgencia !== 'Todos' || fCert !== 'Todos' || fTrx !== 'Todos'
+    const temFiltro = fCert !== 'Todos' || fTrx !== 'Todos'
 
     if (temFiltro) {
       carregarTodosParaFiltro()
@@ -1116,7 +1092,7 @@ export default function ExpressoGeralPage() {
     }, 450)
 
     return () => window.clearTimeout(timer)
-  }, [q, user, fAgencia, fCert, fTrx])
+  }, [q, user, fCert, fTrx])
 
   const computed = useMemo(() => {
     const list = rows.map((r) => {
@@ -1150,18 +1126,11 @@ export default function ExpressoGeralPage() {
 
   const stats = resumoExpressos || computed
 
-  const agencias = useMemo(() => {
-    const set = new Set<string>()
-    computed.list.forEach(({ r }) => r.agencia && set.add(r.agencia))
-    return ['Todos', ...Array.from(set).sort((a, b) => a.localeCompare(b))]
-  }, [computed.list])
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase()
 
     let list = computed.list.filter(({ r, semCert, vencida }) => {
-      if (fAgencia !== 'Todos' && r.agencia !== fAgencia) return false
-
       if (fCert !== 'Todos') {
         if (fCert === 'NaoCertificado' && !semCert) return false
         if (fCert === 'Certificado' && semCert) return false
@@ -1197,7 +1166,7 @@ export default function ExpressoGeralPage() {
     }
 
     return list
-  }, [computed.list, q, fAgencia, fCert, fTrx, allRowsLoaded])
+  }, [computed.list, q, fCert, fTrx, allRowsLoaded])
 
   async function copyWhatsApp(
     r: RowBase,
@@ -1224,23 +1193,6 @@ export default function ExpressoGeralPage() {
         trx: r.trx || 0,
         certLabel,
         certDatePt,
-        qtdContas: r.qtdContas,
-        qtdContasComDeposito: r.qtdContasComDeposito,
-        qtdContasSemDeposito: r.qtdContasSemDeposito,
-        qtdCestaServ: r.qtdCestaServ,
-        qtdMobilidade: r.qtdMobilidade,
-        qtdCartaoEmitido: r.qtdCartaoEmitido,
-        qtdChesContratado: r.qtdChesContratado,
-        qtdLimeAbConta: r.qtdLimeAbConta,
-        qtdLime: r.qtdLime,
-        qtdConsignado: r.qtdConsignado,
-        qtdCreditoParcelado: r.qtdCreditoParcelado,
-        qtdMicrosseguro: r.qtdMicrosseguro,
-        qtdVivaVida: r.qtdVivaVida,
-        qtdPlanoOdonto: r.qtdPlanoOdonto,
-        qtdSegResidencial: r.qtdSegResidencial,
-        qtdExpSorte: r.qtdExpSorte || 0,
-        referencia: r.referencia,
       })
 
       await navigator.clipboard.writeText(msg)
@@ -1380,34 +1332,20 @@ export default function ExpressoGeralPage() {
       </div>
 
       <div className="card" style={{ display: 'grid', gap: '1rem' }}>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <label>
             <div className="label">Buscar (opcional)</div>
             <input
               className="input"
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Nome ou chave..."
+              placeholder="Nome, chave ou agência..."
             />
             <div className="p-muted" style={{ marginTop: '.35rem', fontSize: 12 }}>
               A página carrega inicialmente só <b>{LIMIT_NO_SEARCH}</b> registros.
             </div>
           </label>
 
-          <label>
-            <div className="label">Agência</div>
-            <select
-              className="input"
-              value={fAgencia}
-              onChange={(e) => setFAgencia(e.target.value)}
-            >
-              {agencias.map((a) => (
-                <option key={a} value={a}>
-                  {a}
-                </option>
-              ))}
-            </select>
-          </label>
 
           <label>
             <div className="label">Certificação</div>
