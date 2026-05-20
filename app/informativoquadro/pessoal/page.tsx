@@ -14,6 +14,10 @@ const colaboradores = [
   { nome: "ELISMAGNA SANTOS", foto: "/informativoquadro/pessoal/elismagna.png" },
   { nome: "ELIVALDO LEAL", foto: "/informativoquadro/pessoal/elivaldo.png" },
   { nome: "RITA LEAL", foto: "/informativoquadro/pessoal/rita.png" },
+
+  // NOVOS
+  { nome: "HANNA NAVACK", foto: "/informativoquadro/pessoal/hanna.png" },
+  { nome: "CAIO QUEIROZ", foto: "/informativoquadro/pessoal/caio.png" },
 ];
 
 export default function Page() {
@@ -177,148 +181,6 @@ export default function Page() {
   font-size:.85rem;
 }
 
-/* BLOCO TOKEN */
-
-.warning{
-  background:#fff;
-  border-radius:22px;
-  padding:24px;
-  box-shadow:0 15px 35px rgba(0,0,0,.18);
-  display:grid;
-  grid-template-columns:1.2fr .8fr;
-  gap:24px;
-  align-items:center;
-  border:1px solid rgba(214,31,44,.12);
-}
-
-.warning-left{
-  display:grid;
-  gap:16px;
-}
-
-.warning-top{
-  display:flex;
-  gap:14px;
-  align-items:flex-start;
-}
-
-.warning-icon{
-  width:52px;
-  height:52px;
-  border-radius:16px;
-  display:grid;
-  place-items:center;
-  font-size:26px;
-  background:linear-gradient(135deg,#d61f2c 0%, #b51f5e 45%, #4a2eb0 100%);
-  color:white;
-  box-shadow:0 10px 22px rgba(0,0,0,.14);
-  flex-shrink:0;
-}
-
-.warning-title{
-  font-weight:900;
-  color:#d61f2c;
-  font-size:1.2rem;
-  margin-bottom:4px;
-}
-
-.warning-text{
-  font-size:.95rem;
-  line-height:1.6;
-  color:#333;
-}
-
-.token-box{
-  background:linear-gradient(180deg,#fff8f8 0%, #faf7ff 100%);
-  border:1px solid rgba(214,31,44,.12);
-  border-radius:18px;
-  padding:18px;
-  display:grid;
-  gap:14px;
-}
-
-.token-box-title{
-  font-weight:900;
-  color:#3a3a3a;
-  font-size:1rem;
-  text-align:center;
-}
-
-.token-steps{
-  display:grid;
-  gap:10px;
-}
-
-.token-step{
-  display:grid;
-  grid-template-columns:40px 1fr;
-  gap:10px;
-  align-items:center;
-  background:white;
-  border-radius:14px;
-  padding:10px 12px;
-  box-shadow:0 6px 14px rgba(0,0,0,.06);
-  border:1px solid rgba(0,0,0,.05);
-}
-
-.token-num{
-  width:40px;
-  height:40px;
-  border-radius:12px;
-  display:grid;
-  place-items:center;
-  color:white;
-  font-weight:900;
-  background:linear-gradient(135deg,#d61f2c 0%, #4a2eb0 100%);
-}
-
-.token-label{
-  font-size:.95rem;
-  font-weight:800;
-  color:#2d2d2d;
-  line-height:1.25;
-}
-
-.token-note{
-  font-size:.88rem;
-  line-height:1.5;
-  color:#444;
-  background:#fff;
-  border-radius:14px;
-  padding:12px 14px;
-  border:1px dashed rgba(74,46,176,.25);
-}
-
-.support-box{
-  background:#fff;
-  border-radius:16px;
-  padding:14px 16px;
-  border:1px solid rgba(0,0,0,.06);
-  box-shadow:0 6px 14px rgba(0,0,0,.05);
-}
-
-.support-title{
-  font-weight:900;
-  color:#d61f2c;
-  margin-bottom:6px;
-}
-
-.support-box strong{
-  color:#111;
-}
-
-.pos-img{
-  display:flex;
-  justify-content:center;
-}
-
-.pos-img img{
-  width:100%;
-  max-width:300px;
-  border-radius:18px;
-  box-shadow:0 12px 24px rgba(0,0,0,.16);
-}
-
 @media(max-width:900px){
   .main-grid{
     grid-template-columns:1fr;
@@ -330,14 +192,6 @@ export default function Page() {
 
   .team-card{
     width:140px;
-  }
-
-  .warning{
-    grid-template-columns:1fr;
-  }
-
-  .pos-img img{
-    max-width:220px;
   }
 }
       `}</style>
@@ -412,70 +266,6 @@ export default function Page() {
                 ))}
               </div>
             </div>
-          </div>
-        </section>
-
-        <section className="warning">
-          <div className="warning-left">
-            <div className="warning-top">
-              <div className="warning-icon">🛡️</div>
-
-              <div>
-                <div className="warning-title">Não caia em golpes</div>
-                <div className="warning-text">
-                  Nossa equipe nunca entra em contato pedindo para realizar qualquer tipo de transação financeira, transferências ou pagamentos de boletos.
-                </div>
-              </div>
-            </div>
-
-            <div className="token-box">
-              <div className="token-box-title">Como validar no TOKEN da sua máquina (POS)</div>
-
-              <div className="token-steps">
-                <div className="token-step">
-                  <div className="token-num">7</div>
-                  <div className="token-label">Funções Administrativas</div>
-                </div>
-
-                <div className="token-step">
-                  <div className="token-num">7</div>
-                  <div className="token-label">Token</div>
-                </div>
-
-                <div className="token-step">
-                  <div className="token-num">1</div>
-                  <div className="token-label">Atendimento</div>
-                </div>
-
-                <div className="token-step">
-                  <div className="token-num">3</div>
-                  <div className="token-label">Multiplicador</div>
-                </div>
-              </div>
-
-              <div className="token-note">
-                <strong>TDS</strong> = Atendimento
-                <br />
-                <strong>Multiplicador</strong> = Identificação e Finalização
-              </div>
-            </div>
-
-            <div className="support-box">
-              <div className="support-title">Em caso de dúvida</div>
-              Fale conosco ou com o suporte da TDS:
-              <br />
-              <br />
-              <strong>0800-727-7667</strong>
-              <br />
-              WhatsApp <strong>(11) 3534-8599</strong>
-            </div>
-          </div>
-
-          <div className="pos-img">
-            <img
-              src="/informativoquadro/pessoal/maquininha.jpg"
-              alt="Passo a passo do token na máquina POS"
-            />
           </div>
         </section>
       </div>
