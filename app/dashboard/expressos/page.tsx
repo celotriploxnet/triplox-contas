@@ -8,7 +8,7 @@ export default function ExpressosMenuPage() {
     {
       title: '📊 Expresso Geral (visão completa)',
       desc: 'Resumo geral, filtros e contadores (transacional, treinado, certificação).',
-      href: '/dashboard/expressos/geral',
+      href: '/dashboard/expressos/geral-junho-2026',
       enabled: true,
       pill: 'Geral',
     },

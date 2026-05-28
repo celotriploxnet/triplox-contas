@@ -173,68 +173,49 @@ function getContatoRegistro(data: any) {
   }
 }
 
-
-function normalizeChaveContato(value: any) {
-  const onlyNumbers = toStr(value).replace(/\D/g, '')
-  return onlyNumbers.replace(/^0+(?=\d)/, '')
-}
-
-function getChaveContatoFromRegistro(data: any, docId?: string) {
-  return normalizeChaveContato(
-    data?.chave ||
-      data?.chave_loja ||
-      data?.chaveLoja ||
-      data?.CHAVE ||
-      docId ||
-      ''
-  )
-}
-
-async function carregarContatosOficiaisAntigos() {
-  const snapAntigo = await getDocs(collection(db, EXPRESSOS_COLLECTION_ANTIGA))
-
-  const contatos = new Map<
-    string,
-    {
-      responsavel?: string
-      telefoneResponsavel?: string
-    }
-  >()
-
-  snapAntigo.forEach((docSnap) => {
-    const data = docSnap.data()
-    const chave = getChaveContatoFromRegistro(data, docSnap.id)
-    if (!chave) return
-
-    const contato = getContatoRegistro(data)
-    if (!contato.responsavel && !contato.telefoneResponsavel) return
-
-    contatos.set(chave, contato)
-  })
-
-  return contatos
-}
-
-async function aplicarContatosOficiaisAntigos(rows: RowBase[]) {
-  const contatosAntigos = await carregarContatosOficiaisAntigos()
-
-  return rows.map((row) => {
-    const chave = normalizeChaveContato(row.chave)
-    const contatoAntigo = contatosAntigos.get(chave)
-
-    if (!contatoAntigo) return row
-
-    return {
-      ...row,
-      responsavel: contatoAntigo.responsavel || row.responsavel || '',
-      telefoneResponsavel:
-        contatoAntigo.telefoneResponsavel || row.telefoneResponsavel || '',
-    }
-  })
-}
-
 function parseNumber(v: any) {
-  const s = toStr(v).replace(/\./g, '').replace(',', '.')
+  if (typeof v === 'number') {
+    return Number.isFinite(v) ? v : 0
+  }
+
+  let s = toStr(v)
+    .replace(/R\$/gi, '')
+    .replace(/\s/g, '')
+    .replace(/[^\d,.-]/g, '')
+
+  if (!s) return 0
+
+  const hasComma = s.includes(',')
+  const hasDot = s.includes('.')
+
+  if (hasComma && hasDot) {
+    const lastComma = s.lastIndexOf(',')
+    const lastDot = s.lastIndexOf('.')
+
+    // Formato BR: 1.234,56
+    if (lastComma > lastDot) {
+      s = s.replace(/\./g, '').replace(',', '.')
+    } else {
+      // Formato EUA: 1,234.56
+      s = s.replace(/,/g, '')
+    }
+  } else if (hasComma) {
+    // Formato BR sem milhar: 1234,56
+    s = s.replace(',', '.')
+  } else if (hasDot) {
+    const parts = s.split('.')
+
+    // Formato BR com ponto apenas como milhar: 1.234 ou 1.234.567
+    const looksLikeThousands =
+      parts.length > 1 &&
+      parts.slice(1).every((part) => part.length === 3)
+
+    if (looksLikeThousands) {
+      s = s.replace(/\./g, '')
+    }
+    // Senão mantém como decimal: 1234.56
+  }
+
   const n = Number(s)
   return Number.isFinite(n) ? n : 0
 }
@@ -291,25 +272,25 @@ function buildEmptyRowFromRegistro(data: any): RowBase {
 
     presenteNaUltimaBase: data.presenteNaUltimaBase === false ? false : true,
 
-    pontos: parseNumber(data.pontos),
+    // IMPORTANTE: nunca confiar em pontos antigos salvos no Firestore.
+    // A pontuação de Junho/2026 deve ser recalculada sempre pela regra nova.
+    pontos: 0,
   }
 
-  if (!row.pontos) {
-    row.pontos = calcPontosExpressoGeral({
-      qtdContasComDeposito: row.qtdContasComDeposito,
-      qtdContasSemDeposito: row.qtdContasSemDeposito,
-      qtdCestaServ: row.qtdCestaServ,
-      qtdSuperProtegido: row.qtdSuperProtegido,
-      vlrLime: row.vlrLime,
-      vlrConsignadoTotal: row.vlrConsignadoTotal,
-      vlrCreditoParcelado: row.vlrCreditoParcelado,
-      qtdMicrosseguro: row.qtdMicrosseguro,
-      qtdVivaVida: row.qtdVivaVida,
-      qtdPlanoOdonto: row.qtdPlanoOdonto,
-      qtdSegCartaoDeb: row.qtdSegCartaoDeb,
-      vlrExpSorte: row.vlrExpSorte,
-    })
-  }
+  row.pontos = calcPontosExpressoGeral({
+    qtdContasComDeposito: row.qtdContasComDeposito,
+    qtdContasSemDeposito: row.qtdContasSemDeposito,
+    qtdCestaServ: row.qtdCestaServ,
+    qtdSuperProtegido: row.qtdSuperProtegido,
+    vlrLime: row.vlrLime,
+    vlrConsignadoTotal: row.vlrConsignadoTotal,
+    vlrCreditoParcelado: row.vlrCreditoParcelado,
+    qtdMicrosseguro: row.qtdMicrosseguro,
+    qtdVivaVida: row.qtdVivaVida,
+    qtdPlanoOdonto: row.qtdPlanoOdonto,
+    qtdSegCartaoDeb: row.qtdSegCartaoDeb,
+    vlrExpSorte: row.vlrExpSorte,
+  })
 
   return row
 }
@@ -732,11 +713,9 @@ export default function ExpressoGeralPage() {
       )
 
       const snap = await getDocs(qRegistros)
-      let primeiros = snap.docs.map((docSnap) =>
+      const primeiros = snap.docs.map((docSnap) =>
         buildEmptyRowFromRegistro(docSnap.data())
       )
-
-      primeiros = await aplicarContatosOficiaisAntigos(primeiros)
 
       setRows(primeiros)
       setAllRowsLoaded(false)
@@ -766,11 +745,9 @@ export default function ExpressoGeralPage() {
       setError(null)
 
       const snap = await getDocs(collection(db, EXPRESSOS_COLLECTION))
-      let todos = snap.docs.map((docSnap) =>
+      const todos = snap.docs.map((docSnap) =>
         buildEmptyRowFromRegistro(docSnap.data())
       )
-
-      todos = await aplicarContatosOficiaisAntigos(todos)
 
       setRows(todos)
       setAllRowsLoaded(true)
@@ -858,8 +835,7 @@ export default function ExpressoGeralPage() {
         encontrados.set(getExpressoDocId(row), row)
       })
 
-      let resultado = Array.from(encontrados.values())
-      resultado = await aplicarContatosOficiaisAntigos(resultado)
+      const resultado = Array.from(encontrados.values())
 
       setRows(resultado)
       setAllRowsLoaded(false)
@@ -1111,43 +1087,47 @@ export default function ExpressoGeralPage() {
 
       try {
         const registrosRef = collection(db, EXPRESSOS_COLLECTION)
-        const snap = await getDocs(registrosRef)
-        const contatosAntigos = await carregarContatosOficiaisAntigos()
+        const registrosAntigosRef = collection(db, EXPRESSOS_COLLECTION_ANTIGA)
+
+        const [snap, snapAntigo] = await Promise.all([
+          getDocs(registrosRef),
+          getDocs(registrosAntigosRef),
+        ])
 
         const salvos = new Map<string, any>()
+        const salvosAntigos = new Map<string, any>()
 
         snap.forEach((docSnap) => {
           const data = docSnap.data()
           salvos.set(docSnap.id, data)
-
-          const chaveData = normalizeChaveContato(data?.chave)
-          if (chaveData) salvos.set(chaveData, data)
+          const chaveData = safeDocId(toStr(data.chave))
+          if (chaveData && chaveData !== 'sem-chave') salvos.set(chaveData, data)
         })
 
-        let contatosMigrados = 0
+        snapAntigo.forEach((docSnap) => {
+          const data = docSnap.data()
+          salvosAntigos.set(docSnap.id, data)
+          const chaveData = safeDocId(toStr(data.chave))
+          if (chaveData && chaveData !== 'sem-chave') salvosAntigos.set(chaveData, data)
+        })
+
         const idsDaBaseAtual = new Set<string>()
         const batch = writeBatch(db)
 
         finalRows = mapped.map((r): RowBase => {
           const id = getExpressoDocId(r)
-          const chaveContato = normalizeChaveContato(r.chave)
           idsDaBaseAtual.add(id)
 
-          const salvoNovo = salvos.get(id) || salvos.get(chaveContato) || {}
+          const salvoNovo = salvos.get(id) || {}
+          const salvoAntigo = salvosAntigos.get(id) || {}
           const contatoNovo = getContatoRegistro(salvoNovo)
-          const contatoAntigo = contatosAntigos.get(chaveContato) || {}
-
-          const responsavelFinal = contatoAntigo.responsavel || contatoNovo.responsavel || ''
-          const telefoneFinal = contatoAntigo.telefoneResponsavel || contatoNovo.telefoneResponsavel || ''
-
-          if (contatoAntigo.responsavel || contatoAntigo.telefoneResponsavel) {
-            contatosMigrados += 1
-          }
+          const contatoAntigo = getContatoRegistro(salvoAntigo)
 
           const rowComRegistro: RowBase = {
             ...r,
-            responsavel: responsavelFinal,
-            telefoneResponsavel: telefoneFinal,
+            responsavel: contatoNovo.responsavel || contatoAntigo.responsavel || '',
+            telefoneResponsavel:
+              contatoNovo.telefoneResponsavel || contatoAntigo.telefoneResponsavel || '',
             presenteNaUltimaBase: true,
           }
 
@@ -1202,7 +1182,7 @@ export default function ExpressoGeralPage() {
         setInfo(
           `Base carregada ✅ ${mapped.length} expressos na última base. ${
             finalRows.length - mapped.length
-          } preservados do histórico. Contatos da Geral antiga encontrados: ${contatosMigrados}.`
+          } preservados do histórico.`
         )
       } catch (firestoreError) {
         console.error('Erro ao sincronizar registro de expressos:', firestoreError)
@@ -1415,21 +1395,15 @@ export default function ExpressoGeralPage() {
 
       const id = getExpressoDocId(r)
 
-      const contatoAtualizado = {
-        chave: r.chave || '',
-        responsavel: (r.responsavel || '').toUpperCase(),
-        telefoneResponsavel: formatarTelefoneBR(r.telefoneResponsavel || ''),
-        contatoAtualizadoEm: serverTimestamp(),
-      }
-
-      await Promise.all([
-        setDoc(doc(db, EXPRESSOS_COLLECTION, id), contatoAtualizado, {
-          merge: true,
-        }),
-        setDoc(doc(db, EXPRESSOS_COLLECTION_ANTIGA, id), contatoAtualizado, {
-          merge: true,
-        }),
-      ])
+      await setDoc(
+        doc(db, EXPRESSOS_COLLECTION, id),
+        {
+          responsavel: (r.responsavel || '').toUpperCase(),
+          telefoneResponsavel: formatarTelefoneBR(r.telefoneResponsavel || ''),
+          contatoAtualizadoEm: serverTimestamp(),
+        },
+        { merge: true }
+      )
 
       setInfo('Contato salvo com sucesso ✅')
       alert('Contato salvo com sucesso!')
@@ -1449,7 +1423,7 @@ export default function ExpressoGeralPage() {
       <div>
         <span className="pill">Geral 2026</span>
         <h1 className="h1" style={{ marginTop: '.75rem' }}>
-          📊 Expresso Geral Junho/2026 (nova pontuação)
+          📊 Expresso Geral 2026 (Nova Pontuação)
         </h1>
       </div>
 
