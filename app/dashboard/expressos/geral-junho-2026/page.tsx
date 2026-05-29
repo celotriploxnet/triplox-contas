@@ -770,9 +770,9 @@ export default function ExpressoGeralPage() {
       return
     }
 
-    const termo = term.trim()
+    const termoOriginal = term.trim()
 
-    if (!termo) {
+    if (!termoOriginal) {
       await carregarPrimeirosRegistros()
       return
     }
@@ -781,98 +781,25 @@ export default function ExpressoGeralPage() {
       setLoading(true)
       setError(null)
 
-      const encontrados = new Map<string, RowBase>()
+      const termoTexto = normalizeText(termoOriginal)
+      const termoNumerico = onlyDigits(termoOriginal)
 
-      // 1) Busca direta pelo ID do documento/chave
-      const direto = await getDoc(
-        doc(db, EXPRESSOS_COLLECTION, safeDocId(termo))
+      const snap = await getDocs(collection(db, EXPRESSOS_COLLECTION))
+
+      const todos = snap.docs.map((docSnap) =>
+        buildEmptyRowFromRegistro(docSnap.data())
       )
 
-      if (direto.exists()) {
-        const row = buildEmptyRowFromRegistro(direto.data())
-        encontrados.set(getExpressoDocId(row), row)
-      }
-
-      // 2) Busca por chave loja
-      const porChave = query(
-        collection(db, EXPRESSOS_COLLECTION),
-        orderBy('chave'),
-        startAt(termo),
-        endAt(`${termo}\uf8ff`),
-        limit(20)
-      )
-
-      const snapChave = await getDocs(porChave)
-      snapChave.docs.forEach((docSnap) => {
-        const row = buildEmptyRowFromRegistro(docSnap.data())
-        encontrados.set(getExpressoDocId(row), row)
-      })
-
-      // 3) Busca por nome do jeito que estiver salvo no Firestore
-      //    Essa busca ajuda quando o nome está exatamente com a mesma caixa.
-      const porNomeOriginal = query(
-        collection(db, EXPRESSOS_COLLECTION),
-        orderBy('nome'),
-        startAt(termo),
-        endAt(`${termo}\uf8ff`),
-        limit(20)
-      )
-
-      const snapNomeOriginal = await getDocs(porNomeOriginal)
-      snapNomeOriginal.docs.forEach((docSnap) => {
-        const row = buildEmptyRowFromRegistro(docSnap.data())
-        encontrados.set(getExpressoDocId(row), row)
-      })
-
-      // 4) Busca por nome em maiúsculo
-      //    Ajuda quando a base foi salva toda em caixa alta.
-      const termoNome = termo.toUpperCase()
-      const porNomeMaiusculo = query(
-        collection(db, EXPRESSOS_COLLECTION),
-        orderBy('nome'),
-        startAt(termoNome),
-        endAt(`${termoNome}\uf8ff`),
-        limit(20)
-      )
-
-      const snapNomeMaiusculo = await getDocs(porNomeMaiusculo)
-      snapNomeMaiusculo.docs.forEach((docSnap) => {
-        const row = buildEmptyRowFromRegistro(docSnap.data())
-        encontrados.set(getExpressoDocId(row), row)
-      })
-
-      // 5) Busca por agência
-      const porAgencia = query(
-        collection(db, EXPRESSOS_COLLECTION),
-        orderBy('agencia'),
-        startAt(termo),
-        endAt(`${termo}\uf8ff`),
-        limit(50)
-      )
-
-      const snapAgencia = await getDocs(porAgencia)
-      snapAgencia.docs.forEach((docSnap) => {
-        const row = buildEmptyRowFromRegistro(docSnap.data())
-        encontrados.set(getExpressoDocId(row), row)
-      })
-
-      // 6) Busca reforçada local:
-      //    corrige problema de acento, caixa alta/baixa, espaços e nomes compostos.
-      //    Ex.: "esporte brasil" encontra "ESPORTE BRASIL", "Esporte Brasil", etc.
-      const termoNormalizado = normalizeText(termo)
-      const termoNumerico = onlyDigits(termo)
-
-      const snapTodos = await getDocs(collection(db, EXPRESSOS_COLLECTION))
-      snapTodos.docs.forEach((docSnap) => {
-        const row = buildEmptyRowFromRegistro(docSnap.data())
-
-        const textoNormalizado = normalizeText(
+      const resultado = todos.filter((row) => {
+        const textoBusca = normalizeText(
           [
             row.nome,
             row.chave,
             row.municipio,
             row.agencia,
             row.pacb,
+            `${row.agencia}/${row.pacb}`,
+            `${row.agencia} / ${row.pacb}`,
             row.statusAnalise,
             row.regional,
             row.uf,
@@ -881,31 +808,40 @@ export default function ExpressoGeralPage() {
           ].join(' ')
         )
 
-        const textoNumerico = onlyDigits(
+        const numerosBusca = onlyDigits(
           [
             row.chave,
             row.agencia,
             row.pacb,
+            `${row.agencia}${row.pacb}`,
             row.telefoneResponsavel,
           ].join(' ')
         )
 
-        const encontrouTexto = termoNormalizado
-          ? textoNormalizado.includes(termoNormalizado)
+        const encontrouTexto = termoTexto
+          ? textoBusca.includes(termoTexto)
           : false
 
         const encontrouNumero = termoNumerico
-          ? textoNumerico.includes(termoNumerico)
+          ? numerosBusca.includes(termoNumerico)
           : false
 
-        if (encontrouTexto || encontrouNumero) {
-          encontrados.set(getExpressoDocId(row), row)
-        }
+        return encontrouTexto || encontrouNumero
       })
 
-      const resultado = Array.from(encontrados.values()).sort((a, b) =>
-        (b.pontos || 0) - (a.pontos || 0)
-      )
+      resultado.sort((a, b) => {
+        const nomeA = normalizeText(a.nome)
+        const nomeB = normalizeText(b.nome)
+
+        const aComecaNome = nomeA.startsWith(termoTexto) ? 1 : 0
+        const bComecaNome = nomeB.startsWith(termoTexto) ? 1 : 0
+
+        if (aComecaNome !== bComecaNome) {
+          return bComecaNome - aComecaNome
+        }
+
+        return (b.pontos || 0) - (a.pontos || 0)
+      })
 
       setRows(resultado)
       setAllRowsLoaded(true)
@@ -1343,6 +1279,7 @@ export default function ExpressoGeralPage() {
 
   const filtered = useMemo(() => {
     const term = normalizeText(q)
+    const termDigits = onlyDigits(q)
 
     let list = computed.list.filter(({ r, semCert, vencida }) => {
       if (fCert !== 'Todos') {
@@ -1361,7 +1298,7 @@ export default function ExpressoGeralPage() {
       return true
     })
 
-    if (term) {
+    if (term || termDigits) {
       list = list.filter(({ r }) => {
         const hay = normalizeText(
           [
@@ -1370,6 +1307,8 @@ export default function ExpressoGeralPage() {
             r.municipio,
             r.agencia,
             r.pacb,
+            `${r.agencia}/${r.pacb}`,
+            `${r.agencia} / ${r.pacb}`,
             r.statusAnalise,
             r.regional,
             r.uf,
@@ -1378,17 +1317,20 @@ export default function ExpressoGeralPage() {
           ].join(' ')
         )
 
-        const termoNumerico = onlyDigits(q)
-        const hayNumerico = onlyDigits(
+        const hayDigits = onlyDigits(
           [
             r.chave,
             r.agencia,
             r.pacb,
+            `${r.agencia}${r.pacb}`,
             r.telefoneResponsavel,
           ].join(' ')
         )
 
-        return hay.includes(term) || Boolean(termoNumerico && hayNumerico.includes(termoNumerico))
+        return (
+          Boolean(term && hay.includes(term)) ||
+          Boolean(termDigits && hayDigits.includes(termDigits))
+        )
       })
     } else if (!allRowsLoaded) {
       list = list.slice(0, LIMIT_NO_SEARCH)
