@@ -783,6 +783,7 @@ export default function ExpressoGeralPage() {
 
       const encontrados = new Map<string, RowBase>()
 
+      // 1) Busca direta pelo ID do documento/chave
       const direto = await getDoc(
         doc(db, EXPRESSOS_COLLECTION, safeDocId(termo))
       )
@@ -792,6 +793,7 @@ export default function ExpressoGeralPage() {
         encontrados.set(getExpressoDocId(row), row)
       }
 
+      // 2) Busca por chave loja
       const porChave = query(
         collection(db, EXPRESSOS_COLLECTION),
         orderBy('chave'),
@@ -806,8 +808,26 @@ export default function ExpressoGeralPage() {
         encontrados.set(getExpressoDocId(row), row)
       })
 
+      // 3) Busca por nome do jeito que estiver salvo no Firestore
+      //    Essa busca ajuda quando o nome está exatamente com a mesma caixa.
+      const porNomeOriginal = query(
+        collection(db, EXPRESSOS_COLLECTION),
+        orderBy('nome'),
+        startAt(termo),
+        endAt(`${termo}\uf8ff`),
+        limit(20)
+      )
+
+      const snapNomeOriginal = await getDocs(porNomeOriginal)
+      snapNomeOriginal.docs.forEach((docSnap) => {
+        const row = buildEmptyRowFromRegistro(docSnap.data())
+        encontrados.set(getExpressoDocId(row), row)
+      })
+
+      // 4) Busca por nome em maiúsculo
+      //    Ajuda quando a base foi salva toda em caixa alta.
       const termoNome = termo.toUpperCase()
-      const porNome = query(
+      const porNomeMaiusculo = query(
         collection(db, EXPRESSOS_COLLECTION),
         orderBy('nome'),
         startAt(termoNome),
@@ -815,12 +835,13 @@ export default function ExpressoGeralPage() {
         limit(20)
       )
 
-      const snapNome = await getDocs(porNome)
-      snapNome.docs.forEach((docSnap) => {
+      const snapNomeMaiusculo = await getDocs(porNomeMaiusculo)
+      snapNomeMaiusculo.docs.forEach((docSnap) => {
         const row = buildEmptyRowFromRegistro(docSnap.data())
         encontrados.set(getExpressoDocId(row), row)
       })
 
+      // 5) Busca por agência
       const porAgencia = query(
         collection(db, EXPRESSOS_COLLECTION),
         orderBy('agencia'),
@@ -835,10 +856,59 @@ export default function ExpressoGeralPage() {
         encontrados.set(getExpressoDocId(row), row)
       })
 
-      const resultado = Array.from(encontrados.values())
+      // 6) Busca reforçada local:
+      //    corrige problema de acento, caixa alta/baixa, espaços e nomes compostos.
+      //    Ex.: "esporte brasil" encontra "ESPORTE BRASIL", "Esporte Brasil", etc.
+      const termoNormalizado = normalizeText(termo)
+      const termoNumerico = onlyDigits(termo)
+
+      const snapTodos = await getDocs(collection(db, EXPRESSOS_COLLECTION))
+      snapTodos.docs.forEach((docSnap) => {
+        const row = buildEmptyRowFromRegistro(docSnap.data())
+
+        const textoNormalizado = normalizeText(
+          [
+            row.nome,
+            row.chave,
+            row.municipio,
+            row.agencia,
+            row.pacb,
+            row.statusAnalise,
+            row.regional,
+            row.uf,
+            row.responsavel,
+            row.telefoneResponsavel,
+          ].join(' ')
+        )
+
+        const textoNumerico = onlyDigits(
+          [
+            row.chave,
+            row.agencia,
+            row.pacb,
+            row.telefoneResponsavel,
+          ].join(' ')
+        )
+
+        const encontrouTexto = termoNormalizado
+          ? textoNormalizado.includes(termoNormalizado)
+          : false
+
+        const encontrouNumero = termoNumerico
+          ? textoNumerico.includes(termoNumerico)
+          : false
+
+        if (encontrouTexto || encontrouNumero) {
+          encontrados.set(getExpressoDocId(row), row)
+        }
+      })
+
+      const resultado = Array.from(encontrados.values()).sort((a, b) =>
+        (b.pontos || 0) - (a.pontos || 0)
+      )
 
       setRows(resultado)
-      setAllRowsLoaded(false)
+      setAllRowsLoaded(true)
       setInfo(
         resultado.length
           ? `Consulta concluída: ${resultado.length} registro(s) encontrado(s) ✅`
@@ -1272,7 +1342,7 @@ export default function ExpressoGeralPage() {
 
 
   const filtered = useMemo(() => {
-    const term = q.trim().toLowerCase()
+    const term = normalizeText(q)
 
     let list = computed.list.filter(({ r, semCert, vencida }) => {
       if (fCert !== 'Todos') {
@@ -1293,19 +1363,32 @@ export default function ExpressoGeralPage() {
 
     if (term) {
       list = list.filter(({ r }) => {
-        const hay = [
-          r.nome,
-          r.chave,
-          r.municipio,
-          r.agencia,
-          r.pacb,
-          r.statusAnalise,
-          r.regional,
-          r.uf,
-        ]
-          .join(' ')
-          .toLowerCase()
-        return hay.includes(term)
+        const hay = normalizeText(
+          [
+            r.nome,
+            r.chave,
+            r.municipio,
+            r.agencia,
+            r.pacb,
+            r.statusAnalise,
+            r.regional,
+            r.uf,
+            r.responsavel,
+            r.telefoneResponsavel,
+          ].join(' ')
+        )
+
+        const termoNumerico = onlyDigits(q)
+        const hayNumerico = onlyDigits(
+          [
+            r.chave,
+            r.agencia,
+            r.pacb,
+            r.telefoneResponsavel,
+          ].join(' ')
+        )
+
+        return hay.includes(term) || Boolean(termoNumerico && hayNumerico.includes(termoNumerico))
       })
     } else if (!allRowsLoaded) {
       list = list.slice(0, LIMIT_NO_SEARCH)

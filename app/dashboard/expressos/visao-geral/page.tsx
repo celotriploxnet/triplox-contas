@@ -45,6 +45,13 @@ type KPI = {
   destaque?: boolean
 }
 
+type QuadranteBonus = {
+  box: string
+  faixa: string
+  bonus: string
+  descricao: string
+}
+
 function toStr(v: any) {
   return v === null || v === undefined ? '' : String(v).trim()
 }
@@ -89,6 +96,87 @@ function formatPercent(n: number) {
     minimumFractionDigits: 1,
     maximumFractionDigits: 1,
   }).format(n || 0)}%`
+}
+
+function getQuadranteBonus(percentual: number): QuadranteBonus {
+  if (percentual < 40) {
+    return {
+      box: 'BOX 1',
+      faixa: 'Abaixo de 40%',
+      bonus: 'PRM',
+      descricao: 'Quadrante atual abaixo da primeira faixa de bônus.',
+    }
+  }
+
+  if (percentual < 45) {
+    return {
+      box: 'BOX 2',
+      faixa: '40% a 44,9%',
+      bonus: 'R$ 1,00',
+      descricao: 'Bônus por produção no quadrante 2.',
+    }
+  }
+
+  if (percentual < 50) {
+    return {
+      box: 'BOX 3',
+      faixa: '45% a 49,9%',
+      bonus: 'R$ 1,25',
+      descricao: 'Bônus por produção no quadrante 3.',
+    }
+  }
+
+  if (percentual < 55) {
+    return {
+      box: 'BOX 4',
+      faixa: '50% a 54,9%',
+      bonus: 'R$ 1,50',
+      descricao: 'Bônus por produção no quadrante 4.',
+    }
+  }
+
+  if (percentual < 60) {
+    return {
+      box: 'BOX 5',
+      faixa: '55% a 59,9%',
+      bonus: 'R$ 1,75',
+      descricao: 'Bônus por produção no quadrante 5.',
+    }
+  }
+
+  if (percentual < 65) {
+    return {
+      box: 'BOX 6',
+      faixa: '60% a 64,9%',
+      bonus: 'R$ 2,00',
+      descricao: 'Bônus por produção no quadrante 6.',
+    }
+  }
+
+  if (percentual < 70) {
+    return {
+      box: 'BOX 7',
+      faixa: '65% a 69,9%',
+      bonus: 'R$ 2,50',
+      descricao: 'Bônus por produção no quadrante 7.',
+    }
+  }
+
+  if (percentual < 75) {
+    return {
+      box: 'BOX 8',
+      faixa: '70% a 74,9%',
+      bonus: 'R$ 3,25',
+      descricao: 'Bônus por produção no quadrante 8.',
+    }
+  }
+
+  return {
+    box: 'BOX 9',
+    faixa: 'A partir de 75%',
+    bonus: 'R$ 4,00',
+    descricao: 'Maior faixa de bônus por produção.',
+  }
 }
 
 function calcPontosFallback(d: any) {
@@ -205,6 +293,15 @@ export default function VisaoGeralExpressosPage() {
       ? (treinadosMais10.length / treinados.length) * 100
       : 0
 
+    const quadranteBonus = getQuadranteBonus(percentualTreinadosProdutivos)
+
+    const meta60Treinados = Math.ceil(treinados.length * 0.6)
+
+    const faltamPara60 = Math.max(
+      meta60Treinados - treinadosMais10.length,
+      0
+    )
+
     const topTreinados = [...treinados]
       .sort((a, b) => b.pontos - a.pontos)
       .slice(0, 10)
@@ -237,6 +334,9 @@ export default function VisaoGeralExpressosPage() {
       treinadosExatamente10,
       transacionaisMais10,
       percentualTreinadosProdutivos,
+      quadranteBonus,
+      meta60Treinados,
+      faltamPara60,
       topTreinados,
       topTransacionais,
       treinadosFaltandoAte4Pontos,
@@ -319,6 +419,42 @@ export default function VisaoGeralExpressosPage() {
           <strong>Fórmula</strong>
           <span>
             {formatNumber(resumo.treinadosMais10.length)} ÷ {formatNumber(resumo.treinados.length)} × 100
+          </span>
+        </div>
+      </section>
+
+      <section style={styles.bonusBox}>
+        <div>
+          <div style={styles.bonusLabel}>Quadrante de bônus</div>
+          <div style={styles.bonusValue}>{resumo.quadranteBonus.box}</div>
+          <p style={styles.bonusText}>
+            Você está na faixa <strong>{resumo.quadranteBonus.faixa}</strong>, com bônus de{' '}
+            <strong>{resumo.quadranteBonus.bonus}</strong>.
+          </p>
+          <p style={styles.bonusSubText}>{resumo.quadranteBonus.descricao}</p>
+        </div>
+
+        <div style={styles.bonusMiniBox}>
+          <strong>Bônus atual</strong>
+          <span>{resumo.quadranteBonus.bonus}</span>
+        </div>
+      </section>
+
+      <section style={styles.meta60Box}>
+        <div>
+          <div style={styles.meta60Label}>Meta 60% dos treinados</div>
+          <div style={styles.meta60Value}>
+            {formatNumber(resumo.faltamPara60)}
+          </div>
+          <p style={styles.meta60Text}>
+            expressos faltando para atingir 60% dos treinados acima de 10 pontos.
+          </p>
+        </div>
+
+        <div style={styles.formulaBox}>
+          <strong>Meta</strong>
+          <span>
+            {formatNumber(resumo.treinadosMais10.length)} / {formatNumber(resumo.meta60Treinados)}
           </span>
         </div>
       </section>
@@ -408,6 +544,7 @@ const styles: Record<string, CSSProperties> = {
     fontFamily:
       'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
   },
+
   loadingBox: {
     maxWidth: 960,
     margin: '80px auto',
@@ -417,6 +554,7 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: '0 18px 50px rgba(80, 0, 20, 0.10)',
     fontWeight: 800,
   },
+
   hero: {
     maxWidth: 1180,
     margin: '0 auto 22px',
@@ -424,12 +562,14 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: 'space-between',
     gap: 18,
     alignItems: 'flex-start',
-    background: 'linear-gradient(135deg, #b5121b 0%, #d61f2c 52%, #7a1ea1 100%)',
+    background:
+      'linear-gradient(135deg, #b5121b 0%, #d61f2c 52%, #7a1ea1 100%)',
     color: '#fff',
     borderRadius: 28,
     padding: 28,
     boxShadow: '0 22px 60px rgba(130, 0, 30, 0.22)',
   },
+
   eyebrow: {
     textTransform: 'uppercase',
     letterSpacing: 1.4,
@@ -437,12 +577,14 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     opacity: 0.9,
   },
+
   title: {
     margin: '6px 0 8px',
     fontSize: 38,
     lineHeight: 1,
     fontWeight: 950,
   },
+
   subtitle: {
     margin: 0,
     maxWidth: 720,
@@ -450,6 +592,7 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.5,
     opacity: 0.92,
   },
+
   badge: {
     background: 'rgba(255,255,255,0.18)',
     border: '1px solid rgba(255,255,255,0.28)',
@@ -459,6 +602,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     whiteSpace: 'nowrap',
   },
+
   error: {
     maxWidth: 1180,
     margin: '0 auto 16px',
@@ -469,24 +613,33 @@ const styles: Record<string, CSSProperties> = {
     border: '1px solid #fecdd3',
     fontWeight: 800,
   },
+
   grid: {
     maxWidth: 1180,
     margin: '0 auto',
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))',
+    gridTemplateColumns:
+      'repeat(auto-fit, minmax(230px, 1fr))',
     gap: 16,
   },
+
   card: {
     background: 'rgba(255,255,255,0.92)',
-    border: '1px solid rgba(140, 0, 35, 0.08)',
+    border:
+      '1px solid rgba(140, 0, 35, 0.08)',
     borderRadius: 24,
     padding: 20,
-    boxShadow: '0 18px 45px rgba(80, 0, 20, 0.08)',
+    boxShadow:
+      '0 18px 45px rgba(80, 0, 20, 0.08)',
   },
+
   cardDestaque: {
-    border: '1px solid rgba(214, 31, 44, 0.28)',
-    boxShadow: '0 20px 55px rgba(214, 31, 44, 0.14)',
+    border:
+      '1px solid rgba(214, 31, 44, 0.28)',
+    boxShadow:
+      '0 20px 55px rgba(214, 31, 44, 0.14)',
   },
+
   cardTitle: {
     fontSize: 12,
     textTransform: 'uppercase',
@@ -494,6 +647,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     color: '#7a1a24',
   },
+
   cardValue: {
     marginTop: 10,
     fontSize: 38,
@@ -501,6 +655,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     color: '#b5121b',
   },
+
   cardSub: {
     marginTop: 10,
     fontSize: 13,
@@ -508,6 +663,7 @@ const styles: Record<string, CSSProperties> = {
     color: '#6b5d64',
     fontWeight: 700,
   },
+
   percentBox: {
     maxWidth: 1180,
     margin: '18px auto 0',
@@ -519,8 +675,10 @@ const styles: Record<string, CSSProperties> = {
     color: '#fff',
     borderRadius: 28,
     padding: 24,
-    boxShadow: '0 22px 60px rgba(17, 24, 39, 0.18)',
+    boxShadow:
+      '0 22px 60px rgba(17, 24, 39, 0.18)',
   },
+
   percentLabel: {
     fontSize: 13,
     textTransform: 'uppercase',
@@ -528,12 +686,14 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     opacity: 0.86,
   },
+
   percentValue: {
     marginTop: 8,
     fontSize: 54,
     lineHeight: 1,
     fontWeight: 950,
   },
+
   percentText: {
     margin: '10px 0 0',
     maxWidth: 680,
@@ -541,16 +701,118 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 700,
     lineHeight: 1.45,
   },
+
   formulaBox: {
     minWidth: 220,
     background: 'rgba(255,255,255,0.10)',
-    border: '1px solid rgba(255,255,255,0.14)',
+    border:
+      '1px solid rgba(255,255,255,0.14)',
     borderRadius: 20,
     padding: 16,
     display: 'grid',
     gap: 8,
     fontWeight: 850,
   },
+
+  bonusBox: {
+    maxWidth: 1180,
+    margin: '18px auto 0',
+    display: 'flex',
+    justifyContent: 'space-between',
+    gap: 20,
+    alignItems: 'center',
+    background:
+      'linear-gradient(135deg, #5b1020 0%, #b5121b 45%, #7a1ea1 100%)',
+    color: '#fff',
+    borderRadius: 28,
+    padding: 24,
+    boxShadow:
+      '0 22px 60px rgba(122, 30, 161, 0.22)',
+  },
+
+  bonusLabel: {
+    fontSize: 13,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    fontWeight: 950,
+    opacity: 0.88,
+  },
+
+  bonusValue: {
+    marginTop: 8,
+    fontSize: 54,
+    lineHeight: 1,
+    fontWeight: 950,
+  },
+
+  bonusText: {
+    margin: '10px 0 0',
+    maxWidth: 760,
+    color: 'rgba(255,255,255,0.88)',
+    fontWeight: 800,
+    lineHeight: 1.45,
+  },
+
+  bonusSubText: {
+    margin: '6px 0 0',
+    maxWidth: 760,
+    color: 'rgba(255,255,255,0.72)',
+    fontWeight: 700,
+    lineHeight: 1.45,
+    fontSize: 13,
+  },
+
+  bonusMiniBox: {
+    minWidth: 220,
+    background: 'rgba(255,255,255,0.12)',
+    border:
+      '1px solid rgba(255,255,255,0.16)',
+    borderRadius: 20,
+    padding: 16,
+    display: 'grid',
+    gap: 8,
+    fontWeight: 850,
+  },
+
+  meta60Box: {
+    maxWidth: 1180,
+    margin: '18px auto 0',
+    display: 'flex',
+    justifyContent: 'space-between',
+    gap: 20,
+    alignItems: 'center',
+    background:
+      'linear-gradient(135deg, #7c2d12 0%, #b91c1c 100%)',
+    color: '#fff',
+    borderRadius: 28,
+    padding: 24,
+    boxShadow:
+      '0 22px 60px rgba(127, 29, 29, 0.22)',
+  },
+
+  meta60Label: {
+    fontSize: 13,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    fontWeight: 950,
+    opacity: 0.86,
+  },
+
+  meta60Value: {
+    marginTop: 8,
+    fontSize: 54,
+    lineHeight: 1,
+    fontWeight: 950,
+  },
+
+  meta60Text: {
+    margin: '10px 0 0',
+    maxWidth: 680,
+    color: 'rgba(255,255,255,0.82)',
+    fontWeight: 700,
+    lineHeight: 1.45,
+  },
+
   noteBox: {
     maxWidth: 1180,
     margin: '18px auto 0',
@@ -562,29 +824,37 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 14,
     lineHeight: 1.45,
   },
+
   tablesWrap: {
     maxWidth: 1180,
     margin: '18px auto 0',
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))',
+    gridTemplateColumns:
+      'repeat(auto-fit, minmax(420px, 1fr))',
     gap: 16,
   },
+
   fullTableWrap: {
     maxWidth: 1180,
     margin: '18px auto 0',
   },
+
   tableCard: {
     background: '#fff',
     borderRadius: 24,
     padding: 18,
-    boxShadow: '0 18px 45px rgba(80, 0, 20, 0.08)',
-    border: '1px solid rgba(140, 0, 35, 0.08)',
+    boxShadow:
+      '0 18px 45px rgba(80, 0, 20, 0.08)',
+    border:
+      '1px solid rgba(140, 0, 35, 0.08)',
   },
+
   sectionTitle: {
     margin: '0 0 8px',
     fontSize: 17,
     color: '#2b1720',
   },
+
   sectionText: {
     margin: '0 0 14px',
     color: '#6b5d64',
@@ -592,14 +862,17 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.45,
     fontWeight: 700,
   },
+
   tableScroll: {
     overflowX: 'auto',
   },
+
   table: {
     width: '100%',
     borderCollapse: 'collapse',
     fontSize: 13,
   },
+
   th: {
     textAlign: 'left',
     padding: '10px 8px',
@@ -609,6 +882,7 @@ const styles: Record<string, CSSProperties> = {
     textTransform: 'uppercase',
     letterSpacing: 0.6,
   },
+
   thRight: {
     textAlign: 'right',
     padding: '10px 8px',
@@ -618,12 +892,14 @@ const styles: Record<string, CSSProperties> = {
     textTransform: 'uppercase',
     letterSpacing: 0.6,
   },
+
   td: {
     padding: '10px 8px',
     borderBottom: '1px solid #f2f2f2',
     color: '#3f3439',
     whiteSpace: 'nowrap',
   },
+
   tdStrong: {
     padding: '10px 8px',
     borderBottom: '1px solid #f2f2f2',
@@ -631,6 +907,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 850,
     minWidth: 180,
   },
+
   tdRight: {
     padding: '10px 8px',
     borderBottom: '1px solid #f2f2f2',
@@ -639,6 +916,7 @@ const styles: Record<string, CSSProperties> = {
     textAlign: 'right',
     whiteSpace: 'nowrap',
   },
+
   empty: {
     padding: 18,
     borderRadius: 16,
