@@ -124,6 +124,39 @@ function normalizeKey(k: string) {
     .toLowerCase()
 }
 
+function normalizeText(v: any) {
+  return toStr(v)
+    .replaceAll('Ã³', 'ó')
+    .replaceAll('Ã£', 'ã')
+    .replaceAll('Ã§', 'ç')
+    .replaceAll('Ãº', 'ú')
+    .replaceAll('Ã¡', 'á')
+    .replaceAll('Ã©', 'é')
+    .replaceAll('Ã­', 'í')
+    .replaceAll('Ãª', 'ê')
+    .replaceAll('Ã´', 'ô')
+    .replaceAll('Â', '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .toUpperCase()
+    .trim()
+}
+
+function onlyDigits(v: any) {
+  return toStr(v).replace(/\D/g, '')
+}
+
+function firstValue(...values: any[]) {
+  for (const value of values) {
+    const str = toStr(value)
+    if (str) return str
+  }
+
+  return ''
+}
+
 function formatarTelefoneBR(valor: string) {
   const numeros = valor.replace(/\D/g, '').slice(0, 11)
 
@@ -221,15 +254,19 @@ function parseNumber(v: any) {
 }
 
 function buildEmptyRowFromRegistro(data: any): RowBase {
+  const agPacb = splitAgPacb(
+    firstValue(data.agPacb, data.ag_pacb, data['agencia / pacb'])
+  )
+
   const row: RowBase = {
-    chave: toStr(data.chave),
-    nome: toStr(data.nome),
-    municipio: toStr(data.municipio),
-    agencia: toStr(data.agencia),
-    pacb: toStr(data.pacb),
-    statusAnalise: toStr(data.statusAnalise),
-    dtCertificacao: toStr(data.dtCertificacao),
-    trx: parseNumber(data.trx),
+    chave: firstValue(data.chave, data.chaveLoja, data.chave_loja),
+    nome: firstValue(data.nome, data.nomeLoja, data.nome_loja, data.expresso),
+    municipio: firstValue(data.municipio, data.cidade),
+    agencia: firstValue(data.agencia, agPacb.agencia),
+    pacb: firstValue(data.pacb, agPacb.pacb),
+    statusAnalise: firstValue(data.statusAnalise, data.status_analise, data.status),
+    dtCertificacao: firstValue(data.dtCertificacao, data.dt_certificacao),
+    trx: parseNumber(firstValue(data.trx, data.qtd_TrxContabil, data.qtd_trxcontabil)),
 
     qtdContas: parseNumber(data.qtdContas),
     qtdContasComDeposito: parseNumber(data.qtdContasComDeposito),
@@ -784,50 +821,57 @@ export default function ExpressoGeralPage() {
       const termoTexto = normalizeText(termoOriginal)
       const termoNumerico = onlyDigits(termoOriginal)
 
+      // Busca geral na coleção de Junho e filtra localmente.
+      // Isso permite encontrar QUALQUER PARTE do nome do expresso,
+      // município, agência, PACB, agência/PACB e chave loja,
+      // sem depender de startAt/endAt do Firestore.
       const snap = await getDocs(collection(db, EXPRESSOS_COLLECTION))
 
-      const todos = snap.docs.map((docSnap) =>
-        buildEmptyRowFromRegistro(docSnap.data())
-      )
+      const resultado = snap.docs
+        .map((docSnap) => {
+          const row = buildEmptyRowFromRegistro(docSnap.data())
+          return {
+            row,
+            docId: docSnap.id,
+          }
+        })
+        .filter(({ row, docId }) => {
+          const textoBusca = normalizeText(
+            [
+              docId,
+              row.nome,
+              row.chave,
+              row.municipio,
+              row.agencia,
+              row.pacb,
+              `${row.agencia}/${row.pacb}`,
+              `${row.agencia} / ${row.pacb}`,
+              `${row.agencia} ${row.pacb}`,
+              row.statusAnalise,
+              row.regional,
+              row.uf,
+              row.responsavel,
+              row.telefoneResponsavel,
+            ].join(' ')
+          )
 
-      const resultado = todos.filter((row) => {
-        const textoBusca = normalizeText(
-          [
-            row.nome,
-            row.chave,
-            row.municipio,
-            row.agencia,
-            row.pacb,
-            `${row.agencia}/${row.pacb}`,
-            `${row.agencia} / ${row.pacb}`,
-            row.statusAnalise,
-            row.regional,
-            row.uf,
-            row.responsavel,
-            row.telefoneResponsavel,
-          ].join(' ')
-        )
+          const numerosBusca = onlyDigits(
+            [
+              docId,
+              row.chave,
+              row.agencia,
+              row.pacb,
+              `${row.agencia}${row.pacb}`,
+              row.telefoneResponsavel,
+            ].join(' ')
+          )
 
-        const numerosBusca = onlyDigits(
-          [
-            row.chave,
-            row.agencia,
-            row.pacb,
-            `${row.agencia}${row.pacb}`,
-            row.telefoneResponsavel,
-          ].join(' ')
-        )
-
-        const encontrouTexto = termoTexto
-          ? textoBusca.includes(termoTexto)
-          : false
-
-        const encontrouNumero = termoNumerico
-          ? numerosBusca.includes(termoNumerico)
-          : false
-
-        return encontrouTexto || encontrouNumero
-      })
+          return (
+            Boolean(termoTexto && textoBusca.includes(termoTexto)) ||
+            Boolean(termoNumerico && numerosBusca.includes(termoNumerico))
+          )
+        })
+        .map(({ row }) => row)
 
       resultado.sort((a, b) => {
         const nomeA = normalizeText(a.nome)

@@ -86,9 +86,9 @@ export default function DashboardPage() {
   const ADMIN_EMAIL = 'marcelo@treinexpresso.com.br'
   const STORAGE_FOLDER = 'arquivos-obrigatorios'
 
-  const BASE_STORAGE_PATH = 'base-lojas/banco.csv'
+  const BASE_STORAGE_PATH = 'base-lojas/banco-junho-2026.csv'
   const BASE_BACKUP_FOLDER = 'base-lojas/backups'
-  const BASE_META_DOC = { col: 'config', docId: 'base_lojas' }
+  const BASE_META_DOC = { col: 'config', docId: 'base_lojas_junho_2026' }
 
   const [user, setUser] = useState<User | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
@@ -405,7 +405,7 @@ export default function DashboardPage() {
         now.getMinutes()
       )}-${pad2(now.getSeconds())}`
 
-      const backupPath = `${BASE_BACKUP_FOLDER}/banco_${stamp}.csv`
+      const backupPath = `${BASE_BACKUP_FOLDER}/banco-junho-2026_${stamp}.csv`
       await uploadBytes(ref(storage, backupPath), currentBytes, { contentType: 'text/csv' })
     } catch (e: any) {
       const code = String(e?.code || '')
@@ -575,6 +575,13 @@ export default function DashboardPage() {
           <div className="h2">🏦 Simulador Abertura de Conta</div>
           <p className="p-muted mt-1">Treinar o fluxo de abertura de conta no simulador.</p>
         </Link>
+
+        {isAdmin && (
+          <Link href="/dashboard/expressos/visao-geral" className="card-soft">
+            <div className="h2">📊 Visão Geral</div>
+            <p className="p-muted mt-1">Resumo executivo dos Expressos pela base Junho 2026.</p>
+          </Link>
+        )}
       </div>
 
       {isAdmin && (
@@ -584,7 +591,7 @@ export default function DashboardPage() {
             Base de dados (Expresso)
           </h2>
           <p className="p-muted" style={{ marginTop: '.35rem' }}>
-            Atualize a base principal (banco.csv) direto por Excel ou CSV. O sistema faz backup automático.
+            Atualize a base principal de Junho 2026 (banco-junho-2026.csv) direto por Excel ou CSV. O sistema faz backup automático.
           </p>
 
           <div style={{ marginTop: '.85rem', display: 'grid', gap: '.6rem' }}>
@@ -623,7 +630,7 @@ export default function DashboardPage() {
                 onChange={(e) => setBaseFile(e.target.files?.[0] ?? null)}
               />
               <p className="p-muted" style={{ marginTop: '.35rem', fontSize: 13 }}>
-                Você pode subir Excel direto. O sistema converte internamente para CSV e atualiza <b>base-lojas/banco.csv</b>.
+                Você pode subir Excel direto. O sistema converte internamente para CSV e atualiza <b>base-lojas/banco-junho-2026.csv</b>.
               </p>
             </label>
 
