@@ -218,67 +218,6 @@ function mapToLinhaTreinamento(r: Record<string, any>): LinhaTreinamento {
   }
 }
 
-function linhaToExcelRow(r: LinhaTreinamento): Record<string, any> {
-  return {
-    'Chave Loja': r.chaveLoja,
-    'Razão Social': r.razaoSocial,
-    'Nome da Loja': r.nomeLoja,
-    CNPJ: r.cnpj,
-    Filial: '',
-    Controle: '',
-    'Cód. Ag. Relacionamento': r.codAgRelacionamento,
-    'Nome Ag.': r.nomeAg,
-    'Num. PACB': r.numPacb,
-    Municipio: r.municipio,
-    DDD: r.ddd,
-    Telefone: r.telefone,
-    'Status do Tablet': r.statusTablet,
-    Contato: r.contato,
-    'Email do contato': r.emailContato,
-  }
-}
-
-function mergeTreinamentos(
-  atuais: LinhaTreinamento[],
-  novos: LinhaTreinamento[]
-): LinhaTreinamento[] {
-  const map = new Map<string, LinhaTreinamento>()
-
-  atuais.forEach((r) => {
-    const chave = toStr(r.chaveLoja)
-    if (!chave) return
-    map.set(chave, r)
-  })
-
-  novos.forEach((r) => {
-    const chave = toStr(r.chaveLoja)
-    if (!chave) return
-
-    const anterior = map.get(chave)
-
-    map.set(chave, {
-      ...(anterior || ({} as LinhaTreinamento)),
-      ...r,
-      chaveLoja: chave,
-    })
-  })
-
-  return Array.from(map.values()).sort((a, b) =>
-    toStr(a.nomeLoja || a.razaoSocial).localeCompare(
-      toStr(b.nomeLoja || b.razaoSocial),
-      'pt-BR'
-    )
-  )
-}
-
-function workbookFromTreinamentos(rows: LinhaTreinamento[]) {
-  const wb = XLSX.utils.book_new()
-  const ws = XLSX.utils.json_to_sheet(rows.map(linhaToExcelRow))
-  XLSX.utils.book_append_sheet(wb, ws, 'Lista')
-  return wb
-}
-
-
 /* =========================
    COMPANY CARD
    ========================= */
@@ -546,34 +485,8 @@ export default function TreinamentosPage() {
         throw new Error('Envie um arquivo .xls ou .xlsx.')
       }
 
-      const novoBytes = await file.arrayBuffer()
-      const novoWb = readWorkbook(novoBytes)
-      const novasLinhas = sheetRows(novoWb)
-        .map(mapToLinhaTreinamento)
-        .filter((r) => !!r.chaveLoja)
-
-      let linhasAtuais: LinhaTreinamento[] = []
-
-      try {
-        const bytesAtuais = await getBytes(ref(storage, FIXED_PATH))
-        const wbAtual = readWorkbook(bytesAtuais)
-        linhasAtuais = sheetRows(wbAtual)
-          .map(mapToLinhaTreinamento)
-          .filter((r) => !!r.chaveLoja)
-      } catch (e) {
-        console.warn('Nenhuma lista anterior encontrada para mesclar:', e)
-      }
-
-      const linhasMescladas = mergeTreinamentos(linhasAtuais, novasLinhas)
-      const wbFinal = workbookFromTreinamentos(linhasMescladas)
-
-      const arquivoFinal = XLSX.write(wbFinal, {
-        bookType: 'xls',
-        type: 'array',
-      }) as ArrayBuffer
-
-      await uploadBytes(ref(storage, FIXED_PATH), arquivoFinal, {
-        contentType: 'application/vnd.ms-excel',
+      await uploadBytes(ref(storage, FIXED_PATH), file, {
+        contentType: file.type || undefined,
       })
 
       await setDoc(
@@ -581,22 +494,12 @@ export default function TreinamentosPage() {
         {
           uploadedAt: serverTimestamp(),
           uploadedBy: auth.currentUser.email || '',
-          totalArquivoNovo: novasLinhas.length,
-          totalListaAnterior: linhasAtuais.length,
-          totalListaMesclada: linhasMescladas.length,
-          modoAtualizacao: 'merge_preservando_agenda_e_nao_assumidos',
         },
         { merge: true }
       )
 
-      setRows(linhasMescladas)
-      await loadAssignments()
-
-      setInfo(
-        `Lista mesclada ✅ Novo arquivo: ${novasLinhas.length} • Anteriores preservados: ${
-          linhasMescladas.length - novasLinhas.length
-        } • Total: ${linhasMescladas.length}`
-      )
+      setInfo('Lista atual atualizada ✅')
+      await loadCurrentList()
       setFile(null)
     } catch (e: any) {
       console.error('handleUploadFixed error:', e)
@@ -825,7 +728,7 @@ export default function TreinamentosPage() {
               Atualizar lista atual
             </h2>
             <p className="p-muted" style={{ marginTop: '.35rem' }}>
-              O arquivo será salvo como <b>trainings/lista-atual.xls</b>, mesclando com a lista atual para preservar agenda e treinamentos ainda não assumidos.
+              O arquivo será salvo como <b>trainings/lista-atual.xls</b> (substitui o anterior).
             </p>
           </div>
 
@@ -840,7 +743,7 @@ export default function TreinamentosPage() {
           </label>
 
           <button onClick={handleUploadFixed} disabled={loadingUpload} className="btn-primary">
-            {loadingUpload ? 'Enviando...' : 'Enviar e mesclar lista'}
+            {loadingUpload ? 'Enviando...' : 'Enviar e substituir lista'}
           </button>
         </div>
       )}
