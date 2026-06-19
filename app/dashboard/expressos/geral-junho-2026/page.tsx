@@ -39,6 +39,170 @@ const EXPRESSOS_COLLECTION_ANTIGA = 'expressos_registro'
 const RESUMO_EXPRESSOS_DOC = 'resumo_expressos_junho_2026'
 const LIMIT_NO_SEARCH = 10
 
+// MÓDULO TEMPORÁRIO — CAMPANHA GOLEADA DE PRÊMIOS
+// Quando a campanha acabar, basta remover este bloco e os pontos marcados com "GOLEADA DE PRÊMIOS".
+const CAMPANHA_GOLEADA_ATIVA = true
+const CAMPANHA_GOLEADA_NOME = 'Goleada de Prêmios'
+const CAMPANHA_GOLEADA_GRUPO_PADRAO = 'GRUPO 1 - ZERADO'
+const CAMPANHA_GOLEADA_DADOS = [
+  {"chave": "403760", "nome": "LUME", "grupo": "GRUPO ELITE"},
+  {"chave": "237558", "nome": "SABOR E VIDA", "grupo": "GRUPO ELITE"},
+  {"chave": "84503", "nome": "FARMACIA SANTO ANTONIO", "grupo": "GRUPO ELITE"},
+  {"chave": "87253", "nome": "FANATICOS", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "88538", "nome": "LR MULTIMARCAS", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "85102", "nome": "TACY PAPELARIA E VARIEDADES", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "224490", "nome": "HL DIGITAL", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "171740", "nome": "DI CHERRY", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "237606", "nome": "NS BEAUTY", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "160402", "nome": "LOJA Z", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "174090", "nome": "JAM MODAS E ACESSORIOS", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "92045", "nome": "IMPERIAL CALCADOS", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "420353", "nome": "EMPORIO SABOR   VIDA", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "223255", "nome": "COMERCIAL MATOS", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "85510", "nome": "MERCEARIA BOM PRECO", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "116245", "nome": "LOJA Z", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "158091", "nome": "BELLA CASA MOVEIS E ELETRODOMESTICOS", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "46275", "nome": "FARMACIA PARA TODOS", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "118172", "nome": "UNIVERSO DAS CORES", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "160105", "nome": "MLM MATERIAL DE CONSTRUCAO", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "79777", "nome": "SANTIAGO CICLOS", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "200832", "nome": "DALETE VARIEDADES", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "416908", "nome": "Otica Flor De Lis", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "117003", "nome": "COMERCIAL ESPORA DE OURO", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "38133", "nome": "FARMACIA RODRIGUES", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "416775", "nome": "Cl. Materiais De Construcao", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "207202", "nome": "SUPERMERCADO DURANS", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "130578", "nome": "DEDEL LASER", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "222748", "nome": "ESPORTE BRASIL", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "26613", "nome": "LOJA MURITIBANA", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "248435", "nome": "ATACADAO DA LIMPEZA", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "116855", "nome": "PHILISOM", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "51238", "nome": "SAO JORGE MATERIAIS DE CONSTRUCAO", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "163036", "nome": "KANARIO MOVEIS", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "118513", "nome": "CASA UTIL PAPELARIA E VARIEDADES", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "417871", "nome": "Lu Cosmeticos", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "405881", "nome": "Construhome Materiais De Construcao", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "160140", "nome": "CASA DO FRANGO E CIA", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "415068", "nome": "CONSTRUAGRO", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "417848", "nome": "Constrular Sjv Materiais Para Construcao", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "178263", "nome": "MERCADAO DA MODA", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "414403", "nome": "Farmacia Tropical Trancoso", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "239666", "nome": "RAIZ DE DAVI", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "63321", "nome": "ESPACO CULTURAL", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "76368", "nome": "L E MODA FASHION", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "166211", "nome": "ARMAZEM MACEDO", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "59527", "nome": "GUIMARAES ESPORTES", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "81183", "nome": "PISOLAR", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "422545", "nome": "SILVA ELETRICIDADE", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "79070", "nome": "PADARIA TRIGO E PAO", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "420237", "nome": "Jl Fashion", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "135397", "nome": "COMERCIAL LACERDA", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "415740", "nome": "Nutri Vida Saj", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "415467", "nome": "PADILHA MATERIAIS DE CONSTRUCAO", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "419653", "nome": "Viva Calcados", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "403367", "nome": "Otica Do Povo 0003", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "26498", "nome": "ELSHADAY MERCEARIA", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "120683", "nome": "MERCADINHO BENÇÃO", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "415539", "nome": "CASA DO CHURRASCO", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "134705", "nome": "COMERCIAL OLIVEIRA E SOUZA", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "422467", "nome": "Comercio Distribuicao De Alimentos", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "245953", "nome": "MERCADINHO FAMILIAR", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "207882", "nome": "NOVA PHARMA", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "411151", "nome": "Cantinho Da Terra", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "139930", "nome": "CONCEITO AGROPECUARIO", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "155228", "nome": "ALEXANDRE CONVENIENCIA E PERFUMARIA", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "247124", "nome": "G T MOTOCICLOS", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "244976", "nome": "ESPACO BELEZA E MODA", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "414692", "nome": "Mercadinho Do Pedrinho", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "57739", "nome": "LIPY CONFECCOES", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "147629", "nome": "SUPERMERCADO CARAIBAS", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "115228", "nome": "MERCADINHO NUNES", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "407631", "nome": "Mercadinho Lindo Horizonte", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "130857", "nome": "CONSTRULIDER", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "410093", "nome": "Farma Dias", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "406232", "nome": "SANTOS RAMOS MATERIAIS DE CONSTRUÇÃO", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "178286", "nome": "LOJAS LUANA 0001", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "227200", "nome": "MERCADO M SILVA", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "58441", "nome": "JOAO E MARIA LOJA DE VARIEDADES", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "221418", "nome": "EMPORIO GRAN BAHIA", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "141827", "nome": "PRADO PAPELARIA", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "404242", "nome": "Ramos Confeccoes", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "419004", "nome": "Frigorifico Ofertao Da Carne", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "249915", "nome": "TIM ELETRO", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "68979", "nome": "ESPACO BETTE", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "181510", "nome": "FARMA DIAS", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "405010", "nome": "Megalar Moveis", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "422496", "nome": "MERCADO MEIRA", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "233249", "nome": "O AVISTAO  SUPERMERCADO", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "403536", "nome": "RODRIGO CELULAR", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "245656", "nome": "OTICA ATUAL", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "401974", "nome": "5 Irmaos Supermercado", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "184178", "nome": "MERCADO E PANIFICACAO NUNES", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "228502", "nome": "MERCADO CHAMA NO ZAP", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "418145", "nome": "Casa Nunes Loucas E Variedades", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "411743", "nome": "Mercado Sao Roque", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "422735", "nome": "Mix Oliveira", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "251339", "nome": "SUPERMERCADO BAIAO", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "208372", "nome": "MERCEARIA AVENIDA", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "244975", "nome": "MERCADO MILLENIUM", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "409023", "nome": "Leoes Construcao", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "410631", "nome": "RODAK PECAS", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "22203", "nome": "DROGARIA PARANA", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "65963", "nome": "KATIK MODAS", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "39276", "nome": "SUPERMERCADO CRUZ", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "165869", "nome": "COMERCIAL ELDORADO", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "400170", "nome": "LOJAS LUANA 0002", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "246078", "nome": "MERCADINHO CLOVIS FILHO", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "186208", "nome": "VERA MODAS", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "403366", "nome": "Otica Do Povo 0002", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "407065", "nome": "Farmacia Bom Preco", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "81987", "nome": "NOVA POTIMAC", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "243135", "nome": "PORTAL MOVEIS", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "242328", "nome": "FARMACIA TEOLANDIA", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "412096", "nome": "FARMACIA FORT POPULAR", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "216502", "nome": "POSTO DE MEDICAMENTOS MAIS SAUDE", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "130308", "nome": "CASA CENTER COMERCIO DE MATERIAL PARA CONSTRUCAO L", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "248605", "nome": "MERCADINHO SUPER BOM PRECO", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "413520", "nome": "Mercearia Da Cris", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "419202", "nome": "Lopes Materiais Para Construcao", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "418804", "nome": "Ramos Moveis", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "81488", "nome": "MATERIAIS DE CONSTRUCAO ROCHA", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "422517", "nome": "Ws Magazine", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "253270", "nome": "OTICA ATUAL 002", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "418218", "nome": "Rede Bem Drogarias Floresta Azul", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "410658", "nome": "Cantinho Dos Presentes E Papelaria 0002", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "101336", "nome": "FARMACIA SAO RAFAEL", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "224632", "nome": "COMERCIAL BULCAO BRUM", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "421891", "nome": "Ramon Assitencia Tecnica", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "219553", "nome": "FAVORITA FARMA", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "233367", "nome": "AVATIM LCL", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "117419", "nome": "LAY MORENA FASHION", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "418836", "nome": "Vet Center", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "164280", "nome": "SHOPPING DOS ELETROS", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "407280", "nome": "Confar Tudo Para O Seu Lar", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "208112", "nome": "TOM MATERIAIS DE CONSTRUCAO", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "404433", "nome": "YES COSMETICOS", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "415247", "nome": "Casa Da Racao", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "48528", "nome": "IRAJUBA MODAS", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "174763", "nome": "OTICA VICOSA", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "220260", "nome": "FARMACIA VIDA 0002", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "60068", "nome": "GIROTTO DELICANTEN", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "400074", "nome": "LANCHONETE BEATRIZ", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "422312", "nome": "Mercado Sacolao Do Povo", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "85193", "nome": "COMERCIAL BRAGA", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "163574", "nome": "CAROL FESTAS ETC E TAL", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "418516", "nome": "Tabelionato De Protesto De Titulos", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "156609", "nome": "MERCADO FERNANDA", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "406716", "nome": "SUPERMERCADO PAGUE MENOS", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "414914", "nome": "Farmacia Economia Do Povo", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "171982", "nome": "PRECO BOM", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "413142", "nome": "Azevedo Motos", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "418402", "nome": "Supermercado Pedrinhas", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "161558", "nome": "CASA DA KA", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "422738", "nome": "Dino Supermercado", "grupo": "GRUPO COM VENDAS"},
+  {"chave": "168556", "nome": "FARMACIA BOA SAUDE", "grupo": "GRUPO COM VENDAS"}
+] as const
+
 type RowBase = {
   chave: string
   nome: string
@@ -104,6 +268,20 @@ type ResumoExpressos = {
 type CertFilter = 'Todos' | 'NaoCertificado' | 'Certificado' | 'Vencida'
 type TrxFilter = 'Todos' | '0' | '1-199' | '200+'
 
+type CampanhaGoleadaMap = {
+  porChave: Map<string, string>
+  porChaveDigitos: Map<string, string>
+  porNome: Map<string, string>
+}
+
+function criarCampanhaGoleadaVazia(): CampanhaGoleadaMap {
+  return {
+    porChave: new Map(),
+    porChaveDigitos: new Map(),
+    porNome: new Map(),
+  }
+}
+
 function toStr(v: any) {
   return v === null || v === undefined ? '' : String(v).trim()
 }
@@ -146,6 +324,95 @@ function normalizeText(v: any) {
 
 function onlyDigits(v: any) {
   return toStr(v).replace(/\D/g, '')
+}
+
+function getFirstKeyContaining(obj: Record<string, any>, ...parts: string[]) {
+  const wanted = parts.map((part) => normalizeText(part))
+
+  for (const key of Object.keys(obj)) {
+    const normalizedKey = normalizeText(key)
+    if (wanted.every((part) => normalizedKey.includes(part))) {
+      return obj[key]
+    }
+  }
+
+  return ''
+}
+
+function normalizeGrupoGoleada(v: any) {
+  const grupo = toStr(v).toUpperCase()
+
+  if (!grupo) return CAMPANHA_GOLEADA_GRUPO_PADRAO
+  if (grupo.includes('GRUPO')) return grupo
+
+  return `GRUPO ${grupo}`
+}
+
+function grupoGoleadaPeloExpresso(
+  r: Pick<RowBase, 'chave' | 'nome'>,
+  campanha: CampanhaGoleadaMap
+) {
+  if (!CAMPANHA_GOLEADA_ATIVA) return ''
+
+  const chaveId = safeDocId(r.chave)
+  const chaveDigitos = onlyDigits(r.chave)
+  const nomeId = normalizeText(r.nome)
+
+  return (
+    campanha.porChave.get(chaveId) ||
+    campanha.porChaveDigitos.get(chaveDigitos) ||
+    campanha.porNome.get(nomeId) ||
+    CAMPANHA_GOLEADA_GRUPO_PADRAO
+  )
+}
+
+function montarMapaCampanhaGoleada(raw: Record<string, any>[]): CampanhaGoleadaMap {
+  const campanha = criarCampanhaGoleadaVazia()
+
+  raw.forEach((obj) => {
+    const r: Record<string, any> = {}
+    for (const [k, v] of Object.entries(obj)) r[normalizeKey(k)] = v
+
+    const chave = firstValue(
+      r['chave_loja'],
+      r['chave loja'],
+      r['chave'],
+      r['codigo'],
+      r['código'],
+      r['cod loja'],
+      getFirstKeyContaining(r, 'chave')
+    )
+
+    const nome = firstValue(
+      r['nome_loja'],
+      r['nome da loja'],
+      r['nome expresso'],
+      r['expresso'],
+      r['nome'],
+      getFirstKeyContaining(r, 'nome')
+    )
+
+    const grupo = normalizeGrupoGoleada(
+      firstValue(
+        r['grupo'],
+        r['nome do grupo'],
+        r['grupo campanha'],
+        r['grupo goleada'],
+        r['campanha'],
+        getFirstKeyContaining(r, 'grupo')
+      )
+    )
+
+    const chaveId = safeDocId(chave)
+    const chaveDigitos = onlyDigits(chave)
+    const nomeId = normalizeText(nome)
+
+    if (chaveId && chaveId !== 'sem-chave') campanha.porChave.set(chaveId, grupo)
+    if (chaveDigitos) campanha.porChaveDigitos.set(chaveDigitos, grupo)
+    if (nomeId) campanha.porNome.set(nomeId, grupo)
+  })
+
+  return campanha
 }
 
 function firstValue(...values: any[]) {
@@ -684,6 +951,9 @@ export default function ExpressoGeralPage() {
 
   const [rows, setRows] = useState<RowBase[]>([])
   const [allRowsLoaded, setAllRowsLoaded] = useState(false)
+  const [campanhaGoleada, setCampanhaGoleada] =
+    useState<CampanhaGoleadaMap>(() => montarMapaCampanhaGoleada([...CAMPANHA_GOLEADA_DADOS]))
+  const [campanhaGoleadaInfo, setCampanhaGoleadaInfo] = useState('')
   const [resumoExpressos, setResumoExpressos] =
     useState<ResumoExpressos | null>(null)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
@@ -707,6 +977,21 @@ export default function ExpressoGeralPage() {
       ...prev,
       [key]: !prev[key],
     }))
+  }
+
+  async function carregarCampanhaGoleada() {
+    if (!CAMPANHA_GOLEADA_ATIVA) return
+
+    const mapa = montarMapaCampanhaGoleada([...CAMPANHA_GOLEADA_DADOS])
+    const total =
+      mapa.porChave.size || mapa.porChaveDigitos.size || mapa.porNome.size
+
+    setCampanhaGoleada(mapa)
+    setCampanhaGoleadaInfo(
+      total
+        ? `${CAMPANHA_GOLEADA_NOME}: ${total} expresso(s) da campanha carregado(s) ✅`
+        : `${CAMPANHA_GOLEADA_NOME}: sem registros identificados.`
+    )
   }
 
   async function carregarResumoExpressos() {
@@ -1264,6 +1549,7 @@ export default function ExpressoGeralPage() {
       }
 
       setIsAdmin((u.email || '').toLowerCase() === ADMIN_EMAIL.toLowerCase())
+      carregarCampanhaGoleada()
       carregarResumoExpressos()
       carregarPrimeirosRegistros()
     })
@@ -1530,6 +1816,19 @@ export default function ExpressoGeralPage() {
           Possível bloqueado: {stats.possivelBloqueado}
         </Pill>
 
+        {CAMPANHA_GOLEADA_ATIVA && (
+          <Pill
+            style={{
+              background: 'rgba(37,99,235,.10)',
+              border: '1px solid rgba(37,99,235,.22)',
+              color: 'rgba(29,78,216,.98)',
+            }}
+            title={campanhaGoleadaInfo || CAMPANHA_GOLEADA_NOME}
+          >
+            ⚽ {CAMPANHA_GOLEADA_NOME}
+          </Pill>
+        )}
+
         <button
           className="btn-primary"
           onClick={isAdmin ? loadCsv : recarregarTela}
@@ -1597,6 +1896,12 @@ export default function ExpressoGeralPage() {
           </div>
         )}
 
+        {CAMPANHA_GOLEADA_ATIVA && campanhaGoleadaInfo && (
+          <div>
+            <span className="pill">⚽ {campanhaGoleadaInfo}</span>
+          </div>
+        )}
+
         {error && (
           <div className="card-soft" style={{ borderColor: 'rgba(214,31,44,.25)' }}>
             <p
@@ -1661,6 +1966,7 @@ export default function ExpressoGeralPage() {
 
             const sinais = gerarSinalizacoes(r, semCert, vencida)
             const recomendacao = acaoRecomendada(r, semCert, vencida)
+            const grupoGoleada = grupoGoleadaPeloExpresso(r, campanhaGoleada)
 
             return (
               <div
@@ -1716,6 +2022,19 @@ export default function ExpressoGeralPage() {
                     <Pill style={pontosPillStyle} title="Ativo se Pontos >= 10">
                       Pontos: {formatPontos(pontos)}
                     </Pill>
+
+                    {CAMPANHA_GOLEADA_ATIVA && (
+                      <Pill
+                        style={{
+                          background: 'linear-gradient(135deg, rgba(214,31,44,.12), rgba(37,99,235,.12))',
+                          border: '1px solid rgba(214,31,44,.20)',
+                          color: 'rgba(115,20,55,.98)',
+                        }}
+                        title="Campanha temporária Goleada de Prêmios"
+                      >
+                        ⚽ {CAMPANHA_GOLEADA_NOME}: {grupoGoleada}
+                      </Pill>
+                    )}
 
                     {r.presenteNaUltimaBase === false && (
                       <Pill
@@ -1817,6 +2136,15 @@ export default function ExpressoGeralPage() {
                     </div>
                     <div style={{ fontWeight: 900 }}>{r.statusAnalise || '—'}</div>
                   </div>
+
+                  {CAMPANHA_GOLEADA_ATIVA && (
+                    <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
+                      <div className="p-muted" style={{ fontSize: 12 }}>
+                        CAMPANHA GOLEADA DE PRÊMIOS
+                      </div>
+                      <div style={{ fontWeight: 900 }}>{grupoGoleada}</div>
+                    </div>
+                  )}
 
                   <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
                     <div className="p-muted" style={{ fontSize: 12 }}>

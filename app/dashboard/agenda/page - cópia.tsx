@@ -151,44 +151,22 @@ export default function AgendaTreinamentosPage() {
   const [info, setInfo] = useState<string>('')
 
   async function loadCurrentKeysFromXls() {
-    try {
-      const bytesAny = await getBytes(sref(storage, FIXED_PATH))
-      const u8 = toUint8(bytesAny)
-      const wb = XLSX.read(u8, { type: 'array' })
+    const bytesAny = await getBytes(sref(storage, FIXED_PATH))
+    const u8 = toUint8(bytesAny)
+    const wb = XLSX.read(u8, { type: 'array' })
 
-      const sheetName = wb.SheetNames[0]
-      const ws = wb.Sheets[sheetName]
-      const raw: Record<string, any>[] = XLSX.utils.sheet_to_json(ws, { defval: '' })
+    const sheetName = wb.SheetNames[0]
+    const ws = wb.Sheets[sheetName]
+    const raw: Record<string, any>[] = XLSX.utils.sheet_to_json(ws, { defval: '' })
 
-      const keys = new Set<string>()
-
-      for (const row of raw) {
-        const normalized: Record<string, any> = {}
-
-        for (const [k, v] of Object.entries(row)) {
-          normalized[normalizeKey(k)] = v
-        }
-
-        const chave = String(
-          normalized['Chave Loja'] ??
-            normalized['CHAVE LOJA'] ??
-            normalized['chave_loja'] ??
-            normalized['chave'] ??
-            normalized['Chave'] ??
-            ''
-        ).trim()
-
-        if (chave) keys.add(chave)
-      }
-
-      setCurrentKeys(keys)
-    } catch (e) {
-      console.error('Falha ao carregar chaves atuais da lista:', e)
-
-      // Importante: a agenda NÃO pode sumir se a lista atual falhar,
-      // mudar de CSV/XLS ou se algum treinamento não estiver mais na base nova.
-      setCurrentKeys(new Set())
+    const keys = new Set<string>()
+    for (const row of raw) {
+      const normalized: Record<string, any> = {}
+      for (const [k, v] of Object.entries(row)) normalized[normalizeKey(k)] = v
+      const chave = String(normalized['Chave Loja'] ?? '').trim()
+      if (chave) keys.add(chave)
     }
+    setCurrentKeys(keys)
   }
 
   async function loadAll() {
