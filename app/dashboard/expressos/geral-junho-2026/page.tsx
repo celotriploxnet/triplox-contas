@@ -302,6 +302,52 @@ function normalizeKey(k: string) {
     .toLowerCase()
 }
 
+
+function compactKey(v: any) {
+  return toStr(v)
+    .replaceAll('Ã³', 'ó')
+    .replaceAll('Ã£', 'ã')
+    .replaceAll('Ã§', 'ç')
+    .replaceAll('Ãº', 'ú')
+    .replaceAll('Ã¡', 'á')
+    .replaceAll('Ã©', 'é')
+    .replaceAll('Ã­', 'í')
+    .replaceAll('Ãª', 'ê')
+    .replaceAll('Ã´', 'ô')
+    .replaceAll('Â', '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .toLowerCase()
+}
+
+function getFieldValue(obj: Record<string, any>, ...names: string[]) {
+  if (!obj) return ''
+
+  for (const name of names) {
+    if (obj[name] !== undefined && obj[name] !== null && toStr(obj[name]) !== '') return obj[name]
+
+    const lowerName = normalizeKey(name)
+    if (obj[lowerName] !== undefined && obj[lowerName] !== null && toStr(obj[lowerName]) !== '') {
+      return obj[lowerName]
+    }
+  }
+
+  const wanted = names.map(compactKey)
+  for (const [key, value] of Object.entries(obj)) {
+    const keyCompact = compactKey(key)
+    if (wanted.includes(keyCompact) && value !== undefined && value !== null && toStr(value) !== '') {
+      return value
+    }
+  }
+
+  return ''
+}
+
+function getNumberField(obj: Record<string, any>, ...names: string[]) {
+  return parseNumber(getFieldValue(obj, ...names))
+}
+
 function normalizeText(v: any) {
   return toStr(v)
     .replaceAll('Ã³', 'ó')
@@ -535,25 +581,25 @@ function buildEmptyRowFromRegistro(data: any): RowBase {
     dtCertificacao: firstValue(data.dtCertificacao, data.dt_certificacao),
     trx: parseNumber(firstValue(data.trx, data.qtd_TrxContabil, data.qtd_trxcontabil)),
 
-    qtdContas: parseNumber(data.qtdContas),
-    qtdContasComDeposito: parseNumber(data.qtdContasComDeposito),
-    qtdContasSemDeposito: parseNumber(data.qtdContasSemDeposito),
-    qtdCestaServ: parseNumber(data.qtdCestaServ),
-    qtdSuperProtegido: parseNumber(data.qtdSuperProtegido),
-    qtdMobilidade: parseNumber(data.qtdMobilidade),
-    qtdCartaoEmitido: parseNumber(data.qtdCartaoEmitido),
-    qtdChesContratado: parseNumber(data.qtdChesContratado),
-    qtdLimeAbConta: parseNumber(data.qtdLimeAbConta),
-    qtdLime: parseNumber(data.qtdLime),
-    qtdConsignado: parseNumber(data.qtdConsignado),
-    qtdCreditoParcelado: parseNumber(data.qtdCreditoParcelado),
-    qtdMicrosseguro: parseNumber(data.qtdMicrosseguro),
-    qtdVivaVida: parseNumber(data.qtdVivaVida),
-    qtdPlanoOdonto: parseNumber(data.qtdPlanoOdonto),
-    qtdSegResidencial: parseNumber(data.qtdSegResidencial),
-    qtdSegCartaoDeb: parseNumber(data.qtdSegCartaoDeb),
-    vlrExpSorte: parseNumber(data.vlrExpSorte),
-    qtdExpSorte: parseNumber(data.qtdExpSorte),
+    qtdContas: getNumberField(data, 'qtdContas', 'qtd_contas', 'qtd contas'),
+    qtdContasComDeposito: getNumberField(data, 'qtdContasComDeposito', 'qtd_contas_com_deposito', 'qtd contas com deposito'),
+    qtdContasSemDeposito: getNumberField(data, 'qtdContasSemDeposito', 'qtd_contas_sem_deposito', 'qtd contas sem deposito'),
+    qtdCestaServ: getNumberField(data, 'qtdCestaServ', 'qtd_cesta_serv', 'qtd cesta serv'),
+    qtdSuperProtegido: getNumberField(data, 'qtdSuperProtegido', 'QTD_SUPER_PROTEGIDO', 'qtd_super_protegido'),
+    qtdMobilidade: getNumberField(data, 'qtdMobilidade', 'qtd_mobilidade'),
+    qtdCartaoEmitido: getNumberField(data, 'qtdCartaoEmitido', 'QTD_CARTAO_EMITIDO', 'qtd_cartao_emitido'),
+    qtdChesContratado: getNumberField(data, 'qtdChesContratado', 'qtd_chesp_contratado'),
+    qtdLimeAbConta: getNumberField(data, 'qtdLimeAbConta', 'qtd_lime_ab_conta'),
+    qtdLime: getNumberField(data, 'qtdLime', 'qtd_lime'),
+    qtdConsignado: getNumberField(data, 'qtdConsignado', 'qtd_consignado'),
+    qtdCreditoParcelado: getNumberField(data, 'qtdCreditoParcelado', 'VLR_CREDITO_PARCEL', 'vlr_credito_parcel'),
+    qtdMicrosseguro: getNumberField(data, 'qtdMicrosseguro', 'qtd_microsseguro', 'qtd microsseguro'),
+    qtdVivaVida: getNumberField(data, 'qtdVivaVida', 'QTD_MICRO_VIVAVIDA', 'qtd_micro_vivavida', 'qtd micro vivavida', 'viva vida'),
+    qtdPlanoOdonto: getNumberField(data, 'qtdPlanoOdonto', 'QTD_PLANO_ODONTO', 'qtd_plano_odonto'),
+    qtdSegResidencial: getNumberField(data, 'qtdSegResidencial', 'QTD_SEG_RESIDENCIAL', 'qtd_seg_residencial'),
+    qtdSegCartaoDeb: getNumberField(data, 'qtdSegCartaoDeb', 'QTD_SEG_CARTAO_DEB', 'qtd_seg_cartao_deb'),
+    vlrExpSorte: getNumberField(data, 'vlrExpSorte', 'VLR_EXP_SORTE', 'vlr_exp_sorte'),
+    qtdExpSorte: getNumberField(data, 'qtdExpSorte', 'qtd_exp_sorte'),
     referencia: toStr(data.referencia),
 
     uf: toStr(data.uf),
@@ -561,13 +607,13 @@ function buildEmptyRowFromRegistro(data: any): RowBase {
     dtClube: toStr(data.dtClube),
     dataUltTransacao: toStr(data.dataUltTransacao),
     regional: toStr(data.regional),
-    vlrLime: parseNumber(data.vlrLime),
-    vlrConsignadoTotal: parseNumber(data.vlrConsignadoTotal),
-    vlrConsignadoInss: parseNumber(data.vlrConsignadoInss),
-    vlrConsignadoPub: parseNumber(data.vlrConsignadoPub),
-    vlrConsignadoPriv: parseNumber(data.vlrConsignadoPriv),
-    vlrCreditoParcelado: parseNumber(data.vlrCreditoParcelado),
-    qtdContasPj: parseNumber(data.qtdContasPj),
+    vlrLime: getNumberField(data, 'vlrLime', 'vlr_lime'),
+    vlrConsignadoTotal: getNumberField(data, 'vlrConsignadoTotal', 'vlr_consignado_total'),
+    vlrConsignadoInss: getNumberField(data, 'vlrConsignadoInss', 'vlr_consignado_inss'),
+    vlrConsignadoPub: getNumberField(data, 'vlrConsignadoPub', 'vlr_consignado_pub'),
+    vlrConsignadoPriv: getNumberField(data, 'vlrConsignadoPriv', 'vlr_consignado_priv'),
+    vlrCreditoParcelado: getNumberField(data, 'vlrCreditoParcelado', 'VLR_CREDITO_PARCEL', 'vlr_credito_parcel'),
+    qtdContasPj: getNumberField(data, 'qtdContasPj', 'QTD_CONTAS_PJ', 'qtd_contas_pj'),
     bloqueado: toStr(data.bloqueado),
     dtBloqueado: toStr(data.dtBloqueado),
 
@@ -1311,11 +1357,19 @@ export default function ExpressoGeralPage() {
         const qtdConsignado = 0
         const qtdCreditoParcelado = 0
 
-        const qtdMicrosseguro = parseNumber(
-          r['qtd_microsseguro'] || r['qtd microsseguro']
+        const qtdMicrosseguro = getNumberField(
+          r,
+          'qtd_microsseguro',
+          'qtd microsseguro',
+          'qtdMicrosseguro'
         )
-        const qtdVivaVida = parseNumber(
-          r['qtd_micro_vivavida'] || r['qtd micro vivavida'] || r['viva vida']
+        const qtdVivaVida = getNumberField(
+          r,
+          'QTD_MICRO_VIVAVIDA',
+          'qtd_micro_vivavida',
+          'qtd micro vivavida',
+          'qtdVivaVida',
+          'viva vida'
         )
         const qtdPlanoOdonto = parseNumber(
           r['qtd_plano_odonto'] || r['qtd plano odonto'] || r['odonto']
@@ -1515,7 +1569,7 @@ export default function ExpressoGeralPage() {
         setRows(finalRows.slice(0, LIMIT_NO_SEARCH))
         setAllRowsLoaded(false)
         setInfo(
-          `Base carregada ✅ ${mapped.length} expressos na última base. ${
+          `Base carregada ✅ ${mapped.length} expressos na última base. Teste chave 63321: ${finalRows.find((x) => onlyDigits(x.chave) === '63321')?.qtdMicrosseguro ?? 'não localizada'} microsseguro(s). ${
             finalRows.length - mapped.length
           } preservados do histórico.`
         )
