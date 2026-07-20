@@ -510,82 +510,260 @@ export default function DashboardPage() {
     return `Você tem ${chamadosAbertos} chamados em aberto.`
   }, [carregandoChamados, chamadosAbertos])
 
+  const atalhosDashboard = [
+    { href: '/dashboard/treinamentos', titulo: 'Treinamentos', descricao: 'Ver empresas, assumir e agendar treinamentos.', icone: '📚', categoria: 'Capacitação', destaque: true },
+    { href: '/dashboard/cursos', titulo: 'Cursos', descricao: 'Consultar produtos, regras, coberturas e materiais de apoio.', icone: '🎓', categoria: 'Conhecimento', destaque: true },
+    { href: '/dashboard/baixa-empresa', titulo: 'Solicitar Baixa', descricao: 'Solicitar baixa de treinamento ou check-in.', icone: '📤', categoria: 'Operacional' },
+    { href: '/dashboard/nova-prestacao', titulo: 'Solicitar Reembolso', descricao: 'Enviar nova prestação e anexar comprovantes.', icone: '💰', categoria: 'Financeiro' },
+    { href: '/dashboard/historico', titulo: 'Histórico', descricao: 'Consultar prestações e downloads anteriores.', icone: '📑', categoria: 'Consultas' },
+    { href: '/dashboard/agenda', titulo: 'Agenda', descricao: 'Visualizar compromissos e agendamentos.', icone: '🗓️', categoria: 'Organização' },
+    { href: '/dashboard/reportar', titulo: 'Reportar', descricao: 'Abrir chamado ou acompanhar problemas reportados.', detalhe: textoChamados, icone: '📕', categoria: 'Suporte' },
+    { href: '/dashboard/simulador', titulo: 'Simulador de Comissão', descricao: 'Simular comissão de produtos e resultados.', icone: '🧮', categoria: 'Simuladores' },
+    { href: '/dashboard/simulador/abertura-conta', titulo: 'Simulador Abertura de Conta', descricao: 'Treinar o fluxo completo de abertura de conta.', icone: '🏦', categoria: 'Simuladores' },
+  ]
+
   return (
-    <section style={{ display: 'grid', gap: '1.5rem' }}>
-      <div className="card">
-        <span className="pill">Dashboard</span>
+    <main className="page-modern">
+      <section
+        className="hero-modern"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0, 1fr) auto',
+          gap: 32,
+          alignItems: 'center',
+          minHeight: 310,
+          padding: 48,
+        }}
+      >
+        <div style={{ maxWidth: 760 }}>
+          <span
+            style={{
+              display: 'inline-block',
+              marginBottom: 10,
+              fontSize: '.8rem',
+              fontWeight: 850,
+              letterSpacing: '.12em',
+              textTransform: 'uppercase',
+            }}
+          >
+            Painel TreinExpresso
+          </span>
 
-        <h1 className="h1" style={{ marginTop: '1rem' }}>
-          Bem-vindo, {userName} 👋
-        </h1>
+          <h1
+            style={{
+              margin: 0,
+              fontSize: 'clamp(2.6rem, 5vw, 4.8rem)',
+              lineHeight: .98,
+              letterSpacing: '-.055em',
+            }}
+          >
+            Olá, {userName} 👋
+          </h1>
 
-        <p className="p-muted" style={{ marginTop: '.5rem' }}>
-          Aqui você encontra seus treinamentos, agenda e arquivos importantes para o dia a dia.
-        </p>
+          <p
+            style={{
+              maxWidth: 720,
+              margin: '22px 0 0',
+              color: 'rgba(255,255,255,.88)',
+              fontSize: '1.08rem',
+              lineHeight: 1.65,
+            }}
+          >
+            Encontre treinamentos, cursos, agenda, solicitações e arquivos importantes
+            em um único lugar.
+          </p>
 
-        {isAdmin && (
-          <div style={{ marginTop: '.75rem' }}>
-            <span className="pill">Admin</span>
+          <div
+            style={{
+              display: 'flex',
+              gap: 10,
+              flexWrap: 'wrap',
+              marginTop: 24,
+            }}
+          >
+            <span
+              style={{
+                padding: '9px 13px',
+                border: '1px solid rgba(255,255,255,.24)',
+                borderRadius: 999,
+                background: 'rgba(255,255,255,.14)',
+                fontSize: '.82rem',
+                fontWeight: 800,
+                backdropFilter: 'blur(8px)',
+              }}
+            >
+              Acesso rápido
+            </span>
+
+            {isAdmin && (
+              <span
+                style={{
+                  padding: '9px 13px',
+                  border: '1px solid rgba(255,255,255,.24)',
+                  borderRadius: 999,
+                  background: 'rgba(255,255,255,.14)',
+                  fontSize: '.82rem',
+                  fontWeight: 800,
+                  backdropFilter: 'blur(8px)',
+                }}
+              >
+                Administrador
+              </span>
+            )}
           </div>
-        )}
-      </div>
+        </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Link href="/dashboard/treinamentos" className="card-soft">
-          <div className="h2">📚 Treinamentos</div>
-          <p className="p-muted mt-1">Ver empresas, assumir e agendar treinamentos.</p>
-        </Link>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            width: 190,
+            minHeight: 190,
+            padding: 26,
+            border: '1px solid rgba(255,255,255,.24)',
+            borderRadius: 30,
+            background: 'rgba(255,255,255,.14)',
+            backdropFilter: 'blur(10px)',
+          }}
+        >
+          <strong
+            style={{
+              fontSize: '4rem',
+              lineHeight: 1,
+              letterSpacing: '-.07em',
+            }}
+          >
+            {atalhosDashboard.length + (isAdmin ? 1 : 0)}
+          </strong>
 
-        <Link href="/dashboard/baixa-empresa" className="card-soft">
-          <div className="h2">📤 Solicitar Baixa</div>
-          <p className="p-muted mt-1">Baixa de treinamento ou check-in.</p>
-        </Link>
+          <span
+            style={{
+              marginTop: 9,
+              color: 'rgba(255,255,255,.82)',
+              lineHeight: 1.4,
+            }}
+          >
+            opções disponíveis no seu painel
+          </span>
+        </div>
+      </section>
 
-        <Link href="/dashboard/nova-prestacao" className="card-soft">
-          <div className="h2">💰 Solicitar Reembolso</div>
-          <p className="p-muted mt-1">Enviar nova prestação e anexar comprovantes.</p>
-        </Link>
+      <div
+        className="content-modern"
+        style={{
+          display: 'grid',
+          gap: 32,
+          padding: '52px 0 20px',
+        }}
+      >
+        <section style={{ display: 'grid', gap: 26 }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'end',
+              gap: 20,
+            }}
+          >
+            <div>
+              <span className="section-label">Acesso rápido</span>
+              <h2
+                style={{
+                  margin: 0,
+                  fontSize: 'clamp(2rem, 4vw, 3.15rem)',
+                  letterSpacing: '-.045em',
+                }}
+              >
+                Escolha uma opção
+              </h2>
+            </div>
 
-        <Link href="/dashboard/historico" className="card-soft">
-          <div className="h2">📑 Histórico</div>
-          <p className="p-muted mt-1">Consultar prestações e downloads anteriores.</p>
-        </Link>
+            <span
+              style={{
+                padding: '10px 14px',
+                border: '1px solid #dde0e6',
+                borderRadius: 999,
+                color: '#68707d',
+                background: '#fff',
+                fontSize: '.86rem',
+                fontWeight: 800,
+              }}
+            >
+              {atalhosDashboard.length + (isAdmin ? 1 : 0)} opções
+            </span>
+          </div>
 
-        <Link href="/dashboard/agenda" className="card-soft">
-          <div className="h2">🗓️ Agenda</div>
-          <p className="p-muted mt-1">Ver agendamentos.</p>
-        </Link>
+          <div className="cards-grid">
+          {atalhosDashboard.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`card card-enter ${item.destaque ? 'card-featured' : ''}`}
+              style={{ display: 'flex', flexDirection: 'column', minHeight: 285, padding: 22 }}
+            >
+              <div className="card-header">
+                <span className="card-icon" aria-hidden="true">{item.icone}</span>
+                <span className="card-category">{item.categoria}</span>
+              </div>
 
-        <Link href="/dashboard/reportar" className="card-soft">
-          <div className="h2">📕 Reportar</div>
-          <p className="p-muted mt-1">
-            Abrir chamado ou acompanhar problemas reportados.
-          </p>
-          <p className="p-muted mt-1" style={{ fontWeight: 900 }}>
-            {textoChamados}
-          </p>
-        </Link>
+              <div className="card-body">
+                <h3>{item.titulo}</h3>
+                <p>{item.descricao}</p>
+                {item.detalhe && (
+                  <strong
+                    style={{
+                      display: 'block',
+                      marginTop: 10,
+                      color: '#b70a38',
+                      fontSize: '.82rem',
+                    }}
+                  >
+                    {item.detalhe}
+                  </strong>
+                )}
+              </div>
 
-        <Link href="/dashboard/simulador" className="card-soft">
-          <div className="h2">🧮 Simulador de Comissão</div>
-          <p className="p-muted mt-1">Simular comissão de produtos e resultados.</p>
-        </Link>
+              <div className="card-footer">
+                <span>Acessar</span>
+                <strong aria-hidden="true">→</strong>
+              </div>
+            </Link>
+          ))}
 
-        <Link href="/dashboard/simulador/abertura-conta" className="card-soft">
-          <div className="h2">🏦 Simulador Abertura de Conta</div>
-          <p className="p-muted mt-1">Treinar o fluxo de abertura de conta no simulador.</p>
-        </Link>
-
-        {isAdmin && (
-          <Link href="/dashboard/expressos/visao-geral" className="card-soft">
-            <div className="h2">📊 Visão Geral</div>
-            <p className="p-muted mt-1">Resumo executivo dos Expressos pela base Junho 2026.</p>
-          </Link>
-        )}
-      </div>
+          {isAdmin && (
+            <Link
+              href="/dashboard/expressos/visao-geral"
+              className="card card-enter"
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                minHeight: 285,
+                padding: 22,
+                borderColor: '#ded0a8',
+                background:
+                  'linear-gradient(150deg, rgba(183,144,36,.07), transparent 48%), #fff',
+              }}
+            >
+              <div className="card-header">
+                <span className="card-icon" aria-hidden="true">📊</span>
+                <span className="card-category">Administrador</span>
+              </div>
+              <div className="card-body">
+                <h3>Visão Geral</h3>
+                <p>Resumo executivo dos Expressos pela base Junho 2026.</p>
+              </div>
+              <div className="card-footer">
+                <span>Acessar</span>
+                <strong aria-hidden="true">→</strong>
+              </div>
+            </Link>
+          )}
+        </div>
+      </section>
 
       {isAdmin && (
-        <div className="card">
+        <div className="card page-enter">
           <span className="pill">Admin</span>
           <h2 className="h2" style={{ marginTop: '.65rem' }}>
             Base de dados (Expresso)
@@ -657,7 +835,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div className="card">
+      <div className="card page-enter">
         <div style={{ display: 'flex', gap: '.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
           <span className="pill">Arquivos</span>
           <h2 className="h2">Arquivos obrigatórios</h2>
@@ -798,6 +976,7 @@ export default function DashboardPage() {
       </div>
 
       {!user && <p className="p-muted">Você não está autenticado.</p>}
-    </section>
+      </div>
+    </main>
   )
 }
