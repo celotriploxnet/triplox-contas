@@ -439,8 +439,11 @@ a {
 }
 
 .card-soft {
-  min-height: 150px;
-  padding: 1.15rem;
+  width: fit-content;
+  max-width: 100%;
+  height: fit-content;
+  min-height: 0;
+  padding: 0.9rem 1rem;
   border: 1px solid var(--stroke);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-soft);
@@ -577,6 +580,183 @@ a {
 .card:hover .card-footer strong,
 .card-soft:hover .card-footer strong {
   transform: translateX(4px);
+}
+
+
+/* =========================================================
+   CARDS COMPACTOS DE INFORMAÇÃO
+   Use para Chave Loja, Cidade, UF, Código, Status etc.
+   ========================================================= */
+
+.info-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.info-card {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  width: fit-content;
+  min-width: 104px;
+  max-width: 100%;
+  min-height: 64px;
+  padding: 11px 14px;
+  border: 1px solid var(--stroke);
+  border-radius: 15px;
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: 0 7px 20px rgba(32, 36, 44, 0.05);
+  vertical-align: top;
+  transition:
+    transform var(--transition-normal),
+    border-color var(--transition-normal),
+    box-shadow var(--transition-normal);
+  animation: cardEnter 0.4s both;
+}
+
+.info-card::after {
+  content: "";
+  position: absolute;
+  right: -30px;
+  bottom: -42px;
+  width: 78px;
+  height: 78px;
+  border-radius: 50%;
+  background: rgba(194, 11, 59, 0.045);
+  pointer-events: none;
+  transition: transform var(--transition-normal);
+}
+
+.info-card:hover {
+  transform: translateY(-2px);
+  border-color: #dc9caf;
+  box-shadow: 0 12px 26px rgba(32, 36, 44, 0.085);
+}
+
+.info-card:hover::after {
+  transform: scale(1.12);
+}
+
+.info-label {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  color: #7a818c;
+  font-size: 0.68rem;
+  font-weight: 850;
+  line-height: 1.2;
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
+}
+
+.info-value {
+  position: relative;
+  z-index: 1;
+  margin-top: 4px;
+  color: var(--text-strong);
+  font-size: 1rem;
+  font-weight: 850;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.info-card-wide {
+  min-width: 180px;
+}
+
+.info-card-full {
+  width: 100%;
+}
+
+.info-card-highlight {
+  border-color: var(--stroke-red);
+  background:
+    linear-gradient(
+      145deg,
+      rgba(194, 11, 59, 0.052),
+      transparent 58%
+    ),
+    var(--surface);
+}
+
+.info-card-highlight .info-value {
+  color: var(--red-700);
+}
+
+/* Card compacto para números e indicadores */
+.stat-card {
+  display: inline-flex;
+  flex-direction: column;
+  width: fit-content;
+  min-width: 118px;
+  max-width: 100%;
+  padding: 13px 16px;
+  border: 1px solid var(--stroke);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: var(--shadow-soft);
+}
+
+.stat-card strong {
+  color: var(--red-700);
+  font-size: 1.45rem;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.stat-card span {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 750;
+}
+
+/* Card para agrupar formulários e conteúdos maiores */
+.section-card {
+  width: 100%;
+  min-width: 0;
+  padding: 1.2rem;
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+/* Versão translúcida para áreas de destaque */
+.glass-card {
+  width: fit-content;
+  max-width: 100%;
+  padding: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: var(--radius-lg);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(10px);
+}
+
+/* Quando card-soft for usado como área de formulário ou seção,
+   adicione também a classe card-soft-full. */
+.card-soft-full {
+  width: 100%;
+  min-width: 0;
+}
+
+/* Evita que grids antigos estiquem cards compactos verticalmente */
+.info-grid > .info-card,
+.cards-compact > .card-soft {
+  align-self: flex-start;
+}
+
+.cards-compact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px;
 }
 
 /* =========================================================
@@ -789,6 +969,20 @@ a {
 }
 
 @media (max-width: 720px) {
+  .info-grid,
+  .cards-compact {
+    gap: 8px;
+  }
+
+  .info-card {
+    min-width: 96px;
+    padding: 10px 12px;
+  }
+
+  .info-card-wide {
+    min-width: 150px;
+  }
+
   .app-container {
     padding: 1.25rem 0.75rem;
   }

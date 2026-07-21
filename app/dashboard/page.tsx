@@ -634,7 +634,7 @@ export default function DashboardPage() {
               letterSpacing: '-.07em',
             }}
           >
-            {atalhosDashboard.length + (isAdmin ? 1 : 0)}
+            
           </strong>
 
           <span
@@ -644,7 +644,11 @@ export default function DashboardPage() {
               lineHeight: 1.4,
             }}
           >
-            opções disponíveis no seu painel
+            Fique atento aos
+              <br />
+              check-ins que faltam
+              <br />
+              na sua região!
           </span>
         </div>
       </section>
@@ -690,7 +694,7 @@ export default function DashboardPage() {
                 fontWeight: 800,
               }}
             >
-              {atalhosDashboard.length + (isAdmin ? 1 : 0)} opções
+               opções
             </span>
           </div>
 
