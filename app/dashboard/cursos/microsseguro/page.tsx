@@ -2,67 +2,69 @@
 
 import Image from "next/image";
 import { useState } from "react";
-import styles from "./VidaViva.module.css";
+import styles from "./Microsseguro.module.css";
 
-const planos = [
+const beneficios = [
   {
-    nome: "Plano 1",
-    valor: "R$ 40,00 por ano",
-    morte: "R$ 5.000",
-    invalidez: "R$ 5.000",
+    titulo: "Morte acidental",
+    destaque: "R$ 3 mil",
+    texto:
+      "Indenização aos beneficiários em caso de morte causada exclusivamente por acidente.",
   },
   {
-    nome: "Plano 2",
-    valor: "R$ 70,00 por ano",
-    morte: "R$ 15.000",
-    invalidez: "R$ 15.000",
+    titulo: "Sorteio mensal",
+    destaque: "R$ 20 mil*",
+    texto:
+      "O cliente participa de 12 sorteios pela Loteria Federal durante a vigência.",
+  },
+  {
+    titulo: "Assistência funeral",
+    destaque: "Individual",
+    texto:
+      "Atendimento em caso de morte natural ou acidental, com acionamento pela central.",
+  },
+  {
+    titulo: "Cesta básica",
+    destaque: "2 × R$ 100",
+    texto:
+      "Cartão de benefício no valor de R$ 100 por mês, durante dois meses.",
   },
 ];
 
 const perguntas = [
   {
-    pergunta: "Quem pode contratar o Vida Viva Bradesco?",
-    opcoes: [
-      "Somente correntistas Bradesco",
-      "Correntistas e não correntistas, entre 18 e 80 anos",
-      "Somente clientes com cartão de crédito",
-      "Apenas aposentados",
-    ],
+    pergunta: "Qual é o valor anual do Microsseguro Proteção Premiável?",
+    opcoes: ["R$ 20,00", "R$ 30,00", "R$ 50,00", "R$ 100,00"],
     correta: 1,
   },
   {
-    pergunta: "Onde a contratação é realizada?",
+    pergunta: "Qual é a faixa etária permitida para contratação?",
+    opcoes: ["16 a 65 anos", "18 a 70 anos", "21 a 75 anos", "18 a 80 anos"],
+    correta: 1,
+  },
+  {
+    pergunta: "Quantos sorteios o cliente terá durante a vigência?",
+    opcoes: ["6 sorteios", "10 sorteios", "12 sorteios", "24 sorteios"],
+    correta: 2,
+  },
+  {
+    pergunta: "Qual é o valor da cobertura por morte acidental?",
+    opcoes: ["R$ 1.000", "R$ 3.000", "R$ 10.000", "R$ 20.000"],
+    correta: 1,
+  },
+  {
+    pergunta: "Qual é o caminho correto no POS?",
     opcoes: [
-      "Somente na agência",
-      "No aplicativo do cliente",
-      "No tablet, pela Plataforma Expresso",
-      "Pelo telefone da seguradora",
+      "4 - Outras Funções > 8 - Microsseguro > 1 - Proteção Premiável > 1 - Plano 1",
+      "2 - Seguros > 1 - Microsseguro > 4 - Plano Anual",
+      "8 - Microsseguro > 4 - Outras Funções > 1 - Titular",
+      "1 - Produtos > 8 - Microsseguro > 2 - Plano 2",
     ],
-    correta: 2,
-  },
-  {
-    pergunta: "Qual é a carência informada no material?",
-    opcoes: ["Não há carência", "12 horas", "24 horas", "30 dias"],
-    correta: 2,
-  },
-  {
-    pergunta: "Qual valor do sorteio mensal?",
-    opcoes: ["R$ 20 mil", "R$ 50 mil", "R$ 75 mil", "R$ 100 mil"],
-    correta: 2,
-  },
-  {
-    pergunta: "Qual telefone deve ser acionado para assistência funeral e cesta básica?",
-    opcoes: [
-      "0800 701 2730",
-      "0800 770 0978",
-      "4004 2704",
-      "0800 701 2714",
-    ],
-    correta: 2,
+    correta: 0,
   },
 ];
 
-export default function VidaVivaPage() {
+export default function MicrosseguroPage() {
   const [respostas, setRespostas] = useState<Record<number, number>>({});
 
   const acertos = perguntas.reduce(
@@ -77,12 +79,11 @@ export default function VidaVivaPage() {
     <main className={styles.page}>
       <section className={styles.hero}>
         <div className={styles.heroText}>
-          <span>Curso • Seguro de Vida</span>
-          <h1>Vida Viva Bradesco</h1>
+          <span>Curso • Seguros</span>
+          <h1>Microsseguro Proteção Premiável</h1>
           <p>
-            Aprenda a ofertar e contratar o Vida Viva pela Plataforma Expresso
-            no tablet, para clientes correntistas ou não correntistas do
-            Bradesco.
+            Aprenda como ofertar e contratar o Microsseguro pelo POS, conhecendo
+            coberturas, assistências, sorteios e principais argumentos de venda.
           </p>
 
           <div className={styles.heroActions}>
@@ -90,314 +91,245 @@ export default function VidaVivaPage() {
               Iniciar treinamento
             </a>
             <a
-              href="/materiais/vida-viva/manual-vida-viva.pdf"
+              href="/materiais/microsseguro/manual-microsseguro.pdf"
               target="_blank"
               rel="noreferrer"
               className={styles.secondaryButton}
             >
               Abrir manual
             </a>
+            <a
+              href="/materiais/microsseguro/regulamento-microsseguro.pdf"
+              target="_blank"
+              rel="noreferrer"
+              className={styles.secondaryButton}
+            >
+              Ver regulamento
+            </a>
           </div>
         </div>
 
-        <div className={styles.heroImage}>
-          <Image
-            src="/materiais/vida-viva/imagens/01-capa.png"
-            alt="Seguro de Vida Vida Viva Bradesco"
-            width={900}
-            height={900}
-            priority
-          />
+        <div className={styles.heroCard}>
+          <strong>R$ 30,00</strong>
+          <span>por ano</span>
+          <small>Proteção, assistência e sorteios em um único produto.</small>
         </div>
       </section>
 
       <section className={styles.summary}>
         <article>
-          <strong>No tablet</strong>
-          <span>Contratação pela Plataforma Expresso</span>
+          <strong>12 meses</strong>
+          <span>de vigência</span>
         </article>
         <article>
-          <strong>Correntista ou não</strong>
-          <span>O produto pode ser ofertado para ambos</span>
+          <strong>18 a 70 anos</strong>
+          <span>faixa etária permitida</span>
         </article>
         <article>
-          <strong>18 a 80 anos</strong>
-          <span>Faixa etária permitida</span>
+          <strong>12 sorteios</strong>
+          <span>durante a vigência</span>
         </article>
         <article>
-          <strong>24 horas</strong>
-          <span>Prazo de carência informado</span>
+          <strong>Qualquer pessoa</strong>
+          <span>correntista ou não</span>
         </article>
       </section>
 
       <section className={styles.content} id="conteudo">
         <header className={styles.sectionHeader}>
-          <span>Capital segurado</span>
-          <h2>Planos disponíveis</h2>
+          <span>Visão geral</span>
+          <h2>O que o cliente recebe</h2>
         </header>
 
-        <div className={styles.plansGrid}>
-          {planos.map((plano) => (
-            <article key={plano.nome}>
-              <span>{plano.nome}</span>
-              <h3>{plano.valor}</h3>
-              <div>
-                <p>
-                  Morte acidental
-                  <strong>{plano.morte}</strong>
-                </p>
-                <p>
-                  Invalidez
-                  <strong>{plano.invalidez}</strong>
-                </p>
-              </div>
+        <div className={styles.benefitsGrid}>
+          {beneficios.map((item) => (
+            <article key={item.titulo}>
+              <span>{item.titulo}</span>
+              <strong>{item.destaque}</strong>
+              <p>{item.texto}</p>
             </article>
           ))}
         </div>
 
-        <div className={styles.sharedBenefits}>
-          <strong>Todos os planos também incluem:</strong>
-          <span>Cesta Básica: 3 × R$ 150</span>
-          <span>Sorteio mensal: R$ 75 mil</span>
-          <span>Assistência Funeral</span>
-        </div>
-
-        <section className={styles.tabletSection}>
+        <section className={styles.hiringSection}>
           <header className={styles.sectionHeader}>
-            <span>Contratação</span>
-            <h2>Realizada no tablet</h2>
+            <span>Contratação pelo POS</span>
+            <h2>Passo a passo</h2>
           </header>
 
-          <div className={styles.tabletGrid}>
-            <article className={styles.tabletCard}>
-              <div className={styles.tabletMockup}>
-                <div className={styles.tabletScreen}>
-                  <span>Vida Viva</span>
-                  <strong>Seguro de Vida</strong>
-                  <small>Contratação pela Plataforma Expresso</small>
-                </div>
-              </div>
-            </article>
+          <div className={styles.hiringGrid}>
+            <div className={styles.infographic}>
+              <Image
+                src="/materiais/microsseguro/imagens/como-contratar-microsseguro.png"
+                alt="Como contratar o Microsseguro pelo POS"
+                width={1024}
+                height={1536}
+              />
+            </div>
 
-            <div className={styles.tabletInfo}>
+            <div className={styles.hiringSteps}>
               <article>
                 <b>01</b>
-                <h3>Atendimento presencial</h3>
+                <h3>Acesse no POS</h3>
                 <p>
-                  A contratação é feita com o cliente presente, diretamente no
-                  tablet do Bradesco Expresso.
+                  Siga o caminho:
+                  <strong>
+                    {" "}4 - Outras Funções → 8 - Microsseguro → 1 - Proteção
+                    Premiável → 1 - Plano 1 - R$ 30,00.
+                  </strong>
                 </p>
               </article>
 
               <article>
                 <b>02</b>
-                <h3>Correntista ou não correntista</h3>
+                <h3>Preencha os dados</h3>
                 <p>
-                  O Vida Viva pode ser ofertado tanto para quem possui
-                  conta-corrente Bradesco quanto para quem não possui.
+                  Informe CPF, data de nascimento, CEP, telefone, sexo, estado
+                  civil e profissão.
                 </p>
               </article>
 
               <article>
                 <b>03</b>
-                <h3>Aceite do cliente</h3>
+                <h3>Confirme a contratação</h3>
                 <p>
-                  Nos pagamentos em dinheiro, o aceite ocorre por biometria
-                  facial.
+                  Confira os dados com o cliente, conclua a contratação e
+                  entregue o bilhete impresso.
                 </p>
               </article>
             </div>
           </div>
         </section>
 
-        <section className={styles.dataSection}>
+        <section className={styles.sortSection}>
           <header className={styles.sectionHeader}>
-            <span>Dados necessários</span>
-            <h2>Informações para contratação</h2>
+            <span>Sorteio</span>
+            <h2>Como funciona</h2>
           </header>
 
-          <div className={styles.dataGrid}>
-            {[
-              "CPF",
-              "Nome completo",
-              "Data de nascimento",
-              "Estado civil",
-              "Sexo",
-              "Telefone",
-              "E-mail",
-              "Endereço completo",
-            ].map((item, index) => (
-              <article key={item}>
-                <span>{String(index + 1).padStart(2, "0")}</span>
-                <strong>{item}</strong>
-              </article>
-            ))}
+          <div className={styles.sortGrid}>
+            <article>
+              <strong>12 chances</strong>
+              <p>
+                O cliente participa de um sorteio no último sábado de cada mês,
+                durante a vigência do seguro.
+              </p>
+            </article>
+            <article>
+              <strong>Número da Sorte</strong>
+              <p>
+                O bilhete apresenta uma combinação de seis algarismos válida
+                durante um ano.
+              </p>
+            </article>
+            <article>
+              <strong>R$ 20 mil*</strong>
+              <p>
+                O valor do prêmio é bruto. Em caso de contemplação, o seguro
+                continua vigente e o cliente segue concorrendo.
+              </p>
+            </article>
           </div>
 
           <div className={styles.note}>
-            <strong>Atenção ao e-mail</strong>
+            <strong>Importante:</strong>
             <p>
-              Caso o cliente não informe um e-mail, ele receberá apenas a
-              filipeta impressa. O contrato digital e outras comunicações são
-              enviados por e-mail.
+              Contratações realizadas até 10 dias antes do último sábado do mês
+              participam do sorteio daquele mês. Com menos de 10 dias, a
+              participação começa no mês seguinte.
             </p>
           </div>
         </section>
 
         <section className={styles.coverageSection}>
           <header className={styles.sectionHeader}>
-            <span>Coberturas</span>
-            <h2>Proteção para diferentes situações</h2>
+            <span>Coberturas e assistências</span>
+            <h2>Proteção para o cliente e sua família</h2>
           </header>
 
           <div className={styles.coverageGrid}>
             <article>
               <h3>Morte acidental</h3>
               <p>
-                Garante indenização aos beneficiários em caso de morte do
-                segurado decorrente de acidente pessoal coberto.
+                Indenização de R$ 3.000 aos beneficiários, com prazo de
+                pagamento de até 10 dias após o recebimento da documentação
+                completa pela seguradora.
               </p>
             </article>
 
             <article>
-              <h3>Invalidez</h3>
+              <h3>Assistência funeral</h3>
               <p>
-                Prevê indenização em caso de perda ou redução definitiva,
-                total ou parcial, de membro, órgão, sentido ou função corporal
-                causada por acidente pessoal coberto.
+                Disponível em caso de morte natural ou acidental. Inclui
+                serviços como registro em cartório, sepultamento, sala para
+                velório, ornamentação, carro funerário, urna, traslado e outros
+                itens previstos no regulamento.
               </p>
             </article>
 
             <article>
-              <h3>Assistência Funeral</h3>
+              <h3>Assistência cesta básica</h3>
               <p>
-                Disponibiliza serviços para realização do funeral em território
-                nacional, conforme as condições do produto.
-              </p>
-            </article>
-
-            <article>
-              <h3>Cesta Básica</h3>
-              <p>
-                Fornece Vale Cartão Cesta Básica durante três meses, conforme o
-                limite contratado, em caso de falecimento do titular.
+                Em caso de morte natural ou acidental, os beneficiários recebem
+                um cartão de R$ 100 por mês, durante dois meses.
               </p>
             </article>
           </div>
-        </section>
 
-        <section className={styles.funeralSection}>
-          <header className={styles.sectionHeader}>
-            <span>Assistência Funeral e Cesta Básica</span>
-            <h2>Acionamento obrigatório</h2>
-          </header>
-
-          <div className={styles.funeralGrid}>
-            <article>
-              <strong>0800 770 0978</strong>
-              <span>Atendimento 24 horas por dia</span>
-              <p>
-                A central deve ser acionada antes que a família tome qualquer
-                medida por conta própria relacionada ao funeral.
-              </p>
-            </article>
-
-            <article className={styles.alertCard}>
-              <h3>Não há reembolso sem acionamento</h3>
-              <p>
-                Despesas contratadas diretamente pela família não serão
-                reembolsadas, salvo quando o prestador não conseguir realizar o
-                atendimento pelos próprios meios.
-              </p>
-            </article>
+          <div className={styles.central}>
+            <div>
+              <span>Central de Atendimento</span>
+              <strong>0800 701 2730</strong>
+            </div>
+            <p>
+              Sinistro: segunda a sexta, das 8h às 18h. Assistências funeral e
+              cesta básica: atendimento 24 horas, 7 dias por semana.
+            </p>
           </div>
         </section>
 
-        <section className={styles.sortSection}>
+        <section className={styles.salesSection}>
           <header className={styles.sectionHeader}>
-            <span>Sorteios</span>
-            <h2>R$ 75 mil todos os meses</h2>
+            <span>Argumentos de venda</span>
+            <h2>Como apresentar ao cliente</h2>
           </header>
 
-          <div className={styles.sortGrid}>
+          <div className={styles.salesGrid}>
             <article>
-              <strong>Valor líquido</strong>
+              <b>01</b>
+              <h3>Baixo investimento</h3>
               <p>
-                O segurado concorre a sorteios mensais pela Loteria Federal no
-                valor de R$ 75 mil.
+                R$ 30 por ano equivalem a R$ 2,50 por mês. Essa comparação é
+                apenas demonstrativa, pois o produto não é parcelado.
               </p>
             </article>
 
             <article>
-              <strong>A partir de 60 dias</strong>
+              <b>02</b>
+              <h3>Proteção completa</h3>
               <p>
-                A participação começa 60 dias após a emissão do seguro pela
-                seguradora.
+                O cliente conta com morte acidental, assistência funeral,
+                cesta básica e participação em sorteios.
               </p>
             </article>
 
             <article>
-              <strong>Contato por telefone</strong>
+              <b>03</b>
+              <h3>Venda para não correntistas</h3>
               <p>
-                A divulgação dos contemplados é realizada pela Bradesco Vida e
-                Previdência.
+                O produto pode ser oferecido para qualquer pessoa dentro da
+                faixa etária permitida, correntista ou não do Bradesco.
               </p>
             </article>
           </div>
-        </section>
 
-        <section className={styles.rulesSection}>
-          <header className={styles.sectionHeader}>
-            <span>Regras gerais</span>
-            <h2>O que o atendente precisa saber</h2>
-          </header>
-
-          <div className={styles.rulesGrid}>
-            <article>
-              <h3>Renovação</h3>
-              <p>
-                Pode ser renovado automaticamente uma única vez por igual
-                período, salvo manifestação contrária com antecedência.
-              </p>
-            </article>
-
-            <article>
-              <h3>Abrangência</h3>
-              <p>
-                As coberturas principais consideram sinistros ocorridos em
-                qualquer parte do globo, observadas as condições do seguro.
-              </p>
-            </article>
-
-            <article>
-              <h3>Beneficiários</h3>
-              <p>
-                Não são indicados no ato da contratação, mas o segurado poderá
-                indicá-los posteriormente pelos canais da seguradora.
-              </p>
-            </article>
-          </div>
-        </section>
-
-        <section className={styles.centralSection}>
-          <header className={styles.sectionHeader}>
-            <span>Canais de atendimento</span>
-            <h2>Central de Relacionamento</h2>
-          </header>
-
-          <div className={styles.centralGrid}>
-            <article>
-              <span>Capitais e regiões metropolitanas</span>
-              <strong>4004 2704</strong>
-            </article>
-            <article>
-              <span>Demais regiões</span>
-              <strong>0800 701 2714</strong>
-            </article>
-            <article>
-              <span>Deficiência auditiva ou de fala</span>
-              <strong>0800 701 2778</strong>
-            </article>
+          <div className={styles.moments}>
+            <h3>Melhores momentos para ofertar</h3>
+            <div>
+              <span>Abertura de conta</span>
+              <span>Liberação do LIME</span>
+              <span>Pagamentos, saques e autenticações</span>
+            </div>
           </div>
         </section>
 
@@ -407,22 +339,19 @@ export default function VidaVivaPage() {
             <h2>Pontos de atenção</h2>
           </div>
           <ul>
+            <li>A contratação é permitida para pessoas entre 18 e 70 anos.</li>
+            <li>A vigência é de 12 meses e começa às 24h da data de pagamento.</li>
             <li>
-              O produto pode ser ofertado para correntistas e não correntistas
-              Bradesco.
-            </li>
-            <li>A contratação é presencial e realizada no tablet.</li>
-            <li>
-              O cliente precisa ter entre 18 e 80 anos no momento da
-              contratação.
+              A assistência funeral deve ser acionada no momento do falecimento.
+              Não há reembolso quando a central não é acionada.
             </li>
             <li>
-              Oriente o cliente a cadastrar um e-mail válido para receber o
-              contrato e as comunicações digitais.
+              O cliente pode desistir no prazo de 7 dias após o pagamento do
+              prêmio, conforme as condições do produto.
             </li>
             <li>
-              As assistências devem ser acionadas pela central antes da
-              contratação de serviços por conta própria.
+              Sempre entregue o bilhete e oriente o cliente a guardar o Número
+              da Sorte e os canais de atendimento.
             </li>
           </ul>
         </section>
