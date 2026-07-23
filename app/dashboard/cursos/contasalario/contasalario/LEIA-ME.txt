@@ -1,0 +1,17 @@
+CURSO CONTA PARA RECEBIMENTO DE SALÁRIO
+
+Página:
+app/cursos/contasalario/page.tsx
+app/cursos/contasalario/ContaSalario.module.css
+
+Materiais públicos:
+public/materiais/conta-salario/conta_salario.pdf
+public/materiais/conta-salario/controle-contas-salario.xlsx
+public/materiais/conta-salario/imagens/
+
+A página destaca:
+- leitura obrigatória do QR Code gerado no tablet;
+- identificação da produção do Bradesco Expresso;
+- reinstalação do App Bradesco quando possível;
+- necessidade de CNPJ e número do convênio;
+- planilha mensal para controle das contas abertas.

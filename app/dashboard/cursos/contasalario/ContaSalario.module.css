@@ -1,0 +1,507 @@
+.page {
+  min-height: 100vh;
+  padding: 24px;
+  background: #f5f6f8;
+  color: #252833;
+}
+
+.hero {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 54px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(340px, 0.92fr);
+  align-items: center;
+  gap: 45px;
+  overflow: hidden;
+  border-radius: 32px;
+  color: #fff;
+  background: linear-gradient(135deg, #d4073f 0%, #ae0034 55%, #790024 100%);
+  box-shadow: 0 24px 65px rgba(99, 0, 28, 0.22);
+}
+
+.heroText > span,
+.sectionHeader > span,
+.controlSection span,
+.criticalAlert span {
+  font-size: 0.77rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.hero h1 {
+  margin: 18px 0 16px;
+  font-size: clamp(2.8rem, 5.5vw, 5.3rem);
+  line-height: 0.95;
+  letter-spacing: -0.06em;
+}
+
+.hero p {
+  max-width: 670px;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 1.06rem;
+  line-height: 1.7;
+}
+
+.heroActions {
+  margin-top: 28px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 11px;
+}
+
+.primaryButton,
+.secondaryButton {
+  min-height: 48px;
+  padding: 0 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.primaryButton {
+  color: #b00035;
+  background: #fff;
+}
+
+.secondaryButton {
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.heroImage {
+  display: grid;
+  place-items: center;
+}
+
+.heroImage img {
+  width: min(100%, 410px);
+  height: auto;
+  border-radius: 24px;
+  box-shadow: 0 24px 55px rgba(0, 0, 0, 0.25);
+}
+
+.criticalAlert {
+  max-width: 1120px;
+  margin: -22px auto 0;
+  position: relative;
+  z-index: 2;
+  padding: 25px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 18px;
+  border: 2px solid #e30646;
+  border-radius: 23px;
+  background: #fff;
+  box-shadow: 0 12px 34px rgba(25, 29, 39, 0.1);
+}
+
+.alertMark {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: #e30646;
+  font-size: 1.8rem;
+  font-weight: 900;
+}
+
+.criticalAlert span {
+  color: #c50039;
+}
+
+.criticalAlert h2 {
+  margin: 7px 0 8px;
+  font-size: 1.7rem;
+}
+
+.criticalAlert p {
+  margin: 0;
+  color: #5f6671;
+  line-height: 1.65;
+}
+
+.infoGrid {
+  max-width: 1120px;
+  margin: 16px auto 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.infoGrid article {
+  min-height: 108px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border: 1px solid #e2e5e9;
+  border-radius: 19px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(25, 29, 39, 0.06);
+}
+
+.infoGrid strong {
+  color: #b00035;
+  font-size: 1.24rem;
+}
+
+.infoGrid span {
+  margin-top: 5px;
+  color: #737984;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.content {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 70px 0 92px;
+}
+
+.sectionHeader {
+  margin-bottom: 24px;
+}
+
+.sectionHeader > span,
+.controlSection span {
+  color: #b00035;
+}
+
+.sectionHeader h2,
+.controlSection h2 {
+  margin: 7px 0 0;
+  font-size: clamp(2rem, 4vw, 3.2rem);
+  line-height: 1;
+  letter-spacing: -0.045em;
+}
+
+.checklistGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 13px;
+}
+
+.checklistGrid article {
+  padding: 23px;
+  border: 1px solid #e1e4e8;
+  border-radius: 21px;
+  background: #fff;
+}
+
+.checklistGrid b {
+  display: grid;
+  place-items: center;
+  width: 45px;
+  height: 45px;
+  border-radius: 14px;
+  color: #fff;
+  background: #c90039;
+}
+
+.checklistGrid h3 {
+  margin: 19px 0 10px;
+}
+
+.checklistGrid p {
+  margin: 0;
+  color: #616975;
+  line-height: 1.62;
+}
+
+.tabletGuide,
+.stepsSection,
+.attention,
+.controlSection,
+.quizSection {
+  margin-top: 72px;
+}
+
+.guideImage {
+  padding: 18px;
+  border: 1px solid #e1e4e8;
+  border-radius: 25px;
+  background: #fff;
+  box-shadow: 0 13px 34px rgba(25, 29, 39, 0.06);
+}
+
+.guideImage img {
+  display: block;
+  width: min(100%, 900px);
+  height: auto;
+  margin: 0 auto;
+  border-radius: 17px;
+}
+
+.stepsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.stepCard {
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(210px, 0.88fr) minmax(0, 1.12fr);
+  border: 1px solid #e1e4e8;
+  border-radius: 23px;
+  background: #fff;
+  box-shadow: 0 11px 30px rgba(25, 29, 39, 0.055);
+}
+
+.stepImage {
+  min-height: 310px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #f0f1f3;
+}
+
+.stepImage img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.stepContent {
+  padding: 25px;
+  align-self: center;
+}
+
+.stepContent > span {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  color: #fff;
+  background: #c90039;
+  font-weight: 900;
+}
+
+.stepContent h3 {
+  margin: 18px 0 10px;
+  font-size: 1.35rem;
+  letter-spacing: -0.025em;
+}
+
+.stepContent p {
+  margin: 0;
+  color: #626a76;
+  line-height: 1.65;
+}
+
+.attention {
+  padding: 30px;
+  border: 1px solid #efc5d0;
+  border-radius: 24px;
+  background: linear-gradient(145deg, #fff1f5, #fff);
+}
+
+.attention > div {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+
+.attention > div > span {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  color: #fff;
+  background: #e30646;
+  font-size: 1.3rem;
+  font-weight: 900;
+}
+
+.attention h2 {
+  margin: 0;
+}
+
+.attention ul {
+  margin: 20px 0 0;
+  padding-left: 22px;
+  color: #565e6a;
+  line-height: 1.78;
+}
+
+.controlSection {
+  padding: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+  border-radius: 25px;
+  color: #fff;
+  background: linear-gradient(135deg, #c90039, #850027);
+}
+
+.controlSection span {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.controlSection h2 {
+  color: #fff;
+}
+
+.controlSection p {
+  max-width: 680px;
+  margin: 13px 0 0;
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.65;
+}
+
+.controlSection a {
+  flex: 0 0 auto;
+  padding: 14px 18px;
+  border-radius: 14px;
+  color: #b00035;
+  background: #fff;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.quizGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+.quizCard {
+  padding: 21px;
+  border: 1px solid #e1e4e8;
+  border-radius: 20px;
+  background: #fff;
+}
+
+.quizCard > span {
+  color: #b00035;
+  font-size: 0.75rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.quizCard h3 {
+  min-height: 52px;
+}
+
+.quizCard > div {
+  display: grid;
+  gap: 9px;
+}
+
+.quizCard button {
+  padding: 11px 12px;
+  border: 1px solid #dde1e6;
+  border-radius: 12px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.quizCard button.correct {
+  border-color: #4b9f65;
+  background: #eef9f1;
+}
+
+.quizCard button.wrong {
+  border-color: #d26475;
+  background: #fff0f3;
+}
+
+.result {
+  margin-top: 14px;
+  padding: 20px;
+  border: 1px solid #efc5d0;
+  border-radius: 18px;
+  background: #fff2f5;
+}
+
+.result strong {
+  color: #b00035;
+}
+
+.result p {
+  margin: 7px 0 0;
+  color: #5d6470;
+}
+
+@media (max-width: 1000px) {
+  .hero {
+    grid-template-columns: 1fr;
+  }
+
+  .checklistGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .stepsGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .page {
+    padding: 12px;
+  }
+
+  .hero {
+    padding: 31px 22px;
+    border-radius: 25px;
+  }
+
+  .hero h1 {
+    font-size: 3rem;
+  }
+
+  .criticalAlert {
+    margin-top: 14px;
+  }
+
+  .infoGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .content {
+    padding-top: 48px;
+  }
+
+  .stepCard {
+    grid-template-columns: 1fr;
+  }
+
+  .stepImage {
+    min-height: auto;
+    aspect-ratio: 1 / 1;
+  }
+
+  .controlSection {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .quizGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .criticalAlert {
+    grid-template-columns: 1fr;
+  }
+
+  .infoGrid,
+  .checklistGrid {
+    grid-template-columns: 1fr;
+  }
+}

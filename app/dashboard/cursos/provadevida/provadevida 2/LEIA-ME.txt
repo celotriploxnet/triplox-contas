@@ -1,0 +1,17 @@
+ARQUIVOS DO CURSO PROVA DE VIDA - VERSÃO COM TELAS DO TABLET
+
+Destino sugerido:
+app/cursos/provadevida/page.tsx
+app/cursos/provadevida/ProvaDeVida.module.css
+
+Copie a pasta de imagens para:
+public/materiais/prova-de-vida/imagens/
+
+Arquivos de imagem:
+01-tela-inicial.png
+02-informe-cpf.png
+03-biometria-facial.png
+04-prova-enviada.png
+
+Material em PDF:
+public/materiais/prova-de-vida/PROVA_DE_VIDA.pdf

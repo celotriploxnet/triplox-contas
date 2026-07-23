@@ -1,0 +1,864 @@
+.page {
+  min-height: 100vh;
+  padding: 24px;
+  background: #f5f6f8;
+  color: #252833;
+}
+
+.hero {
+  max-width: 1240px;
+  min-height: 520px;
+  margin: 0 auto;
+  padding: 58px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(350px, 0.92fr);
+  align-items: center;
+  gap: 50px;
+  overflow: hidden;
+  border-radius: 34px;
+  color: #fff;
+  background:
+    radial-gradient(circle at 88% 18%, rgba(255, 255, 255, 0.16), transparent 25%),
+    linear-gradient(135deg, #d4073f 0%, #b00035 48%, #850027 100%);
+  box-shadow: 0 26px 70px rgba(105, 0, 30, 0.22);
+}
+
+.eyebrow {
+  display: inline-flex;
+  padding: 8px 13px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.hero h1 {
+  max-width: 680px;
+  margin: 22px 0 16px;
+  font-size: clamp(3rem, 6vw, 5.8rem);
+  line-height: 0.92;
+  letter-spacing: -0.065em;
+}
+
+.hero p {
+  max-width: 650px;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 1.08rem;
+  line-height: 1.7;
+}
+
+.heroActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 30px;
+}
+
+.primaryButton,
+.secondaryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 19px;
+  border-radius: 14px;
+  font-weight: 900;
+  text-decoration: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.primaryButton {
+  color: #b00035;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.15);
+}
+
+.secondaryButton {
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.primaryButton:hover,
+.secondaryButton:hover {
+  transform: translateY(-2px);
+}
+
+.heroVisual {
+  display: grid;
+  place-items: center;
+  min-height: 400px;
+}
+
+.tablet {
+  width: min(100%, 355px);
+  padding: 15px;
+  border: 7px solid #252833;
+  border-radius: 34px;
+  background: #17191f;
+  box-shadow: 0 28px 60px rgba(0, 0, 0, 0.28);
+  transform: rotate(3deg);
+}
+
+.tabletTop {
+  width: 48px;
+  height: 5px;
+  margin: 0 auto 13px;
+  border-radius: 999px;
+  background: #4d515b;
+}
+
+.tabletScreen {
+  min-height: 315px;
+  padding: 35px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 20px;
+  text-align: center;
+  color: #b00035;
+  background: linear-gradient(160deg, #fff, #f4f4f6);
+}
+
+.tabletScreen span {
+  display: grid;
+  place-items: center;
+  width: 88px;
+  height: 88px;
+  margin-bottom: 24px;
+  border-radius: 50%;
+  color: #fff;
+  background: #b00035;
+  font-size: 3rem;
+  font-weight: 900;
+}
+
+.tabletScreen strong {
+  font-size: 2rem;
+  letter-spacing: -0.04em;
+}
+
+.tabletScreen small {
+  margin-top: 9px;
+  color: #707783;
+  font-size: 0.9rem;
+}
+
+.tabletButton {
+  width: 28px;
+  height: 28px;
+  margin: 13px auto 0;
+  border: 2px solid #555a65;
+  border-radius: 50%;
+}
+
+.summaryGrid {
+  position: relative;
+  z-index: 2;
+  max-width: 1120px;
+  margin: -28px auto 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.summaryGrid article {
+  min-height: 104px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border: 1px solid #e4e7eb;
+  border-radius: 19px;
+  background: #fff;
+  box-shadow: 0 12px 34px rgba(23, 27, 38, 0.08);
+}
+
+.summaryGrid strong {
+  color: #b00035;
+  font-size: 1.28rem;
+}
+
+.summaryGrid span {
+  margin-top: 5px;
+  color: #707783;
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.content {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 68px 0 92px;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.sectionHeader span {
+  color: #b00035;
+  font-weight: 800;
+}
+
+.sectionHeader h2 {
+  margin: 6px 0 0;
+  font-size: clamp(2rem, 4vw, 3.2rem);
+  line-height: 1;
+  letter-spacing: -0.045em;
+}
+
+.introGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  gap: 16px;
+}
+
+.definitionCard {
+  min-height: 100%;
+  padding: 32px;
+  border-radius: 25px;
+  color: #fff;
+  background: linear-gradient(145deg, #c90039, #93002a);
+  box-shadow: 0 18px 42px rgba(176, 0, 53, 0.15);
+}
+
+.definitionCard > span {
+  font-size: 0.75rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.definitionCard h3 {
+  margin: 18px 0 13px;
+  font-size: 2.15rem;
+  line-height: 1.07;
+  letter-spacing: -0.04em;
+}
+
+.definitionCard p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.86);
+  line-height: 1.72;
+}
+
+.definitionCard strong {
+  display: block;
+  margin-top: 25px;
+  padding-top: 21px;
+  border-top: 1px solid rgba(255, 255, 255, 0.24);
+  line-height: 1.58;
+}
+
+.infoCards {
+  display: grid;
+  gap: 12px;
+}
+
+.infoCards article {
+  display: flex;
+  gap: 15px;
+  padding: 21px;
+  border: 1px solid #e1e4e8;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(25, 30, 40, 0.05);
+}
+
+.infoCards article > span {
+  display: grid;
+  place-items: center;
+  flex: 0 0 46px;
+  height: 46px;
+  border-radius: 14px;
+  color: #b00035;
+  background: #fff0f4;
+  font-weight: 900;
+}
+
+.infoCards h3 {
+  margin: 2px 0 8px;
+}
+
+.infoCards p {
+  margin: 0;
+  color: #626a76;
+  line-height: 1.55;
+}
+
+.methodsSection,
+.posSection,
+.tabletSection,
+.attentionSection,
+.quizSection {
+  margin-top: 74px;
+}
+
+.methodsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.methodCard {
+  position: relative;
+  padding: 28px;
+  overflow: hidden;
+  border: 1px solid #e1e4e8;
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgba(23, 27, 38, 0.06);
+}
+
+.methodFeatured {
+  color: #fff;
+  border: 0;
+  background: linear-gradient(145deg, #c90039, #92002a);
+}
+
+.methodIcon {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 18px;
+  color: #b00035;
+  background: #fff0f4;
+  font-size: 1.8rem;
+  font-weight: 900;
+}
+
+.methodFeatured .methodIcon {
+  color: #b00035;
+  background: #fff;
+}
+
+.methodTag {
+  display: inline-block;
+  margin-top: 24px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  color: #b00035;
+  background: #fff0f4;
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.methodFeatured .methodTag {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.methodCard h3 {
+  margin: 16px 0 10px;
+  font-size: 1.65rem;
+  letter-spacing: -0.03em;
+}
+
+.methodCard p,
+.methodCard li {
+  color: #626a76;
+  line-height: 1.65;
+}
+
+.methodFeatured p,
+.methodFeatured li {
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.methodCard ul {
+  margin: 18px 0 0;
+  padding-left: 21px;
+}
+
+.posPath {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.posStepWrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.posStep {
+  flex: 1;
+  min-height: 160px;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border-radius: 22px;
+  color: #fff;
+  background: linear-gradient(145deg, #c90039, #9c002d);
+}
+
+.posStep strong {
+  display: grid;
+  place-items: center;
+  width: 49px;
+  height: 49px;
+  border-radius: 50%;
+  color: #b00035;
+  background: #fff;
+  font-size: 1.25rem;
+}
+
+.posStep span {
+  margin-top: 24px;
+  font-size: 1.05rem;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.arrow {
+  color: #b00035;
+  font-size: 1.6rem;
+  font-weight: 900;
+}
+
+.posFinish {
+  margin-top: 16px;
+  padding: 28px;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 34px;
+  align-items: center;
+  border: 1px solid #efc5d0;
+  border-radius: 25px;
+  background: linear-gradient(145deg, #fff2f5, #fff);
+}
+
+.posFinish > div:last-child > span {
+  color: #b00035;
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.posFinish h3 {
+  margin: 10px 0 14px;
+  font-size: 2rem;
+  letter-spacing: -0.035em;
+}
+
+.posFinish ol {
+  margin: 0;
+  padding-left: 22px;
+  color: #555d69;
+  line-height: 1.75;
+}
+
+.pinPad {
+  padding: 20px;
+  border: 6px solid #2d3139;
+  border-radius: 26px;
+  background: #4b505a;
+  box-shadow: 0 16px 35px rgba(20, 24, 30, 0.2);
+  transform: rotate(-2deg);
+}
+
+.pinScreen {
+  padding: 25px 12px;
+  border-radius: 10px;
+  color: #294634;
+  background: #cbe2c9;
+  text-align: center;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.pinKeys {
+  margin-top: 17px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.pinKeys i {
+  display: grid;
+  place-items: center;
+  height: 33px;
+  border-radius: 8px;
+  color: #2d3139;
+  background: #f1f2f4;
+  font-style: normal;
+  font-size: 0.75rem;
+  font-weight: 900;
+}
+
+.stepsList {
+  display: grid;
+  gap: 12px;
+}
+
+.stepCard {
+  overflow: hidden;
+  border: 1px solid #e1e4e8;
+  border-radius: 20px;
+  background: #fff;
+}
+
+.stepCard > button {
+  width: 100%;
+  padding: 18px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 16px;
+  align-items: center;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.stepNumber {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 15px;
+  color: #b00035;
+  background: #fff0f4;
+  font-weight: 900;
+}
+
+.stepTitle strong {
+  display: block;
+  font-size: 1rem;
+}
+
+.stepTitle small {
+  display: block;
+  margin-top: 5px;
+  color: #737985;
+  line-height: 1.45;
+}
+
+.stepCard b {
+  color: #b00035;
+  font-size: 1.5rem;
+}
+
+.stepBody {
+  padding: 0 82px 20px;
+}
+
+.stepBody p {
+  margin: 0;
+  padding: 18px;
+  border-radius: 15px;
+  color: #555d69;
+  background: #f7f8fa;
+  line-height: 1.65;
+}
+
+.attentionSection {
+  padding: 30px;
+  border: 1px solid #efc5d0;
+  border-radius: 24px;
+  background: linear-gradient(145deg, #fff2f5, #fff);
+}
+
+.attentionSection > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.attentionSection > div > span {
+  font-size: 1.5rem;
+}
+
+.attentionSection h2 {
+  margin: 0;
+}
+
+.attentionSection ul {
+  margin: 20px 0 0;
+  padding-left: 22px;
+  color: #555d69;
+  line-height: 1.75;
+}
+
+.score {
+  padding: 9px 13px;
+  border-radius: 999px;
+  color: #b00035;
+  background: #fff0f4;
+}
+
+.quizGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+.quizCard {
+  padding: 21px;
+  border: 1px solid #e1e4e8;
+  border-radius: 20px;
+  background: #fff;
+}
+
+.quizCard > span {
+  color: #b00035;
+  font-size: 0.75rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.quizCard h3 {
+  min-height: 52px;
+}
+
+.quizCard > div {
+  display: grid;
+  gap: 9px;
+}
+
+.quizCard button {
+  padding: 11px 12px;
+  border: 1px solid #dfe3e8;
+  border-radius: 12px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.quizCard button:hover {
+  border-color: #c8cdd4;
+  background: #fafafa;
+}
+
+.quizCard button.correct {
+  border-color: #4b9f65;
+  background: #eef9f1;
+}
+
+.quizCard button.wrong {
+  border-color: #d26475;
+  background: #fff0f3;
+}
+
+.quizResult {
+  margin-top: 14px;
+  padding: 20px;
+  border: 1px solid #efc5d0;
+  border-radius: 18px;
+  background: #fff2f5;
+}
+
+.quizResult strong {
+  color: #b00035;
+}
+
+.quizResult p {
+  margin: 7px 0 0;
+  color: #5d6470;
+}
+
+@media (max-width: 980px) {
+  .hero {
+    grid-template-columns: 1fr;
+  }
+
+  .heroVisual {
+    min-height: 330px;
+  }
+
+  .summaryGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .introGrid,
+  .posFinish {
+    grid-template-columns: 1fr;
+  }
+
+  .pinPad {
+    max-width: 260px;
+    margin: 0 auto;
+  }
+
+  .posPath {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 680px) {
+  .page {
+    padding: 12px;
+  }
+
+  .hero {
+    padding: 30px 22px;
+    border-radius: 25px;
+  }
+
+  .hero h1 {
+    font-size: 3.25rem;
+  }
+
+  .heroVisual {
+    min-height: 290px;
+  }
+
+  .tablet {
+    max-width: 270px;
+  }
+
+  .tabletScreen {
+    min-height: 240px;
+  }
+
+  .summaryGrid {
+    margin-top: 14px;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .content {
+    padding-top: 46px;
+  }
+
+  .sectionHeader {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .methodsGrid,
+  .quizGrid,
+  .posPath {
+    grid-template-columns: 1fr;
+  }
+
+  .posStepWrap {
+    display: grid;
+  }
+
+  .arrow {
+    transform: rotate(90deg);
+    text-align: center;
+  }
+
+  .stepCard > button {
+    grid-template-columns: auto 1fr;
+  }
+
+  .stepCard b {
+    display: none;
+  }
+
+  .stepBody {
+    padding: 0 18px 18px;
+  }
+}
+
+@media (max-width: 430px) {
+  .summaryGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .hero h1 {
+    font-size: 2.75rem;
+  }
+}
+
+.journeyIntro {
+  max-width: 760px;
+  margin: -8px 0 24px;
+  color: #626a76;
+  line-height: 1.65;
+}
+
+.screenJourney {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.screenCard {
+  overflow: hidden;
+  border: 1px solid #e1e4e8;
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgba(23, 27, 38, 0.06);
+}
+
+.screenImageWrap {
+  aspect-ratio: 0.68;
+  min-height: 0;
+  padding: 12px 8px 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: linear-gradient(180deg, #f7f8fa 0%, #eceef2 100%);
+}
+
+.screenImageWrap img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center bottom;
+}
+
+.screenCaption {
+  padding: 21px;
+}
+
+.screenCaption > span {
+  display: inline-flex;
+  padding: 6px 9px;
+  border-radius: 999px;
+  color: #b00035;
+  background: #fff0f4;
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.screenCaption h3 {
+  margin: 13px 0 9px;
+  font-size: 1.18rem;
+  line-height: 1.18;
+  letter-spacing: -0.025em;
+}
+
+.screenCaption p {
+  margin: 0;
+  color: #626a76;
+  font-size: 0.9rem;
+  line-height: 1.58;
+}
+
+@media (max-width: 1050px) {
+  .screenJourney {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 580px) {
+  .screenJourney {
+    grid-template-columns: 1fr;
+  }
+
+  .screenImageWrap {
+    aspect-ratio: 0.72;
+  }
+}

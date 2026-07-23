@@ -16,7 +16,7 @@ type Curso = {
 const cursos: Curso[] = [
   {
     titulo: "Abertura de Conta Corrente",
-    pasta: "contracorrente",
+    pasta: "contacorrente",
     categoria: "Contas",
     descricao: "Orientações sobre abertura, requisitos, documentos e jornada de contratação.",
     icone: "🏦",
