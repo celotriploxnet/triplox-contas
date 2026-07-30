@@ -94,7 +94,7 @@ const cursos: Curso[] = [
   },
   {
     titulo: "Sorte Expressa",
-    pasta: "sorteexpressa",
+    pasta: "sorte-expressa",
     categoria: "Soluções Financeiras",
     descricao: "Consulta sobre funcionamento, benefícios e processo de comercialização.",
     icone: "🍀",
