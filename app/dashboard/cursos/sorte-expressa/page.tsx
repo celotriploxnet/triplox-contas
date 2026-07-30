@@ -1001,10 +1001,15 @@ export default function SorteExpressaPage() {
           </p>
           <Link
             href="/dashboard/cursos"
-            className="mt-8 inline-flex items-center gap-2 rounded-full bg-white px-6 py-3.5 font-bold text-red-700 transition hover:bg-red-50"
+            className="mt-8 inline-flex items-center gap-2 rounded-full border-2 border-white bg-white px-6 py-3.5 font-bold shadow-lg transition hover:bg-red-50"
+            style={{ color: "#b91c1c" }}
           >
-            Concluir treinamento
-            <CheckCircle2 className="h-5 w-5" />
+            <span style={{ color: "#b91c1c" }}>Concluir treinamento</span>
+            <CheckCircle2
+              className="h-5 w-5"
+              aria-hidden="true"
+              style={{ color: "#b91c1c" }}
+            />
           </Link>
         </div>
       </section>
