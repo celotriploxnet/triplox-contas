@@ -348,6 +348,63 @@ function getNumberField(obj: Record<string, any>, ...names: string[]) {
   return parseNumber(getFieldValue(obj, ...names))
 }
 
+/**
+ * Localiza Microsseguro sem depender do cabeçalho ficar 100% idêntico.
+ * O XLSX pode acrescentar sufixos como _1 em colunas duplicadas ou manter
+ * caracteres invisíveis vindos do CSV. Viva Vida é excluído desta busca.
+ */
+function getQtdMicrosseguro(obj: Record<string, any>) {
+  const valorExato = getFieldValue(
+    obj,
+    'qtd_microsseguro',
+    'QTD_MICROSEGURO',
+    'qtd microsseguro',
+    'qtdMicrosseguro'
+  )
+
+  if (toStr(valorExato) !== '') {
+    return Math.max(parseNumber(valorExato), 0)
+  }
+
+  for (const [key, value] of Object.entries(obj || {})) {
+    const chave = compactKey(key)
+    const ehMicrosseguro =
+      chave.includes('qtdmicrosseguro') || chave.includes('microsseguro')
+    const ehVivaVida = chave.includes('vivavida')
+
+    if (ehMicrosseguro && !ehVivaVida && toStr(value) !== '') {
+      return Math.max(parseNumber(value), 0)
+    }
+  }
+
+  return 0
+}
+
+function getQtdVivaVida(obj: Record<string, any>) {
+  const valorExato = getFieldValue(
+    obj,
+    'QTD_MICRO_VIVAVIDA',
+    'qtd_micro_vivavida',
+    'qtd micro vivavida',
+    'qtdMicroVivaVida',
+    'qtdVivaVida',
+    'viva vida'
+  )
+
+  if (toStr(valorExato) !== '') {
+    return Math.max(parseNumber(valorExato), 0)
+  }
+
+  for (const [key, value] of Object.entries(obj || {})) {
+    const chave = compactKey(key)
+    if (chave.includes('vivavida') && toStr(value) !== '') {
+      return Math.max(parseNumber(value), 0)
+    }
+  }
+
+  return 0
+}
+
 function normalizeText(v: any) {
   return toStr(v)
     .replaceAll('Ã³', 'ó')
@@ -593,7 +650,7 @@ function buildEmptyRowFromRegistro(data: any): RowBase {
     qtdLime: getNumberField(data, 'qtdLime', 'qtd_lime'),
     qtdConsignado: getNumberField(data, 'qtdConsignado', 'qtd_consignado'),
     qtdCreditoParcelado: getNumberField(data, 'qtdCreditoParcelado', 'VLR_CREDITO_PARCEL', 'vlr_credito_parcel'),
-    qtdMicrosseguro: getNumberField(data, 'qtdMicrosseguro', 'qtd_microsseguro', 'qtd microsseguro'),
+    qtdMicrosseguro: getQtdMicrosseguro(data),
     qtdVivaVida: getNumberField(data, 'qtdVivaVida', 'QTD_MICRO_VIVAVIDA', 'qtd_micro_vivavida', 'qtd micro vivavida', 'viva vida'),
     qtdPlanoOdonto: getNumberField(data, 'qtdPlanoOdonto', 'QTD_PLANO_ODONTO', 'qtd_plano_odonto'),
     qtdSegResidencial: getNumberField(data, 'qtdSegResidencial', 'QTD_SEG_RESIDENCIAL', 'qtd_seg_residencial'),
@@ -1357,20 +1414,8 @@ export default function ExpressoGeralPage() {
         const qtdConsignado = 0
         const qtdCreditoParcelado = 0
 
-        const qtdMicrosseguro = getNumberField(
-          r,
-          'qtd_microsseguro',
-          'qtd microsseguro',
-          'qtdMicrosseguro'
-        )
-        const qtdVivaVida = getNumberField(
-          r,
-          'QTD_MICRO_VIVAVIDA',
-          'qtd_micro_vivavida',
-          'qtd micro vivavida',
-          'qtdVivaVida',
-          'viva vida'
-        )
+        const qtdMicrosseguro = getQtdMicrosseguro(r)
+        const qtdVivaVida = getQtdVivaVida(r)
         const qtdPlanoOdonto = parseNumber(
           r['qtd_plano_odonto'] || r['qtd plano odonto'] || r['odonto']
         )

@@ -179,10 +179,7 @@ function getQuadranteBonus(percentual: number): QuadranteBonus {
   }
 }
 
-function calcPontosFallback(d: any) {
-  const pontosSalvos = toNumber(d.pontos)
-  if (pontosSalvos > 0) return pontosSalvos
-
+function calcPontosAtualizados(d: any) {
   return calcPontosExpressoGeral({
     qtdContasComDeposito: toNumber(d.qtdContasComDeposito),
     qtdContasSemDeposito: toNumber(d.qtdContasSemDeposito),
@@ -210,7 +207,7 @@ function mapDoc(id: string, d: any): ExpressoJunho {
     regional: toStr(d.regional),
     statusAnalise: toStr(d.statusAnalise),
     trx: toNumber(d.trx),
-    pontos: calcPontosFallback(d),
+    pontos: calcPontosAtualizados(d),
     qtdContas: toNumber(d.qtdContas),
     qtdContasComDeposito: toNumber(d.qtdContasComDeposito),
     qtdContasSemDeposito: toNumber(d.qtdContasSemDeposito),
