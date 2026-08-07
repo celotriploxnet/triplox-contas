@@ -114,6 +114,7 @@ export default function DashboardPage() {
 
   const [chamadosAbertos, setChamadosAbertos] = useState(0)
   const [carregandoChamados, setCarregandoChamados] = useState(false)
+  const [linkCopiado, setLinkCopiado] = useState(false)
 
   /* =========================
      AUTH
@@ -510,9 +511,23 @@ export default function DashboardPage() {
     return `Você tem ${chamadosAbertos} chamados em aberto.`
   }, [carregandoChamados, chamadosAbertos])
 
+  async function copiarLinkQuadroInformativo() {
+    const link = 'https://treinoexpresso.com.br/informativoquadro/pessoal'
+
+    try {
+      await navigator.clipboard.writeText(link)
+      setLinkCopiado(true)
+      window.setTimeout(() => setLinkCopiado(false), 2200)
+    } catch (e) {
+      console.error('Não foi possível copiar o link:', e)
+      window.prompt('Copie o link abaixo:', link)
+    }
+  }
+
   const atalhosDashboard = [
     { href: '/dashboard/treinamentos', titulo: 'Treinamentos', descricao: 'Ver empresas, assumir e agendar treinamentos.', icone: '📚', categoria: 'Capacitação', destaque: true },
     { href: '/dashboard/cursos', titulo: 'Cursos', descricao: 'Consultar produtos, regras, coberturas e materiais de apoio.', icone: '🎓', categoria: 'Conhecimento', destaque: true },
+    { href: 'https://treinoexpresso.com.br/informativoquadro/pessoal', titulo: 'Quadro Informativo', descricao: 'Acesse o quadro informativo com comunicados e informações atualizadas.', icone: '📢', categoria: 'Informativos' },
     { href: '/dashboard/baixa-empresa', titulo: 'Solicitar Baixa', descricao: 'Solicitar baixa de treinamento ou check-in.', icone: '📤', categoria: 'Operacional' },
     { href: '/dashboard/nova-prestacao', titulo: 'Solicitar Reembolso', descricao: 'Enviar nova prestação e anexar comprovantes.', icone: '💰', categoria: 'Financeiro' },
     { href: '/dashboard/historico', titulo: 'Histórico', descricao: 'Consultar prestações e downloads anteriores.', icone: '📑', categoria: 'Consultas' },
@@ -699,41 +714,136 @@ export default function DashboardPage() {
           </div>
 
           <div className="cards-grid">
-          {atalhosDashboard.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`card card-enter ${item.destaque ? 'card-featured' : ''}`}
-              style={{ display: 'flex', flexDirection: 'column', minHeight: 285, padding: 22 }}
-            >
-              <div className="card-header">
-                <span className="card-icon" aria-hidden="true">{item.icone}</span>
-                <span className="card-category">{item.categoria}</span>
-              </div>
+          {atalhosDashboard.map((item) => {
+            const isQuadroInformativo = item.href === 'https://treinoexpresso.com.br/informativoquadro/pessoal'
 
-              <div className="card-body">
-                <h3>{item.titulo}</h3>
-                <p>{item.descricao}</p>
-                {item.detalhe && (
-                  <strong
+            if (isQuadroInformativo) {
+              return (
+                <div
+                  key={item.href}
+                  className={`card card-enter ${item.destaque ? 'card-featured' : ''}`}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    minHeight: 285,
+                    padding: 22,
+                    position: 'relative',
+                  }}
+                >
+                  <div className="card-header">
+                    <span className="card-icon" aria-hidden="true">{item.icone}</span>
+                    <span className="card-category">{item.categoria}</span>
+                  </div>
+
+                  <div className="card-body">
+                    <h3>{item.titulo}</h3>
+                    <p>{item.descricao}</p>
+                  </div>
+
+                  <div
                     style={{
-                      display: 'block',
-                      marginTop: 10,
-                      color: '#b70a38',
-                      fontSize: '.82rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 10,
+                      marginTop: 'auto',
+                      paddingTop: 18,
                     }}
                   >
-                    {item.detalhe}
-                  </strong>
-                )}
-              </div>
+                    <Link
+                      href={item.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="card-footer"
+                      style={{
+                        flex: 1,
+                        textDecoration: 'none',
+                        margin: 0,
+                      }}
+                    >
+                      <span>Acessar</span>
+                      <strong aria-hidden="true">→</strong>
+                    </Link>
 
-              <div className="card-footer">
-                <span>Acessar</span>
-                <strong aria-hidden="true">→</strong>
-              </div>
-            </Link>
-          ))}
+                    <button
+                      type="button"
+                      onClick={copiarLinkQuadroInformativo}
+                      title="Copiar link para enviar pelo WhatsApp"
+                      aria-label="Copiar link do Quadro Informativo"
+                      style={{
+                        width: 44,
+                        height: 44,
+                        flex: '0 0 44px',
+                        display: 'grid',
+                        placeItems: 'center',
+                        borderRadius: 14,
+                        border: linkCopiado ? '1px solid #178a4b' : '1px solid #ead6dc',
+                        background: linkCopiado ? '#edf9f2' : '#fff5f7',
+                        color: linkCopiado ? '#178a4b' : '#b70a38',
+                        cursor: 'pointer',
+                        fontSize: '1.15rem',
+                        transition: 'all .2s ease',
+                      }}
+                    >
+                      <span aria-hidden="true">{linkCopiado ? '✓' : '📋'}</span>
+                    </button>
+                  </div>
+
+                  {linkCopiado && (
+                    <span
+                      style={{
+                        marginTop: 9,
+                        color: '#178a4b',
+                        fontSize: '.78rem',
+                        fontWeight: 850,
+                        textAlign: 'right',
+                      }}
+                    >
+                      Link copiado! Cole no WhatsApp.
+                    </span>
+                  )}
+                </div>
+              )
+            }
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                target={item.href.startsWith('http') ? '_blank' : undefined}
+                rel={item.href.startsWith('http') ? 'noopener noreferrer' : undefined}
+                className={`card card-enter ${item.destaque ? 'card-featured' : ''}`}
+                style={{ display: 'flex', flexDirection: 'column', minHeight: 285, padding: 22 }}
+              >
+                <div className="card-header">
+                  <span className="card-icon" aria-hidden="true">{item.icone}</span>
+                  <span className="card-category">{item.categoria}</span>
+                </div>
+
+                <div className="card-body">
+                  <h3>{item.titulo}</h3>
+                  <p>{item.descricao}</p>
+                  {item.detalhe && (
+                    <strong
+                      style={{
+                        display: 'block',
+                        marginTop: 10,
+                        color: '#b70a38',
+                        fontSize: '.82rem',
+                      }}
+                    >
+                      {item.detalhe}
+                    </strong>
+                  )}
+                </div>
+
+                <div className="card-footer">
+                  <span>Acessar</span>
+                  <strong aria-hidden="true">→</strong>
+                </div>
+              </Link>
+            )
+          })}
 
           {isAdmin && (
             <Link
