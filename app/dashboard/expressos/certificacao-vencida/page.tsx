@@ -18,7 +18,7 @@ import { auth, storage } from '@/lib/firebase'
    CONFIG
    ========================= */
 const ADMIN_EMAIL = 'marcelo@treinexpresso.com.br'
-const CSV_PATH = 'base-lojas/banco.csv'
+const CSV_PATH = 'base-lojas/banco-junho-2026.csv'
 const LIMIT_NO_SEARCH = 200
 
 /* =========================

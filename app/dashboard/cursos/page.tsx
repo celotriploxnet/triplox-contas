@@ -37,7 +37,7 @@ const cursos: Curso[] = [
   },
   {
     titulo: "Empréstimo Pessoal (Lime)",
-    pasta: "emprestimopessoal",
+    pasta: "emprestimo-pessoal",
     categoria: "Crédito",
     descricao: "Conteúdo para consulta sobre contratação, condições e jornada do empréstimo pessoal.",
     icone: "💰",
