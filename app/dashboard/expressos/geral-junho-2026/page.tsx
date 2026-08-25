@@ -39,6 +39,83 @@ const EXPRESSOS_COLLECTION_ANTIGA = 'expressos_registro'
 const RESUMO_EXPRESSOS_DOC = 'resumo_expressos_junho_2026'
 const LIMIT_NO_SEARCH = 10
 
+// EXPRESSOS COM SAQUE SEM CARTÃO LIBERADO NO TABLET
+// Lista fornecida por chave loja. Atualize este conjunto quando houver nova relação de liberações.
+const SAQUE_SEM_CARTAO_CHAVES = new Set([
+  '64352',
+  '88859',
+  '81183',
+  '139671',
+  '58744',
+  '76458',
+  '163616',
+  '157379',
+  '169454',
+  '75086',
+  '117003',
+  '142549',
+  '233249',
+  '170782',
+  '120136',
+  '147629',
+  '57739',
+  '98379',
+  '166283',
+  '79070',
+  '189031',
+  '244976',
+  '135397',
+  '156609',
+  '84503',
+  '59527',
+  '44377',
+  '247124',
+  '237606',
+  '231387',
+  '167449',
+  '175393',
+  '168527',
+  '159632',
+  '92045',
+  '60068',
+  '217808',
+  '95640',
+  '231131',
+  '219488',
+  '76742',
+  '178087',
+  '183524',
+  '174763',
+  '218753',
+  '75113',
+  '70768',
+  '200832',
+  '178286',
+  '62085',
+  '144426',
+  '160000',
+  '159511',
+  '40004',
+  '218863',
+  '242643',
+  '116245',
+  '175280',
+  '22203',
+  '86864',
+  '68979',
+  '183756',
+  '400170',
+  '249915',
+  '118068',
+  '47051',
+  '219743',
+  '38133',
+  '87253',
+  '243135',
+  '156130',
+  '404163',
+])
+
 // MÓDULO TEMPORÁRIO — CAMPANHA GOLEADA DE PRÊMIOS
 // Quando a campanha acabar, basta remover este bloco e os pontos marcados com "GOLEADA DE PRÊMIOS".
 const CAMPANHA_GOLEADA_ATIVA = true
@@ -2066,6 +2143,7 @@ export default function ExpressoGeralPage() {
             const sinais = gerarSinalizacoes(r, semCert, vencida)
             const recomendacao = acaoRecomendada(r, semCert, vencida)
             const grupoGoleada = grupoGoleadaPeloExpresso(r, campanhaGoleada)
+            const saqueSemCartaoLiberado = SAQUE_SEM_CARTAO_CHAVES.has(onlyDigits(r.chave))
 
             return (
               <div
@@ -2183,6 +2261,31 @@ export default function ExpressoGeralPage() {
                     </LightButton>
                   </div>
                 </div>
+
+                {saqueSemCartaoLiberado && (
+                  <div
+                    className="card-soft"
+                    style={{
+                      padding: '.7rem .9rem',
+                      background: 'rgba(34,197,94,.08)',
+                      border: '1px solid rgba(34,197,94,.22)',
+                    }}
+                    title="Disponível somente para os expressos liberados na lista por chave loja."
+                  >
+                    <div
+                      style={{
+                        fontWeight: 900,
+                        color: 'rgba(21,128,61,.98)',
+                        fontSize: '.9rem',
+                      }}
+                    >
+                      💵 Saque sem cartão liberado no tablet
+                    </div>
+                    <div className="p-muted" style={{ marginTop: '.2rem', fontSize: 12 }}>
+                      Este Expresso já está habilitado para utilizar a funcionalidade.
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <div className="p-muted" style={{ fontSize: 12 }}>
