@@ -1881,6 +1881,24 @@ export default function ExpressoGeralPage() {
     }
   }
 
+  async function copySaqueSemCartaoWhatsApp(r: RowBase) {
+    try {
+      const msg = `Informamos que o procedimento para emissão do Recibo de Retirada foi atualizado.
+
+O SAQUE SEM CARTÃO será gerado exclusivamente na Plataforma Bradesco Expresso, utilizando a funcionalidade SERVIÇOS - SAQUE SEM CARTÃO.
+
+Chave Loja: ${r.chave || '-'}
+Nome do Expresso: ${r.nome || '-'}`
+
+      await navigator.clipboard.writeText(msg)
+      setInfo('Mensagem de Saque sem Cartão copiada ✅ (cole no WhatsApp)')
+      setError(null)
+    } catch (e) {
+      console.error(e)
+      setError('Não consegui copiar a mensagem de Saque sem Cartão.')
+    }
+  }
+
   function irParaReportar(r: RowBase) {
     const params = new URLSearchParams({
       chaveLoja: r.chave || '',
@@ -2281,8 +2299,26 @@ export default function ExpressoGeralPage() {
                     >
                       💵 Saque sem cartão liberado no tablet
                     </div>
-                    <div className="p-muted" style={{ marginTop: '.2rem', fontSize: 12 }}>
-                      Este Expresso já está habilitado para utilizar a funcionalidade.
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '.75rem',
+                        flexWrap: 'wrap',
+                        marginTop: '.2rem',
+                      }}
+                    >
+                      <div className="p-muted" style={{ fontSize: 12 }}>
+                        Este Expresso já está habilitado para utilizar a funcionalidade.
+                      </div>
+
+                      <LightButton
+                        onClick={() => copySaqueSemCartaoWhatsApp(r)}
+                        title="Copiar comunicado para WhatsApp"
+                      >
+                        📋 Copiar comunicado
+                      </LightButton>
                     </div>
                   </div>
                 )}
