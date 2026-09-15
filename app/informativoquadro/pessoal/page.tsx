@@ -10,7 +10,6 @@ const colaboradores = [
   { nome: "CATARINE LEAL", foto: "/informativoquadro/pessoal/catarine.png" },
   { nome: "JOÃO SANTOS", foto: "/informativoquadro/pessoal/joao.png" },
   { nome: "LORENA VASCONCELOS", foto: "/informativoquadro/pessoal/lorena.png" },
-  { nome: "PAULO SANTANA", foto: "/informativoquadro/pessoal/paulo.png" },
   { nome: "ELISMAGNA SANTOS", foto: "/informativoquadro/pessoal/elismagna.png" },
   { nome: "ELIVALDO LEAL", foto: "/informativoquadro/pessoal/elivaldo.png" },
   { nome: "RITA LEAL", foto: "/informativoquadro/pessoal/rita.png" },
