@@ -271,19 +271,38 @@ export default function PessoaCertificadaPage() {
       })
 
       const mapped: CertRow[] = normalized.map((r) => {
-        const cnpj = formatCNPJ(r['CNPJ'])
+        // Nova base certificados_atual.csv:
+        // CHAVE_LOJA; CNPJ_LOJA; RZ_SOCIAL; ...;
+        // COLABORADOR_ESTA_VINCULADO_AO_CNPJ; NOME_INSCRITO; CPF; DATA_CERTIFICACAO
+        // Mantemos o mesmo formato de informações exibidas pela página.
+        const cnpj = formatCNPJ(r['CNPJ_LOJA'] || r['CNPJ'])
         const chave = toStr(r['CHAVE_LOJA'])
-        const correspondente = toStr(r['CORRESPONDENTE'])
-        const cpf = formatCPF(r['CPF CANDIDATO'] || r['CPF_CANDIDATO'] || r['CPF'])
-        const nome = toStr(r['NOME CANDIDATO'] || r['NOME_CANDIDATO'] || r['CANDIDATO'])
-        const status = toStr(r['STATUS PROVA'] || r['STATUS_PROVA'] || r['STATUS'])
-        const data = parseDateToPtBR(
-          r['DATA REALIZAÇÃO'] ||
+        const correspondente = toStr(r['RZ_SOCIAL'] || r['CORRESPONDENTE'])
+        const cpfRaw = toStr(r['CPF'] || r['CPF CANDIDATO'] || r['CPF_CANDIDATO'])
+        const nome = toStr(
+          r['NOME_INSCRITO'] || r['NOME CANDIDATO'] || r['NOME_CANDIDATO'] || r['CANDIDATO']
+        )
+        const vinculo = toStr(r['COLABORADOR_ESTA_VINCULADO_AO_CNPJ'])
+        const dataRaw = toStr(
+          r['DATA_CERTIFICACAO'] ||
+            r['DATA REALIZAÇÃO'] ||
             r['DATA_REALIZAÇÃO'] ||
             r['DATA REALIZACAO'] ||
             r['DATA_REALIZACAO'] ||
             r['DATA']
         )
+
+        const semCertificado =
+          vinculo.toUpperCase().includes('NÃO POSSUI CERTIFICADO') ||
+          vinculo.toUpperCase().includes('NAO POSSUI CERTIFICADO')
+
+        const cpf = semCertificado || cpfRaw === "'-" || cpfRaw === '-' ? '' : formatCPF(cpfRaw)
+        const data = semCertificado || dataRaw === "'-" || dataRaw === '-' ? '' : parseDateToPtBR(dataRaw)
+        const status = semCertificado
+          ? 'Não possui certificado'
+          : nome && cpf && data
+            ? 'Certificado'
+            : toStr(r['STATUS PROVA'] || r['STATUS_PROVA'] || r['STATUS'] || vinculo)
 
         return {
           cnpj,
