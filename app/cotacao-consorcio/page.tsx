@@ -9,6 +9,7 @@ export default function CotacaoConsorcioPage() {
   const [cpf, setCpf] = useState('')
   const [celular, setCelular] = useState('')
   const [email, setEmail] = useState('')
+  const [consultor, setConsultor] = useState('')
   const [bemDesejado, setBemDesejado] = useState<BemDesejado>('MOTO')
   const [valorBem, setValorBem] = useState('')
   const [empresa, setEmpresa] = useState('')
@@ -93,10 +94,11 @@ export default function CotacaoConsorcioPage() {
       cpfCompleto(cpf) &&
       celularCompleto(celular) &&
       email.trim() !== '' &&
+      consultor.trim().length >= 2 &&
       bemDesejado !== '' &&
       valorBem.trim() !== ''
     )
-  }, [nome, cpf, celular, email, bemDesejado, valorBem])
+  }, [nome, cpf, celular, email, consultor, bemDesejado, valorBem])
 
   async function enviarCotacao(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -124,6 +126,11 @@ export default function CotacaoConsorcioPage() {
       return
     }
 
+    if (!consultor.trim()) {
+      setErro('Informe o nome do consultor que te atendeu.')
+      return
+    }
+
     if (!bemDesejado) {
       setErro('Selecione o bem desejado.')
       return
@@ -147,6 +154,7 @@ export default function CotacaoConsorcioPage() {
           cpf,
           celular,
           email: email.trim(),
+          consultor: consultor.trim(),
           bemDesejado,
           valorBem,
           empresa,
@@ -170,6 +178,7 @@ export default function CotacaoConsorcioPage() {
       setCpf('')
       setCelular('')
       setEmail('')
+      setConsultor('')
       setBemDesejado('MOTO')
       setValorBem('')
       setEmpresa('')
@@ -526,6 +535,30 @@ export default function CotacaoConsorcioPage() {
                       placeholder="seuemail@exemplo.com"
                       autoComplete="email"
                       maxLength={150}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="campo campoTotal">
+                  <label>
+                    Consultor que te atendeu
+                  </label>
+
+                  <div className="inputWrap">
+                    <span className="inputIcone">
+                      ♙
+                    </span>
+
+                    <input
+                      type="text"
+                      value={consultor}
+                      onChange={(e) =>
+                        setConsultor(e.target.value)
+                      }
+                      placeholder="Digite o nome do consultor"
+                      autoComplete="off"
+                      maxLength={100}
                       required
                     />
                   </div>

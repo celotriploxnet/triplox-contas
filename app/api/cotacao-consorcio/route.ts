@@ -260,8 +260,17 @@ export async function POST(req: Request) {
     const cpf = limparTexto(body?.cpf, 20)
     const celular = limparTexto(body?.celular, 30)
     const email = limparTexto(body?.email, 150).toLowerCase()
-    const bemDesejado = limparTexto(body?.bemDesejado, 30).toUpperCase()
+    const bemDesejado = limparTexto(
+      body?.bemDesejado,
+      30
+    ).toUpperCase()
     const valorBem = limparTexto(body?.valorBem, 30)
+
+    /*
+     * NOVO CAMPO:
+     * Consultor que realizou o atendimento.
+     */
+    const consultor = limparTexto(body?.consultor, 100)
 
     /*
      * Validações
@@ -300,6 +309,12 @@ export async function POST(req: Request) {
       )
     }
 
+    if (consultor.length < 2) {
+      return respostaErro(
+        'Informe o nome do consultor que te atendeu.'
+      )
+    }
+
     const cpfFormatado = formatarCPF(cpf)
     const celularFormatado = formatarTelefone(celular)
     const bemLabel = labelBem(bemDesejado)
@@ -321,6 +336,7 @@ export async function POST(req: Request) {
       `CPF: ${cpfFormatado}`,
       `Celular / WhatsApp: ${celularFormatado}`,
       `E-mail: ${email}`,
+      `Consultor que atendeu: ${consultor}`,
       ``,
       `🎯 COTAÇÃO DESEJADA`,
       `Bem: ${bemLabel}`,
@@ -441,6 +457,18 @@ export async function POST(req: Request) {
 
                     <td style="${valueStyleEmail}">
                       ${escapeHtml(email)}
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td style="${labelStyleEmail}">
+                      Consultor que atendeu
+                    </td>
+
+                    <td style="${valueStyleEmail}">
+                      <strong>
+                        ${escapeHtml(consultor)}
+                      </strong>
                     </td>
                   </tr>
                 </table>
