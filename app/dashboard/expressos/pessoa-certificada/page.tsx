@@ -101,9 +101,11 @@ function parseDateToPtBR(v: any) {
 
 function statusTone(status: string) {
   const s = (status || '').toLowerCase()
+  if (s.includes('pend')) return 'yellow'
+  if (s.includes('certifica') && s.includes('ok')) return 'green'
+  if (s.includes('bloque') || s.includes('reprov')) return 'red'
   if (s.includes('aprov')) return 'green'
-  if (s.includes('reprov')) return 'red'
-  if (s.includes('pend') || s.includes('aguard') || s.includes('andam')) return 'yellow'
+  if (s.includes('aguard') || s.includes('andam')) return 'yellow'
   return 'gray'
 }
 
@@ -187,8 +189,8 @@ function buildWhatsAppMessage(r: CertRow, canViewFullCpf: boolean) {
     `🧾 *CNPJ:* ${r.cnpj || '—'}`,
     `🏢 *Correspondente:* ${r.correspondente || '—'}`,
     '',
-    `✅ *Status da prova:* ${r.statusProva || '—'}`,
-    `📅 *Data realização:* ${r.dataRealizacao || '—'}`,
+    `✅ *Status da certificação:* ${r.statusProva || '—'}`,
+    `📅 *Data da certificação:* ${r.dataRealizacao || '—'}`,
   ].join('\n')
 }
 
@@ -199,7 +201,7 @@ export default function PessoaCertificadaPage() {
   const router = useRouter()
 
   const ADMIN_EMAIL = 'marcelo@treinexpresso.com.br'
-  const CSV_PATH = 'pessoa-certificada/certificados.csv'
+  const BASE_PATH = 'pessoa-certificada/basevinculo.xlsx'
 
   const [user, setUser] = useState<User | null>(null)
   const [checkingAuth, setCheckingAuth] = useState(true)
@@ -214,7 +216,7 @@ export default function PessoaCertificadaPage() {
   const [rows, setRows] = useState<CertRow[]>([])
   const [q, setQ] = useState('')
 
-  const [csvFile, setCsvFile] = useState<File | null>(null)
+  const [baseFile, setBaseFile] = useState<File | null>(null)
   const [cpfVisivelMap, setCpfVisivelMap] = useState<Record<string, boolean>>({})
 
   async function resolveIsAdmin(u: User) {
@@ -244,7 +246,7 @@ export default function PessoaCertificadaPage() {
     }))
   }
 
-  async function loadCsv() {
+  async function loadBase() {
     if (!auth.currentUser) {
       setError('Você precisa estar logado.')
       return
@@ -255,12 +257,10 @@ export default function PessoaCertificadaPage() {
       setError(null)
       setInfo('')
 
-      const bytesAny = await getBytes(ref(storage, CSV_PATH))
+      const bytesAny = await getBytes(ref(storage, BASE_PATH))
       const u8 = toUint8(bytesAny)
 
-      const text = new TextDecoder('utf-8').decode(u8)
-
-      const wb = XLSX.read(text, { type: 'string' })
+      const wb = XLSX.read(u8, { type: 'array', cellDates: true })
       const ws = wb.Sheets[wb.SheetNames[0]]
       const raw: Record<string, any>[] = XLSX.utils.sheet_to_json(ws, { defval: '' })
 
@@ -271,38 +271,32 @@ export default function PessoaCertificadaPage() {
       })
 
       const mapped: CertRow[] = normalized.map((r) => {
-        // Nova base certificados_atual.csv:
-        // CHAVE_LOJA; CNPJ_LOJA; RZ_SOCIAL; ...;
-        // COLABORADOR_ESTA_VINCULADO_AO_CNPJ; NOME_INSCRITO; CPF; DATA_CERTIFICACAO
-        // Mantemos o mesmo formato de informações exibidas pela página.
         const cnpj = formatCNPJ(r['CNPJ_LOJA'] || r['CNPJ'])
         const chave = toStr(r['CHAVE_LOJA'])
         const correspondente = toStr(r['RZ_SOCIAL'] || r['CORRESPONDENTE'])
-        const cpfRaw = toStr(r['CPF'] || r['CPF CANDIDATO'] || r['CPF_CANDIDATO'])
-        const nome = toStr(
-          r['NOME_INSCRITO'] || r['NOME CANDIDATO'] || r['NOME_CANDIDATO'] || r['CANDIDATO']
-        )
         const vinculo = toStr(r['COLABORADOR_ESTA_VINCULADO_AO_CNPJ'])
-        const dataRaw = toStr(
-          r['DATA_CERTIFICACAO'] ||
-            r['DATA REALIZAÇÃO'] ||
-            r['DATA_REALIZAÇÃO'] ||
-            r['DATA REALIZACAO'] ||
-            r['DATA_REALIZACAO'] ||
-            r['DATA']
-        )
+        const statusBase = toStr(r['STATUS_CERTIFICACAO'])
 
         const semCertificado =
           vinculo.toUpperCase().includes('NÃO POSSUI CERTIFICADO') ||
           vinculo.toUpperCase().includes('NAO POSSUI CERTIFICADO')
 
-        const cpf = semCertificado || cpfRaw === "'-" || cpfRaw === '-' ? '' : formatCPF(cpfRaw)
-        const data = semCertificado || dataRaw === "'-" || dataRaw === '-' ? '' : parseDateToPtBR(dataRaw)
-        const status = semCertificado
-          ? 'Não possui certificado'
-          : nome && cpf && data
-            ? 'Certificado'
-            : toStr(r['STATUS PROVA'] || r['STATUS_PROVA'] || r['STATUS'] || vinculo)
+        const nomeRaw = toStr(r['NOME_INSCRITO'] || r['NOME CANDIDATO'] || r['NOME_CANDIDATO'])
+        const cpfRaw = toStr(r['CPF'] || r['CPF CANDIDATO'] || r['CPF_CANDIDATO'])
+        const dataRaw = r['DATA_CERTIFICACAO'] || r['DATA REALIZAÇÃO'] || r['DATA_REALIZACAO'] || ''
+
+        const valorVazio = (v: any) => {
+          const x = toStr(v)
+          return !x || x === '-' || x === "'-"
+        }
+
+        const nome = semCertificado || valorVazio(nomeRaw) ? '' : nomeRaw
+        const cpf = semCertificado || valorVazio(cpfRaw) ? '' : formatCPF(cpfRaw)
+        const data = semCertificado || valorVazio(dataRaw) ? '' : parseDateToPtBR(dataRaw)
+
+        const status =
+          statusBase ||
+          (semCertificado ? 'BLOQUEADO - SEM CERTIFICACAO' : vinculo || '—')
 
         return {
           cnpj,
@@ -314,19 +308,18 @@ export default function PessoaCertificadaPage() {
           dataRealizacao: data,
         }
       })
-
       setRows(mapped)
       setCpfVisivelMap({})
-      setInfo('CSV carregado ✅')
+      setInfo('Base carregada ✅')
     } catch (e: any) {
-      console.error('loadCsv error:', e)
-      setError(`Falha ao carregar CSV (${e?.code || 'sem-code'}): ${e?.message || 'erro'}`)
+      console.error('loadBase error:', e)
+      setError(`Falha ao carregar a base (${e?.code || 'sem-code'}): ${e?.message || 'erro'}`)
     } finally {
       setLoading(false)
     }
   }
 
-  async function handleUploadCsv() {
+  async function handleUploadBase() {
     if (!user) {
       setError('Você precisa estar logado.')
       return
@@ -335,14 +328,14 @@ export default function PessoaCertificadaPage() {
       setError('Apenas o administrador pode atualizar o CSV.')
       return
     }
-    if (!csvFile) {
-      setError('Selecione o arquivo certificados.csv para enviar.')
+    if (!baseFile) {
+      setError('Selecione o arquivo basevinculo.xlsx para enviar.')
       return
     }
 
-    const name = csvFile.name.toLowerCase()
-    if (!name.endsWith('.csv')) {
-      setError('Envie somente arquivo .csv')
+    const name = baseFile.name.toLowerCase()
+    if (!name.endsWith('.xlsx')) {
+      setError('Envie somente arquivo .xlsx')
       return
     }
 
@@ -351,28 +344,28 @@ export default function PessoaCertificadaPage() {
       setError(null)
       setInfo('')
 
-      await uploadBytes(ref(storage, CSV_PATH), csvFile, {
-        contentType: 'text/csv',
+      await uploadBytes(ref(storage, BASE_PATH), baseFile, {
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       })
 
-      setInfo('CSV atualizado ✅')
-      setCsvFile(null)
-      await loadCsv()
+      setInfo('Base atualizada ✅')
+      setBaseFile(null)
+      await loadBase()
     } catch (e: any) {
-      console.error('handleUploadCsv error:', e)
+      console.error('handleUploadBase error:', e)
       setError(`Falha ao enviar (${e?.code || 'sem-code'}): ${e?.message || 'erro'}`)
     } finally {
       setUploading(false)
     }
   }
 
-  async function openDownloadCsv() {
+  async function openDownloadBase() {
     try {
-      const url = await getDownloadURL(ref(storage, CSV_PATH))
+      const url = await getDownloadURL(ref(storage, BASE_PATH))
       window.open(url, '_blank', 'noopener,noreferrer')
     } catch (e) {
       console.error(e)
-      setError('Não foi possível gerar link para baixar o CSV.')
+      setError('Não foi possível gerar link para baixar a base.')
     }
   }
 
@@ -401,7 +394,7 @@ export default function PessoaCertificadaPage() {
 
       const admin = await resolveIsAdmin(u)
       setIsAdmin(admin)
-      loadCsv()
+      loadBase()
     })
 
     return () => unsub()
@@ -436,19 +429,19 @@ export default function PessoaCertificadaPage() {
           👤 Consultar Pessoa Certificada
         </h1>
         <p className="p-muted" style={{ marginTop: '.35rem' }}>
-          Digite no campo abaixo para buscar por <b>CNPJ</b>, <b>nome</b>, <b>chave loja</b> ou <b>CPF</b>.
+          Digite no campo abaixo para buscar por <b>CNPJ</b>, <b>nome</b>, <b>chave loja</b> ou <b>CPF</b>. Se o Expresso tiver mais de uma certificação, todas serão exibidas.
         </p>
       </div>
 
       <div className="card" style={{ display: 'grid', gap: '1rem' }}>
         <div style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
-          <button className="btn-primary" onClick={loadCsv} disabled={loading || checkingAuth}>
-            {checkingAuth ? 'Verificando login...' : loading ? 'Carregando...' : 'Recarregar CSV'}
+          <button className="btn-primary" onClick={loadBase} disabled={loading || checkingAuth}>
+            {checkingAuth ? 'Verificando login...' : loading ? 'Carregando...' : 'Recarregar base'}
           </button>
 
           {isAdmin && (
-            <LightButton onClick={openDownloadCsv} title="Baixar o CSV atual">
-              Baixar CSV
+            <LightButton onClick={openDownloadBase} title="Baixar o CSV atual">
+              Baixar base
             </LightButton>
           )}
 
@@ -471,24 +464,24 @@ export default function PessoaCertificadaPage() {
           <div className="card-soft" style={{ display: 'grid', gap: '.85rem' }}>
             <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
               <span className="pill">Admin</span>
-              <div className="h2">Atualizar CSV de Certificação</div>
+              <div className="h2">Atualizar base de Certificação</div>
             </div>
 
             <label>
-              <div className="label">Arquivo (CSV)</div>
+              <div className="label">Arquivo (XLSX)</div>
               <input
                 className="input"
                 type="file"
-                accept=".csv,text/csv"
-                onChange={(e) => setCsvFile(e.target.files?.[0] ?? null)}
+                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                onChange={(e) => setBaseFile(e.target.files?.[0] ?? null)}
               />
               <p className="p-muted" style={{ marginTop: '.35rem', fontSize: 13 }}>
-                O arquivo será salvo fixo em: <b>{CSV_PATH}</b> (substitui o anterior).
+                O arquivo será salvo fixo em: <b>{BASE_PATH}</b> (substitui o anterior).
               </p>
             </label>
 
-            <button className="btn-primary" type="button" onClick={handleUploadCsv} disabled={uploading}>
-              {uploading ? 'Enviando...' : 'Enviar e substituir CSV'}
+            <button className="btn-primary" type="button" onClick={handleUploadBase} disabled={uploading}>
+              {uploading ? 'Enviando...' : 'Enviar e substituir base'}
             </button>
           </div>
         )}
@@ -610,7 +603,7 @@ export default function PessoaCertificadaPage() {
 
                       <div className="card-soft" style={{ padding: '.75rem .9rem' }}>
                         <div className="p-muted" style={{ fontSize: 12 }}>
-                          Data realização
+                          Data da certificação
                         </div>
                         <div style={{ fontWeight: 900 }}>{r.dataRealizacao || '—'}</div>
                       </div>
