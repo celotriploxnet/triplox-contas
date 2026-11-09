@@ -27,6 +27,7 @@ import {
 import * as XLSX from 'xlsx'
 
 import { auth, db, storage } from '@/lib/firebase'
+import PlanoComercialExpresso from './PlanoComercialExpresso'
 import {
   calcPontosContasExpressoGeral,
   calcPontosExpressoGeral,
@@ -38,83 +39,7 @@ const EXPRESSOS_COLLECTION = 'expressos_registro_junho_2026'
 const EXPRESSOS_COLLECTION_ANTIGA = 'expressos_registro'
 const RESUMO_EXPRESSOS_DOC = 'resumo_expressos_junho_2026'
 const LIMIT_NO_SEARCH = 10
-
-// EXPRESSOS COM SAQUE SEM CARTÃO LIBERADO NO TABLET
-// Lista fornecida por chave loja. Atualize este conjunto quando houver nova relação de liberações.
-const SAQUE_SEM_CARTAO_CHAVES = new Set([
-  '64352',
-  '88859',
-  '81183',
-  '139671',
-  '58744',
-  '76458',
-  '163616',
-  '157379',
-  '169454',
-  '75086',
-  '117003',
-  '142549',
-  '233249',
-  '170782',
-  '120136',
-  '147629',
-  '57739',
-  '98379',
-  '166283',
-  '79070',
-  '189031',
-  '244976',
-  '135397',
-  '156609',
-  '84503',
-  '59527',
-  '44377',
-  '247124',
-  '237606',
-  '231387',
-  '167449',
-  '175393',
-  '168527',
-  '159632',
-  '92045',
-  '60068',
-  '217808',
-  '95640',
-  '231131',
-  '219488',
-  '76742',
-  '178087',
-  '183524',
-  '174763',
-  '218753',
-  '75113',
-  '70768',
-  '200832',
-  '178286',
-  '62085',
-  '144426',
-  '160000',
-  '159511',
-  '40004',
-  '218863',
-  '242643',
-  '116245',
-  '175280',
-  '22203',
-  '86864',
-  '68979',
-  '183756',
-  '400170',
-  '249915',
-  '118068',
-  '47051',
-  '219743',
-  '38133',
-  '87253',
-  '243135',
-  '156130',
-  '404163',
-])
+const IMAGEM_SAQUE_SEM_CARTAO = '/materiais/saque-sem-cartao/guia-saque-sem-cartao.png'
 
 type RowBase = {
   chave: string
@@ -1612,7 +1537,9 @@ export default function ExpressoGeralPage() {
     try {
       const msg = `Informamos que o procedimento para emissão do Recibo de Retirada foi atualizado.
 
-O SAQUE SEM CARTÃO será gerado exclusivamente na Plataforma Bradesco Expresso, utilizando a funcionalidade SERVIÇOS - SAQUE SEM CARTÃO.
+O SAQUE SEM CARTÃO será realizado exclusivamente pelo tablet usando a Plataforma Bradesco Expresso. O serviço está liberado para qualquer cliente Bradesco, com ou sem senha, utilizando a funcionalidade SERVIÇOS - SAQUE SEM CARTÃO.
+
+Maiores informações favor entrar em contato com nossa equipe.
 
 Chave Loja: ${r.chave || '-'}
 Nome do Expresso: ${r.nome || '-'}`
@@ -1623,6 +1550,45 @@ Nome do Expresso: ${r.nome || '-'}`
     } catch (e) {
       console.error(e)
       setError('Não consegui copiar a mensagem de Saque sem Cartão.')
+    }
+  }
+
+  async function compartilharSaqueSemCartaoWhatsApp(r: RowBase) {
+    const msg = `Informamos que o procedimento para emissão do Recibo de Retirada foi atualizado.\n\nO SAQUE SEM CARTÃO será realizado exclusivamente pelo tablet usando a Plataforma Bradesco Expresso. O serviço está liberado para qualquer cliente Bradesco, com ou sem senha, utilizando a funcionalidade SERVIÇOS - SAQUE SEM CARTÃO.
+
+Maiores informações favor entrar em contato com nossa equipe.\n\nChave Loja: ${r.chave || '-'}\nNome do Expresso: ${r.nome || '-'}`
+
+    try {
+      const response = await fetch(IMAGEM_SAQUE_SEM_CARTAO)
+      if (!response.ok) throw new Error('Não consegui carregar a arte do comunicado.')
+      const blob = await response.blob()
+      const file = new File([blob], 'guia-saque-sem-cartao.png', { type: 'image/png' })
+      const shareNav = navigator as Navigator & {
+        share?: (data: { title?: string; text?: string; files?: File[] }) => Promise<void>
+        canShare?: (data: { files?: File[] }) => boolean
+      }
+      const shareData = { title: 'Saque sem cartão no Bradesco Expresso', text: msg, files: [file] }
+
+      if (shareNav.share && shareNav.canShare?.({ files: [file] })) {
+        await shareNav.share(shareData)
+        setInfo('Comunicado e imagem enviados para o menu de compartilhamento.')
+      } else {
+        await navigator.clipboard.writeText(msg)
+        const imageUrl = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = imageUrl
+        link.download = file.name
+        document.body.appendChild(link)
+        link.click()
+        link.remove()
+        window.setTimeout(() => URL.revokeObjectURL(imageUrl), 1000)
+        setInfo('Texto copiado e imagem baixada. No WhatsApp, cole o texto e anexe o guia.')
+      }
+      setError(null)
+    } catch (e: any) {
+      if (e?.name === 'AbortError') return
+      console.error(e)
+      setError('Não consegui preparar o compartilhamento. Copie o texto e baixe a imagem separadamente.')
     }
   }
 
@@ -1872,7 +1838,6 @@ Nome do Expresso: ${r.nome || '-'}`
 
             const sinais = gerarSinalizacoes(r, semCert, vencida)
             const recomendacao = acaoRecomendada(r, semCert, vencida)
-            const saqueSemCartaoLiberado = SAQUE_SEM_CARTAO_CHAVES.has(onlyDigits(r.chave))
 
             return (
               <div
@@ -1946,6 +1911,17 @@ Nome do Expresso: ${r.nome || '-'}`
                   </div>
 
                   <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
+                    <PlanoComercialExpresso
+                      registroCollection={EXPRESSOS_COLLECTION}
+                      expresso={{
+                        chave: r.chave,
+                        nome: r.nome,
+                        agencia: r.agencia,
+                        pacb: r.pacb,
+                        municipio: r.municipio,
+                      }}
+                    />
+
                     <LightButton
                       onClick={() => irParaArvoreCronologica(r)}
                       title="Árvore Cronológica"
@@ -1980,15 +1956,14 @@ Nome do Expresso: ${r.nome || '-'}`
                   </div>
                 </div>
 
-                {saqueSemCartaoLiberado && (
-                  <div
+                <div
                     className="card-soft"
                     style={{
                       padding: '.7rem .9rem',
                       background: 'rgba(34,197,94,.08)',
                       border: '1px solid rgba(34,197,94,.22)',
                     }}
-                    title="Disponível somente para os expressos liberados na lista por chave loja."
+                    title="Comunicado disponível para todos os Expressos."
                   >
                     <div
                       style={{
@@ -1997,7 +1972,7 @@ Nome do Expresso: ${r.nome || '-'}`
                         fontSize: '.9rem',
                       }}
                     >
-                      💵 Saque sem cartão liberado no tablet
+                      💵 Comunicado: saque sem cartão no tablet
                     </div>
                     <div
                       style={{
@@ -2010,18 +1985,24 @@ Nome do Expresso: ${r.nome || '-'}`
                       }}
                     >
                       <div className="p-muted" style={{ fontSize: 12 }}>
-                        Este Expresso já está habilitado para utilizar a funcionalidade.
+                        Copie e envie as orientações para este Expresso.
                       </div>
 
                       <LightButton
-                        onClick={() => copySaqueSemCartaoWhatsApp(r)}
-                        title="Copiar comunicado para WhatsApp"
+                        onClick={() => compartilharSaqueSemCartaoWhatsApp(r)}
+                        title="Compartilhar o texto e a imagem do guia"
                       >
-                        📋 Copiar comunicado
+                        📤 Enviar com imagem
+                      </LightButton>
+
+                      <LightButton
+                        onClick={() => copySaqueSemCartaoWhatsApp(r)}
+                        title="Copiar somente o texto do comunicado"
+                      >
+                        📋 Copiar texto
                       </LightButton>
                     </div>
                   </div>
-                )}
 
                 <div>
                   <div className="p-muted" style={{ fontSize: 12 }}>
