@@ -486,6 +486,9 @@ export default function AgendaTreinamentosPage() {
         {visible.map((x) => {
           const isMine = !!user && x.trainerUid === user.uid
           const canEdit = isAdmin || isMine
+          const dadosListaAtual = currentTrainingInfo[x.chaveLoja]
+          const agenciaExpresso = x.agencia || dadosListaAtual?.agencia || ''
+          const pacbExpresso = x.pacb || dadosListaAtual?.pacb || ''
 
           const existsInCurrentList = currentKeys.has(x.chaveLoja)
           const showHistoricText = !existsInCurrentList && !!x.listUploadedAt
@@ -579,6 +582,16 @@ export default function AgendaTreinamentosPage() {
                 <div style={{ display: 'grid', gap: '.15rem' }}>
                   <div className="p-muted" style={{ fontSize: 12 }}>CNPJ</div>
                   <div style={{ fontWeight: 800 }}>{x.cnpj || '—'}</div>
+                </div>
+
+                <div style={{ display: 'grid', gap: '.15rem' }}>
+                  <div className="p-muted" style={{ fontSize: 12 }}>Agência</div>
+                  <div style={{ fontWeight: 800 }}>{agenciaExpresso || '—'}</div>
+                </div>
+
+                <div style={{ display: 'grid', gap: '.15rem' }}>
+                  <div className="p-muted" style={{ fontSize: 12 }}>PACB</div>
+                  <div style={{ fontWeight: 800 }}>{pacbExpresso || '—'}</div>
                 </div>
 
                 <div style={{ display: 'grid', gap: '.15rem' }}>
