@@ -278,12 +278,6 @@ export default function SimuladorAberturaConta() {
                 />
 
                 <TipoContaCard
-                  title="Conta pra salário"
-                  subtitle="Pra quem trabalha em uma empresa que tem convênio com o Bradesco."
-                  onClick={avancarParaRenda}
-                />
-
-                <TipoContaCard
                   title="Conta pra benefício INSS"
                   subtitle="Para quem é aposentado ou pensionista do INSS."
                   onClick={avancarParaRenda}
