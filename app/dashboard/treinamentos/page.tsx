@@ -49,6 +49,8 @@ type Agendamento = {
   razaoSocial?: string
   municipio?: string
   cnpj?: string
+  agencia?: string
+  pacb?: string
   listUploadedAt?: Timestamp
 }
 
@@ -659,6 +661,8 @@ export default function TreinamentosPage() {
         razaoSocial: r.razaoSocial,
         municipio: r.municipio,
         cnpj: r.cnpj,
+        agencia: r.codAgRelacionamento,
+        pacb: r.numPacb,
         trainerUid: user.uid,
         trainerEmail: user.email || '',
         scheduledAt: Timestamp.fromDate(date),
@@ -723,6 +727,16 @@ export default function TreinamentosPage() {
     } finally {
       setResettingKey(null)
     }
+  }
+
+  function abrirSolicitacaoBaixa(r: LinhaTreinamento) {
+    const params = new URLSearchParams({
+      chave: r.chaveLoja || '',
+      nomeExpresso: r.nomeLoja || '',
+      agencia: r.codAgRelacionamento || '',
+      pacb: r.numPacb || '',
+    })
+    router.push(`/dashboard/baixa-empresa?${params.toString()}`)
   }
 
   function buildWhatsAppMessage(r: LinhaTreinamento, ag?: Agendamento) {
@@ -917,7 +931,7 @@ export default function TreinamentosPage() {
                     isAdmin={isAdmin}
                     isMine={isMine}
                     onStartSchedule={() => startSchedule(r.chaveLoja)}
-                    onRequestBaixa={() => router.push('/dashboard/baixa-empresa')}
+                    onRequestBaixa={() => abrirSolicitacaoBaixa(r)}
                     onCopyWhatsApp={() => copyWhatsAppMessage(r)}
                     onMarkDone={() => markDone(r.chaveLoja)}
                     onReset={() => resetAgendamento(r.chaveLoja)}

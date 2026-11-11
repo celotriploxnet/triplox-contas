@@ -33,6 +33,19 @@ export default function BaixaEmpresaPage() {
     return () => unsub()
   }, [router])
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const chaveParam = params.get('chave')
+    const nomeParam = params.get('nomeExpresso')
+    const agenciaParam = params.get('agencia')
+    const pacbParam = params.get('pacb')
+
+    if (chaveParam !== null) setChave(chaveParam)
+    if (nomeParam !== null) setNomeExpresso(nomeParam)
+    if (agenciaParam !== null) setAgencia(agenciaParam)
+    if (pacbParam !== null) setPacb(pacbParam)
+  }, [])
+
   const assuntoLabel =
     assuntoTipo === 'treinamento'
       ? 'BAIXA DE TREINAMENTO'

@@ -28,6 +28,8 @@ type Agendamento = {
   razaoSocial?: string
   municipio?: string
   cnpj?: string
+  agencia?: string
+  pacb?: string
   listUploadedAt?: Timestamp // ✅ novo
 }
 
@@ -147,6 +149,7 @@ export default function AgendaTreinamentosPage() {
 
   const [items, setItems] = useState<Agendamento[]>([])
   const [currentKeys, setCurrentKeys] = useState<Set<string>>(new Set())
+  const [currentTrainingInfo, setCurrentTrainingInfo] = useState<Record<string, { nomeLoja: string; agencia: string; pacb: string }>>({})
   const [loading, setLoading] = useState(false)
 
   const [fMonth, setFMonth] = useState('')
@@ -171,6 +174,7 @@ export default function AgendaTreinamentosPage() {
       const raw: Record<string, any>[] = XLSX.utils.sheet_to_json(ws, { defval: '' })
 
       const keys = new Set<string>()
+      const trainingInfo: Record<string, { nomeLoja: string; agencia: string; pacb: string }> = {}
 
       for (const row of raw) {
         const normalized: Record<string, any> = {}
@@ -188,16 +192,25 @@ export default function AgendaTreinamentosPage() {
             ''
         ).trim()
 
-        if (chave) keys.add(chave)
+        if (chave) {
+          keys.add(chave)
+          trainingInfo[chave] = {
+            nomeLoja: String(normalized['Nome da Loja'] ?? '').trim(),
+            agencia: String(normalized['Cód. Ag. Relacionamento'] ?? normalized['Cod. Ag. Relacionamento'] ?? '').trim(),
+            pacb: String(normalized['Num. PACB'] ?? normalized['Num PACB'] ?? '').trim(),
+          }
+        }
       }
 
       setCurrentKeys(keys)
+      setCurrentTrainingInfo(trainingInfo)
     } catch (e) {
       console.error('Falha ao carregar chaves atuais da lista:', e)
 
       // Importante: a agenda NÃO pode sumir se a lista atual falhar,
       // mudar de CSV/XLS ou se algum treinamento não estiver mais na base nova.
       setCurrentKeys(new Set())
+      setCurrentTrainingInfo({})
     }
   }
 
@@ -286,6 +299,17 @@ export default function AgendaTreinamentosPage() {
     } finally {
       setSavingReschedule(false)
     }
+  }
+
+  function solicitarBaixa(item: Agendamento) {
+    const currentInfo = currentTrainingInfo[item.chaveLoja] || { nomeLoja: '', agencia: '', pacb: '' }
+    const params = new URLSearchParams({
+      chave: item.chaveLoja || '',
+      nomeExpresso: item.nomeLoja || currentInfo.nomeLoja || '',
+      agencia: item.agencia || currentInfo.agencia || '',
+      pacb: item.pacb || currentInfo.pacb || '',
+    })
+    router.push(`/dashboard/baixa-empresa?${params.toString()}`)
   }
 
   useEffect(() => {
@@ -491,6 +515,7 @@ export default function AgendaTreinamentosPage() {
                     <LightButton onClick={() => markDone(x.chaveLoja)}>Marcar concluído</LightButton>
                   </>
                 )}
+                <LightButton onClick={() => solicitarBaixa(x)}>Solicitar baixa</LightButton>
               </div>
 
               {reschedulingKey === x.chaveLoja && canEdit && x.status !== 'concluido' && (
