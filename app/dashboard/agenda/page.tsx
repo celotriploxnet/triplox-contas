@@ -53,6 +53,13 @@ function formatDateOnlyPtBR(ts?: Timestamp) {
   }).format(d)
 }
 
+function toDateTimeLocal(ts?: Timestamp) {
+  if (!ts) return ''
+  const date = ts.toDate()
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+  return localDate.toISOString().slice(0, 16)
+}
+
 function toDateKey(ts?: Timestamp) {
   if (!ts) return ''
   const d = ts.toDate()
@@ -146,6 +153,9 @@ export default function AgendaTreinamentosPage() {
   const [fDate, setFDate] = useState('')
   const [fEmployee, setFEmployee] = useState('')
   const [q, setQ] = useState('')
+  const [reschedulingKey, setReschedulingKey] = useState('')
+  const [rescheduleDateTime, setRescheduleDateTime] = useState('')
+  const [savingReschedule, setSavingReschedule] = useState(false)
 
   const [err, setErr] = useState<string | null>(null)
   const [info, setInfo] = useState<string>('')
@@ -234,6 +244,50 @@ export default function AgendaTreinamentosPage() {
     }
   }
 
+  function startReschedule(item: Agendamento) {
+    setErr(null)
+    setInfo('')
+    setReschedulingKey(item.chaveLoja)
+    setRescheduleDateTime(toDateTimeLocal(item.scheduledAt))
+  }
+
+  async function saveReschedule(item: Agendamento) {
+    if (!user || (!isAdmin && item.trainerUid !== user.uid)) {
+      setErr('Você só pode reagendar os treinamentos que agendou.')
+      return
+    }
+    if (!rescheduleDateTime) {
+      setErr('Escolha a nova data e hora do treinamento.')
+      return
+    }
+
+    const newDate = new Date(rescheduleDateTime)
+    if (Number.isNaN(newDate.getTime())) {
+      setErr('A nova data e hora são inválidas.')
+      return
+    }
+
+    setSavingReschedule(true)
+    setErr(null)
+    setInfo('')
+    try {
+      await setDoc(
+        doc(db, 'treinamentos_agendamentos', item.chaveLoja),
+        { scheduledAt: Timestamp.fromDate(newDate), updatedAt: serverTimestamp() },
+        { merge: true }
+      )
+      setReschedulingKey('')
+      setRescheduleDateTime('')
+      await loadAll()
+      setInfo('Treinamento reagendado ✅')
+    } catch (e) {
+      console.error('Erro ao reagendar treinamento:', e)
+      setErr('Não consegui reagendar o treinamento. Tente novamente.')
+    } finally {
+      setSavingReschedule(false)
+    }
+  }
+
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       setUser(u)
@@ -301,6 +355,14 @@ export default function AgendaTreinamentosPage() {
             ? 'Você (admin) vê todos os agendamentos e pode filtrar por mês, data e funcionário.'
             : 'Você vê somente os treinamentos que você agendou.'}
         </p>
+        <button
+          type="button"
+          className="btn-primary"
+          onClick={() => router.push('/dashboard/baixa-empresa')}
+          style={{ marginTop: '.5rem' }}
+        >
+          📄 Baixa
+        </button>
       </div>
 
       <div className="card" style={{ display: 'grid', gap: '1rem' }}>
@@ -424,9 +486,44 @@ export default function AgendaTreinamentosPage() {
                 </div>
 
                 {canEdit && x.status !== 'concluido' && (
-                  <LightButton onClick={() => markDone(x.chaveLoja)}>Marcar concluído</LightButton>
+                  <>
+                    <LightButton onClick={() => startReschedule(x)}>🗓️ Reagendar</LightButton>
+                    <LightButton onClick={() => markDone(x.chaveLoja)}>Marcar concluído</LightButton>
+                  </>
                 )}
               </div>
+
+              {reschedulingKey === x.chaveLoja && canEdit && x.status !== 'concluido' && (
+                <div className="card-soft" style={{ display: 'flex', gap: '.75rem', alignItems: 'end', flexWrap: 'wrap' }}>
+                  <label style={{ flex: '1 1 240px' }}>
+                    <div className="label">Nova data e hora</div>
+                    <input
+                      className="input"
+                      type="datetime-local"
+                      value={rescheduleDateTime}
+                      onChange={(event) => setRescheduleDateTime(event.target.value)}
+                      disabled={savingReschedule}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={() => void saveReschedule(x)}
+                    disabled={savingReschedule}
+                  >
+                    {savingReschedule ? 'Salvando…' : 'Confirmar reagendamento'}
+                  </button>
+                  <LightButton
+                    onClick={() => {
+                      setReschedulingKey('')
+                      setRescheduleDateTime('')
+                    }}
+                    disabled={savingReschedule}
+                  >
+                    Cancelar
+                  </LightButton>
+                </div>
+              )}
 
               {/* ✅ TEXTO QUE VOCÊ QUIS */}
               {showHistoricText && (
