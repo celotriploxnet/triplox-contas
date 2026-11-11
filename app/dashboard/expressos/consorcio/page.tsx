@@ -10,7 +10,6 @@ import { auth, storage } from '@/lib/firebase'
 
 const ADMIN_EMAIL = 'marcelo@treinexpresso.com.br'
 const CONSORCIO_PATH = 'consorcio/consorcios-liberados.xlsx'
-const BASE_PATH = 'base-lojas/banco-junho-2026.csv'
 
 type ConsorcioRow = {
   chave: string
@@ -75,20 +74,6 @@ function readConsorcio(bytes: Uint8Array | ArrayBuffer) {
   return validRows
 }
 
-async function loadEligibleRows(consorcioBytes: Uint8Array | ArrayBuffer, baseBytes: Uint8Array | ArrayBuffer) {
-  const eligibleKeys = new Set(
-    sheetRows(new TextDecoder('utf-8').decode(baseBytes), 'string')
-      .map((record) => {
-        const values = new Map(Object.entries(record).map(([key, value]) => [headerKey(key), value]))
-        return storeKey(values.get('chaveloja') || values.get('chave'))
-      })
-      .filter(Boolean)
-  )
-
-  if (!eligibleKeys.size) throw new Error('Não consegui localizar chaves na base atual de expressos.')
-  return readConsorcio(consorcioBytes).filter((row) => eligibleKeys.has(row.chave))
-}
-
 export default function ConsorcioPage() {
   const router = useRouter()
   const fileInput = useRef<HTMLInputElement>(null)
@@ -107,13 +92,10 @@ export default function ConsorcioPage() {
     setLoading(true)
     setError('')
     try {
-      const [consorcioBytes, baseBytes] = await Promise.all([
-        getBytes(ref(storage, CONSORCIO_PATH)),
-        getBytes(ref(storage, BASE_PATH)),
-      ])
-      const filtered = await loadEligibleRows(consorcioBytes, baseBytes)
-      setRows(filtered)
-      setInfo(`${filtered.length} registro${filtered.length === 1 ? '' : 's'} de consórcio liberado${filtered.length === 1 ? '' : 's'} na base atual.`)
+      const consorcioBytes = await getBytes(ref(storage, CONSORCIO_PATH))
+      const registros = readConsorcio(consorcioBytes)
+      setRows(registros)
+      setInfo(`${registros.length} registro${registros.length === 1 ? '' : 's'} carregado${registros.length === 1 ? '' : 's'} da planilha de consórcio.`)
     } catch (cause: unknown) {
       console.error('Falha ao carregar consórcios liberados:', cause)
       const failure = cause as { code?: string; message?: string }
@@ -173,7 +155,7 @@ export default function ConsorcioPage() {
     const mensagem = [
       `Olá! Seguem as orientações de acesso ao consórcio para ${row.nomeEmpresa}:`,
       '',
-      `O CPF de acesso para o consórcio é sempre o do Responsável da Loja. Para confirmação, informe apenas os 3 primeiros números: ${cpfPrimeirosTresNumeros}.`,
+      `O CPF de acesso para o consórcio é sempre o do Responsável da Loja. Para confirmação, informe o CPF do responsável que começa com: ${cpfPrimeirosTresNumeros}.`,
       `Código do usuário: ${row.codigoUsuario}`,
       '',
       'O código de usuário deve ser usado somente na criação do primeiro acesso ou quando for alterar a senha.',
@@ -233,7 +215,7 @@ export default function ConsorcioPage() {
         <span className="pill">Consórcio</span>
         <h1 className="h1" style={{ margin: 0 }}>Expressos com consórcio liberado</h1>
         <p className="p-muted" style={{ margin: 0 }}>
-          A lista considera apenas as chaves que também estão na base atual de expressos.
+          A lista exibe todos os registros da planilha de consórcios liberados.
         </p>
         <div style={{ display: 'flex', gap: '.65rem', flexWrap: 'wrap', marginTop: '.25rem' }}>
           <button type="button" className="btn-primary" onClick={() => router.push('/dashboard/expressos/geral-junho-2026')}>

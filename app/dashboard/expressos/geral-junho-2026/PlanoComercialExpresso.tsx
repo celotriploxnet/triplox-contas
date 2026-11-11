@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { createPortal } from 'react-dom'
 import {
-  arrayUnion, doc, getDoc, setDoc, Timestamp,
+  arrayRemove, arrayUnion, doc, getDoc, setDoc, Timestamp, updateDoc,
 } from 'firebase/firestore'
 import { auth, db } from '@/lib/firebase'
 import { ROTEIROS_COMERCIAIS } from '@/lib/roteiros-comerciais'
@@ -20,7 +20,9 @@ type Interacao = {
 }
 type Comissao = { id: string; label: string; type: string; value: number }
 
-const OPCOES_RESULTADO = ['Falou com responsável', 'Sem contato', 'Reunião agendada', 'Treinamento realizado', 'Material enviado', 'Retorno pendente']
+const OPCOES_RESULTADO = ['Falou com responsável', 'Falou com Funcionário', 'Sem contato', 'Reunião agendada', 'Treinamento realizado', 'Material enviado', 'Retorno pendente']
+const ADMIN_EMAIL = 'marcelo@treinexpresso.com.br'
+const ADMIN_UID = 'Z1VO0zsXyIf23YwmmGjhTm3hIBE2'
 
 function idSeguro(value: string) {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w.-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 120) || 'sem-chave'
@@ -50,6 +52,8 @@ export default function PlanoComercialExpresso({ expresso, registroCollection }:
   const [produtosFalados, setProdutosFalados] = useState<string[]>([])
   const [observacoes, setObservacoes] = useState('')
   const [proximoContato, setProximoContato] = useState('')
+  const [excluindoId, setExcluindoId] = useState('')
+  const ehAdmin = auth.currentUser?.email?.toLowerCase() === ADMIN_EMAIL || auth.currentUser?.uid === ADMIN_UID
 
   const produto = ROTEIROS_COMERCIAIS.find((item) => item.id === produtoId) || ROTEIROS_COMERCIAIS[0]
   const comissaoIds = produto.comissaoIds || (produto.comissaoId ? [produto.comissaoId] : [])
@@ -108,6 +112,30 @@ export default function PlanoComercialExpresso({ expresso, registroCollection }:
       console.error('Erro ao registrar interação comercial:', e)
       setErro(`Não consegui salvar o atendimento (${e?.code || 'erro'}).`)
     } finally { setSalvando(false) }
+  }
+
+  async function excluirInteracao(item: Interacao) {
+    if (!ehAdmin || !auth.currentUser) return
+    const confirmado = window.confirm('Deseja excluir este contato do histórico? Esta ação não pode ser desfeita.')
+    if (!confirmado) return
+
+    setExcluindoId(item.id)
+    setErro('')
+    setSucesso('')
+    const expressoId = idSeguro(expresso.chave || `${expresso.agencia}-${expresso.pacb}-${expresso.nome}`)
+    try {
+      await updateDoc(doc(db, registroCollection, expressoId), {
+        historicoComercial: arrayRemove(item),
+      })
+      setSucesso('Contato removido do histórico.')
+      await carregarDados()
+    } catch (e: unknown) {
+      console.error('Erro ao excluir contato do histórico:', e)
+      const falha = e as { code?: string }
+      setErro(`Não consegui excluir o contato (${falha?.code || 'erro'}).`)
+    } finally {
+      setExcluindoId('')
+    }
   }
 
   function alternarProduto(id: string) {
@@ -213,7 +241,24 @@ export default function PlanoComercialExpresso({ expresso, registroCollection }:
             <div className={styles.planoHistoricoTopo}><div><span className={styles.planoEyebrow}>Linha do tempo</span><h3>Histórico de contatos</h3></div><button type="button" onClick={() => setAba('roteiro')} className={styles.planoNovoContato}>+ Registrar contato</button></div>
             {historico.length === 0 && !carregando && <div className={styles.planoHistoricoVazio}><span className={styles.planoVazioIcone}>◷</span><strong>Nenhum contato registrado ainda</strong><p>Registre ligações, visitas e treinamentos para acompanhar o relacionamento com este ponto.</p><button type="button" onClick={() => setAba('roteiro')} className={styles.planoNovoContato}>Registrar primeiro contato</button></div>}
             {historico.map((item) => <article key={item.id} className={styles.planoHistoricoCard}>
-              <div className={styles.planoHistoricoCardTopo}><div className={styles.planoHistoricoTitulo}><span className={styles.planoHistoricoPonto} /> <strong>{item.tipo}</strong><span className={styles.planoResultado}>{item.resultado}</span></div><time>{formatarData(item.createdAt)}</time></div>
+              <div className={styles.planoHistoricoCardTopo}>
+                <div className={styles.planoHistoricoTitulo}><span className={styles.planoHistoricoPonto} /> <strong>{item.tipo}</strong><span className={styles.planoResultado}>{item.resultado}</span></div>
+                <div className={styles.planoHistoricoTopoAcoes}>
+                  <time>{formatarData(item.createdAt)}</time>
+                  {ehAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => void excluirInteracao(item)}
+                      disabled={excluindoId === item.id}
+                      aria-label={`Excluir contato: ${item.tipo}`}
+                      title="Excluir contato do histórico"
+                      className={styles.planoExcluirHistorico}
+                    >
+                      {excluindoId === item.id ? '…' : '🗑️'}
+                    </button>
+                  )}
+                </div>
+              </div>
               {item.produtos?.length > 0 && <div className={styles.planoHistoricoProdutos}><b>Produtos:</b> {item.produtos.map((id) => ROTEIROS_COMERCIAIS.find((p) => p.id === id)?.nome || id).join(', ')}</div>}
               {item.observacoes && <p className={styles.planoHistoricoTexto}>{item.observacoes}</p>}
               {item.proximoContato && <div className={styles.planoProximoContato}>Próximo contato: {new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeZone: 'UTC' }).format(new Date(`${item.proximoContato}T12:00:00Z`))}</div>}
