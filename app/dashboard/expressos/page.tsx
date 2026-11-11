@@ -29,6 +29,13 @@ export default function ExpressosMenuPage() {
       pill: 'Produção',
     },
     {
+      title: '📄 Consórcio liberado',
+      desc: 'Consulte empresas com consórcio liberado e atualize a base de consulta.',
+      href: '/dashboard/expressos/consorcio',
+      enabled: true,
+      pill: 'Produção',
+    },
+    {
       title: '🚀 Acelerador (próximos da faixa)',
       desc: 'Ranking dos expressos mais próximos de subir o percentual.',
       href: '/dashboard/expressos/acelerador',

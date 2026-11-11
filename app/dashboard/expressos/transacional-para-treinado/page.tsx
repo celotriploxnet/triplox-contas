@@ -11,14 +11,16 @@ import { useRouter } from 'next/navigation'
 import { onAuthStateChanged, type User } from 'firebase/auth'
 import { collection, doc, getDocs, serverTimestamp, setDoc } from 'firebase/firestore'
 import { getBytes, ref } from 'firebase/storage'
+import * as XLSX from 'xlsx'
 
 import { auth, db, storage } from '@/lib/firebase'
+import { calcPontosExpressoGeral } from '@/lib/pontuacao-junho-2026'
 
 /* =========================
    CONFIG
    ========================= */
 const ADMIN_EMAIL = 'marcelo@treinexpresso.com.br'
-const CSV_PATH = 'base-lojas/banco.csv'
+const CSV_PATH = 'base-lojas/banco-junho-2026.csv'
 const LIMIT_NO_SEARCH = 200
 
 /* =========================
@@ -34,9 +36,21 @@ type RowBase = {
 
   qtdContas: number
   qtdContasComDeposito: number
-  qtdLime: number
-  qtdConsignado: number
+  qtdContasSemDeposito: number
+  qtdCestaServ: number
+  qtdSuperProtegido: number
   qtdCartaoEmitido: number
+  qtdMicrosseguro: number
+  qtdVivaVida: number
+  qtdPlanoOdonto: number
+  qtdSegResidencial: number
+  qtdSegCartaoDeb: number
+  qtdExpSorte: number
+  vlrLime: number
+  vlrConsignadoTotal: number
+  vlrCreditoParcelado: number
+  vlrExpSorte: number
+  pontos: number
 
   trx: number
 }
@@ -83,82 +97,28 @@ function parseCSVText(u8: Uint8Array) {
   return new TextDecoder('utf-8').decode(u8)
 }
 
-function detectDelimiter(headerLine: string) {
-  const candidates = [',', ';', '\t']
-  let best = ','
-  let bestCount = -1
-
-  for (const delimiter of candidates) {
-    const escaped = delimiter === '\t' ? '\\t' : `\\${delimiter}`
-    const count = (headerLine.match(new RegExp(escaped, 'g')) || []).length
-    if (count > bestCount) {
-      best = delimiter
-      bestCount = count
-    }
-  }
-
-  return best
-}
-
-function parseDelimitedLine(line: string, delimiter: string) {
-  const result: string[] = []
-  let current = ''
-  let inQuotes = false
-
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i]
-    const next = line[i + 1]
-
-    if (ch === '"') {
-      if (inQuotes && next === '"') {
-        current += '"'
-        i++
-      } else {
-        inQuotes = !inQuotes
-      }
-      continue
-    }
-
-    if (ch === delimiter && !inQuotes) {
-      result.push(current)
-      current = ''
-      continue
-    }
-
-    current += ch
-  }
-
-  result.push(current)
-  return result
-}
-
-function parseCsvRows(text: string): Record<string, string>[] {
-  const cleaned = text.replace(/^\uFEFF/, '')
-  const lines = cleaned
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    .split('\n')
-    .filter((line) => line.trim().length > 0)
-
-  if (!lines.length) return []
-
-  const delimiter = detectDelimiter(lines[0])
-  const headers = parseDelimitedLine(lines[0], delimiter).map((h) => h.trim())
-
-  return lines.slice(1).map((line) => {
-    const values = parseDelimitedLine(line, delimiter)
-    const row: Record<string, string> = {}
-
-    headers.forEach((header, idx) => {
-      row[header] = (values[idx] ?? '').trim()
-    })
-
-    return row
-  })
-}
-
 function parseNumber(v: any) {
-  const s = toStr(v).replace(/\./g, '').replace(',', '.')
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0
+
+  let s = toStr(v)
+    .replace(/R\$/gi, '')
+    .replace(/\s/g, '')
+    .replace(/[^\d,.-]/g, '')
+  if (!s) return 0
+
+  const hasComma = s.includes(',')
+  const hasDot = s.includes('.')
+  if (hasComma && hasDot) {
+    if (s.lastIndexOf(',') > s.lastIndexOf('.')) s = s.replace(/\./g, '').replace(',', '.')
+    else s = s.replace(/,/g, '')
+  } else if (hasComma) {
+    s = s.replace(',', '.')
+  } else if (hasDot) {
+    const parts = s.split('.')
+    const looksLikeThousands = parts.length > 1 && parts.slice(1).every((part) => part.length === 3)
+    if (looksLikeThousands) s = s.replace(/\./g, '')
+  }
+
   const n = Number(s)
   return Number.isFinite(n) ? n : 0
 }
@@ -177,6 +137,14 @@ function formatNum(n: number) {
   return new Intl.NumberFormat('pt-BR').format(n || 0)
 }
 
+function formatMoney(n: number) {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    maximumFractionDigits: 2,
+  }).format(n || 0)
+}
+
 function isTransacional(status: string) {
   return toStr(status).toLowerCase().includes('trans')
 }
@@ -184,10 +152,19 @@ function isTransacional(status: string) {
 function totalProdutos(r: RowBase) {
   return (
     (r.qtdContas || 0) +
-    (r.qtdContasComDeposito || 0) +
-    (r.qtdLime || 0) +
-    (r.qtdConsignado || 0) +
-    (r.qtdCartaoEmitido || 0)
+    (r.qtdCestaServ || 0) +
+    (r.qtdSuperProtegido || 0) +
+    (r.qtdCartaoEmitido || 0) +
+    (r.qtdMicrosseguro || 0) +
+    (r.qtdVivaVida || 0) +
+    (r.qtdPlanoOdonto || 0) +
+    (r.qtdSegResidencial || 0) +
+    (r.qtdSegCartaoDeb || 0) +
+    Math.max(r.qtdExpSorte || 0, Number(r.vlrExpSorte > 0)) +
+    Number(r.vlrLime > 0) +
+    Number(r.vlrConsignadoTotal > 0) +
+    Number(r.vlrCreditoParcelado > 0) +
+    Number(r.vlrExpSorte > 0)
   )
 }
 
@@ -297,7 +274,9 @@ export default function TransacionalParaTreinadoPage() {
       ])
 
       const text = parseCSVText(toUint8(bytesAny))
-      const raw = parseCsvRows(text)
+      const workbook = XLSX.read(text, { type: 'string' })
+      const sheet = workbook.Sheets[workbook.SheetNames[0]]
+      const raw: Record<string, any>[] = XLSX.utils.sheet_to_json(sheet, { defval: '' })
 
       const normalized = raw.map((obj) => {
         const out: Record<string, any> = {}
@@ -319,15 +298,47 @@ export default function TransacionalParaTreinadoPage() {
           r['qtd_trxcontabil'] || r['qtd_trx_contabil'] || r['qtd trxcontabil'] || r['qtd_trx']
         )
 
-        const qtdContas = parseNumber(r['qtd_contas'] || r['qtd contas'])
-        const qtdContasComDeposito = parseNumber(
-          r['qtd_contas_com_deposito'] || r['qtd contas com deposito']
+        const qtdContas = Math.max(parseNumber(r['qtd_contas'] || r['qtd contas']), 0)
+        const qtdContasComDeposito = Math.min(
+          Math.max(parseNumber(r['qtd_contas_com_deposito'] || r['qtd contas com deposito']), 0),
+          qtdContas
         )
-        const qtdLime = parseNumber(r['qtd_lime'] || r['qtd lime'])
-        const qtdConsignado = parseNumber(r['qtd_consignado'] || r['qtd consignado'])
+        const qtdContasSemDeposito = Math.max(qtdContas - qtdContasComDeposito, 0)
+        const qtdCestaServ = parseNumber(r['qtd_cesta_serv'] || r['qtd cesta serv'])
+        const qtdSuperProtegido = parseNumber(
+          r['qtd_super_protegido'] || r['qtd super protegido'] || r['qtd_superprotegido']
+        )
         const qtdCartaoEmitido = parseNumber(
           r['qtd_cartao_emitido'] || r['qtd cartao emitido'] || r['cartao']
         )
+        const qtdMicrosseguro = parseNumber(r['qtd_microsseguro'] || r['qtd microsseguro'])
+        const qtdVivaVida = parseNumber(r['qtd_micro_vivavida'] || r['qtd micro vivavida'])
+        const qtdPlanoOdonto = parseNumber(r['qtd_plano_odonto'] || r['qtd plano odonto'])
+        const qtdSegResidencial = parseNumber(r['qtd_seg_residencial'] || r['qtd seg residencial'])
+        const qtdSegCartaoDeb = parseNumber(r['qtd_seg_cartao_deb'] || r['qtd seg cartao deb'])
+        const qtdExpSorte = parseNumber(r['qtd_exp_sorte'] || r['qtd exp sorte'])
+        const vlrLime = parseNumber(r['vlr_lime'] || r['valor do lime'] || r['valor lime'])
+        const vlrConsignadoTotal = parseNumber(
+          r['vlr_consignado_total'] || r['valor consignado total'] || r['consignado total']
+        )
+        const vlrCreditoParcelado = parseNumber(
+          r['vlr_credito_parcel'] || r['valor credito parcelado'] || r['valor crédito parcelado']
+        )
+        const vlrExpSorte = parseNumber(r['vlr_exp_sorte'] || r['valor exp sorte'])
+        const pontos = calcPontosExpressoGeral({
+          qtdContasComDeposito,
+          qtdContasSemDeposito,
+          qtdCestaServ,
+          qtdSuperProtegido,
+          vlrLime,
+          vlrConsignadoTotal,
+          vlrCreditoParcelado,
+          qtdMicrosseguro,
+          qtdVivaVida,
+          qtdPlanoOdonto,
+          qtdSegCartaoDeb,
+          vlrExpSorte,
+        })
 
         return {
           chave,
@@ -338,9 +349,21 @@ export default function TransacionalParaTreinadoPage() {
           statusAnalise,
           qtdContas,
           qtdContasComDeposito,
-          qtdLime,
-          qtdConsignado,
+          qtdContasSemDeposito,
+          qtdCestaServ,
+          qtdSuperProtegido,
           qtdCartaoEmitido,
+          qtdMicrosseguro,
+          qtdVivaVida,
+          qtdPlanoOdonto,
+          qtdSegResidencial,
+          qtdSegCartaoDeb,
+          qtdExpSorte,
+          vlrLime,
+          vlrConsignadoTotal,
+          vlrCreditoParcelado,
+          vlrExpSorte,
+          pontos,
           trx,
         }
       })
@@ -592,18 +615,7 @@ export default function TransacionalParaTreinadoPage() {
         >
           {filtrados.map((r) => {
             const total = totalProdutos(r)
-
-            // ✅ CORREÇÃO AQUI
-            const qtdContasSemDeposito = Math.max(
-              (r.qtdContas || 0) - (r.qtdContasComDeposito || 0),
-              0
-            )
-
-            const pontos =
-              (r.qtdContasComDeposito || 0) * 7 +
-              qtdContasSemDeposito * 3 +
-              (r.qtdLime || 0) * 7 +
-              (r.qtdConsignado || 0) * 5.5
+            const pontos = r.pontos
 
             const solicitado = !!solicitacoes[r.chave]?.solicitado
             const salvando = savingKey === r.chave
@@ -708,14 +720,23 @@ export default function TransacionalParaTreinadoPage() {
                     gap: '.6rem',
                   }}
                 >
-                  <Indicador label="Conta" value={formatNum(r.qtdContas || 0)} />
+                  <Indicador label="Contas PF (total)" value={formatNum(r.qtdContas || 0)} />
                   <Indicador
                     label="Conta com Depósito"
                     value={formatNum(r.qtdContasComDeposito || 0)}
                   />
-                  <Indicador label="Lime" value={formatNum(r.qtdLime || 0)} />
-                  <Indicador label="Consignado" value={formatNum(r.qtdConsignado || 0)} />
+                  <Indicador label="Cesta de serviços" value={formatNum(r.qtdCestaServ || 0)} />
+                  <Indicador label="Super Protegido" value={formatNum(r.qtdSuperProtegido || 0)} />
                   <Indicador label="Cartão" value={formatNum(r.qtdCartaoEmitido || 0)} />
+                  <Indicador label="Empréstimo pessoal" value={formatMoney(r.vlrLime || 0)} />
+                  <Indicador label="Consignado" value={formatMoney(r.vlrConsignadoTotal || 0)} />
+                  <Indicador label="Crédito parcelado" value={formatMoney(r.vlrCreditoParcelado || 0)} />
+                  <Indicador label="Microsseguro" value={formatNum(r.qtdMicrosseguro || 0)} />
+                  <Indicador label="Viva Vida" value={formatNum(r.qtdVivaVida || 0)} />
+                  <Indicador label="Plano odontológico" value={formatNum(r.qtdPlanoOdonto || 0)} />
+                  <Indicador label="Seguro residencial" value={formatNum(r.qtdSegResidencial || 0)} />
+                  <Indicador label="Seguro do cartão" value={formatNum(r.qtdSegCartaoDeb || 0)} />
+                  <Indicador label="Expresso da Sorte" value={formatMoney(r.vlrExpSorte || 0)} />
                 </div>
               </div>
             )

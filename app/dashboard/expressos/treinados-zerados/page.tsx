@@ -7,6 +7,8 @@ import * as XLSX from 'xlsx'
 
 import { auth, storage } from '@/lib/firebase'
 
+const CSV_PATH = 'base-lojas/banco-junho-2026.csv'
+
 type Row = {
   chave: string
   nome: string
@@ -22,10 +24,46 @@ function toStr(v: any) {
 }
 
 function toNumber(v: any) {
-  const s = String(v ?? '').trim()
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0
+
+  let s = String(v ?? '')
+    .trim()
+    .replace(/R\$/gi, '')
+    .replace(/\s/g, '')
+    .replace(/[^\d,.-]/g, '')
   if (!s) return 0
-  const n = Number(s.replace(/\./g, '').replace(/,/g, '.'))
+
+  const hasComma = s.includes(',')
+  const hasDot = s.includes('.')
+  if (hasComma && hasDot) {
+    if (s.lastIndexOf(',') > s.lastIndexOf('.')) s = s.replace(/\./g, '').replace(',', '.')
+    else s = s.replace(/,/g, '')
+  } else if (hasComma) {
+    s = s.replace(',', '.')
+  } else if (hasDot) {
+    const parts = s.split('.')
+    const looksLikeThousands = parts.length > 1 && parts.slice(1).every((part) => part.length === 3)
+    if (looksLikeThousands) s = s.replace(/\./g, '')
+  }
+
+  const n = Number(s)
   return Number.isFinite(n) ? n : 0
+}
+
+function normalizeKey(k: string) {
+  return k
+    .replaceAll('Ã³', 'ó')
+    .replaceAll('Ã£', 'ã')
+    .replaceAll('Ã§', 'ç')
+    .replaceAll('Ãº', 'ú')
+    .replaceAll('Ã¡', 'á')
+    .replaceAll('Ã©', 'é')
+    .replaceAll('Ã­', 'í')
+    .replaceAll('Ãª', 'ê')
+    .replaceAll('Ã´', 'ô')
+    .replaceAll('Â', '')
+    .trim()
+    .toLowerCase()
 }
 
 function toUint8(bytes: any): Uint8Array {
@@ -39,8 +77,6 @@ function isZero(v: any) {
 }
 
 export default function TreinadosZeradosPage() {
-  const CSV_PATH = 'base-lojas/banco.csv'
-
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState('')
@@ -59,17 +95,23 @@ export default function TreinadosZeradosPage() {
       setInfo('')
 
       const bytes = await getBytes(ref(storage, CSV_PATH))
-      const wb = XLSX.read(toUint8(bytes), { type: 'array' })
+      const text = new TextDecoder('utf-8').decode(toUint8(bytes))
+      const wb = XLSX.read(text, { type: 'string' })
       const ws = wb.Sheets[wb.SheetNames[0]]
-      const data: any[] = XLSX.utils.sheet_to_json(ws, { defval: '' })
+      const rawRows: any[] = XLSX.utils.sheet_to_json(ws, { defval: '' })
+      const data = rawRows.map((row) => {
+        const normalized: Record<string, any> = {}
+        for (const [key, value] of Object.entries(row)) normalized[normalizeKey(key)] = value
+        return normalized
+      })
 
       const wantedZeroFields = [
         'qtd_contas',
         'qtd_contas_com_deposito',
         'qtd_cesta_serv',
-        'QTD_MOBILIDADE',
-        'QTD_MTOKEN',
-        'QTD_CARTAO_EMITIDO',
+        'qtd_mobilidade',
+        'qtd_mtoken',
+        'qtd_cartao_emitido',
         'vlr_ches',
         'qtd_chesp_contratado',
         'qtd_lime_ab_conta',
@@ -77,33 +119,41 @@ export default function TreinadosZeradosPage() {
         'vlr_lime',
         'qtd_consignado',
         'vlr_consignado',
-        'QTD_CREDITO_PARCEL_DTLHES',
+        'vlr_consignado_total',
+        'vlr_consignado_inss',
+        'vlr_consignado_pub',
+        'vlr_consignado_priv',
+        'vlr_credito_parcel',
+        'qtd_credito_parcel',
+        'qtd_credito_parcel_dtlh',
+        'qtd_credito_parcel_dtlhes',
+        'qtd_credito_parcelado_dtlhes',
         'qtd_consorcio',
-        'QTD_CONTAS_PJ',
-        'QTD_CONTAS_FOLHA',
+        'qtd_contas_pj',
+        'qtd_contas_folha',
         'qtd_microsseguro',
-        'QTD_SUPER_PROTEGIDO',
-        'QTD_MICRO_VIVAVIDA',
-        'QTD_PLANO_ODONTO',
-        'QTD_SEG_RESIDENCIAL',
-        'QTD_SEG_CARTAO_DEB',
-        'QTD_EXP_SORTE',
-        'VLR_EXP_SORTE',
+        'qtd_super_protegido',
+        'qtd_micro_vivavida',
+        'qtd_plano_odonto',
+        'qtd_seg_residencial',
+        'qtd_seg_cartao_deb',
+        'qtd_exp_sorte',
+        'vlr_exp_sorte',
       ] as const
 
       const list: Row[] = data
         .map((r) => {
-          const agPacb = toStr(r.ag_pacb || r['AGENCIA/PACB'] || '')
+          const agPacb = toStr(r.ag_pacb || r['agencia/pacb'] || '')
           const [agencia, pacb] = agPacb.split('/').map((x: string) => x?.trim() || '')
 
           return {
-            chave: toStr(r.chave_loja),
-            nome: toStr(r.nome_loja),
+            chave: toStr(r.chave_loja || r.chave),
+            nome: toStr(r.nome_loja || r.nome),
             municipio: toStr(r.municipio),
             agencia,
             pacb,
-            status: toStr(r.STATUS_ANALISE),
-            trx: toNumber(r.qtd_TrxContabil),
+            status: toStr(r.status_analise || r.status),
+            trx: toNumber(r.qtd_trxcontabil || r.qtd_trx_contabil || r.qtd_trx),
             __raw: r,
           } as any
         })

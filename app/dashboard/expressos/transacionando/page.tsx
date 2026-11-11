@@ -8,6 +8,8 @@ import * as XLSX from 'xlsx'
 
 import { auth, storage } from '@/lib/firebase'
 
+const CSV_PATH = 'base-lojas/banco-junho-2026.csv'
+
 /* =========================
    TYPES
    ========================= */
@@ -29,10 +31,46 @@ function toStr(v: any) {
 }
 
 function toNumber(v: any) {
-  const s = String(v ?? '').trim()
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0
+
+  let s = String(v ?? '')
+    .trim()
+    .replace(/R\$/gi, '')
+    .replace(/\s/g, '')
+    .replace(/[^\d,.-]/g, '')
   if (!s) return 0
-  const n = Number(s.replace(/\./g, '').replace(/,/g, '.'))
+
+  const hasComma = s.includes(',')
+  const hasDot = s.includes('.')
+  if (hasComma && hasDot) {
+    if (s.lastIndexOf(',') > s.lastIndexOf('.')) s = s.replace(/\./g, '').replace(',', '.')
+    else s = s.replace(/,/g, '')
+  } else if (hasComma) {
+    s = s.replace(',', '.')
+  } else if (hasDot) {
+    const parts = s.split('.')
+    const looksLikeThousands = parts.length > 1 && parts.slice(1).every((part) => part.length === 3)
+    if (looksLikeThousands) s = s.replace(/\./g, '')
+  }
+
+  const n = Number(s)
   return Number.isFinite(n) ? n : 0
+}
+
+function normalizeKey(k: string) {
+  return k
+    .replaceAll('Ã³', 'ó')
+    .replaceAll('Ã£', 'ã')
+    .replaceAll('Ã§', 'ç')
+    .replaceAll('Ãº', 'ú')
+    .replaceAll('Ã¡', 'á')
+    .replaceAll('Ã©', 'é')
+    .replaceAll('Ã­', 'í')
+    .replaceAll('Ãª', 'ê')
+    .replaceAll('Ã´', 'ô')
+    .replaceAll('Â', '')
+    .trim()
+    .toLowerCase()
 }
 
 function toUint8(bytes: any): Uint8Array {
@@ -47,6 +85,11 @@ function statusBucket(statusRaw: string): 'transacional' | 'treinado' | 'outro' 
   if (s.includes('transacion')) return 'transacional'
   if (s.includes('treinad')) return 'treinado'
   return 'outro'
+}
+
+function ordenarPorTrxDesc(a: ExpressoContabil, b: ExpressoContabil) {
+  const diferenca = Number(b.trx || 0) - Number(a.trx || 0)
+  return diferenca || a.nome.localeCompare(b.nome, 'pt-BR')
 }
 
 function LightButton({
@@ -103,7 +146,6 @@ function buildWhatsAppMessage(e: ExpressoContabil) {
    ========================= */
 export default function TransacionandoPage() {
   const router = useRouter()
-  const CSV_PATH = 'base-lojas/banco.csv'
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -157,9 +199,15 @@ export default function TransacionandoPage() {
       setInfo('')
 
       const bytes = await getBytes(ref(storage, CSV_PATH))
-      const wb = XLSX.read(toUint8(bytes), { type: 'array' })
+      const text = new TextDecoder('utf-8').decode(toUint8(bytes))
+      const wb = XLSX.read(text, { type: 'string' })
       const ws = wb.Sheets[wb.SheetNames[0]]
-      const rows: any[] = XLSX.utils.sheet_to_json(ws, { defval: '' })
+      const rawRows: any[] = XLSX.utils.sheet_to_json(ws, { defval: '' })
+      const rows = rawRows.map((row) => {
+        const normalized: Record<string, any> = {}
+        for (const [key, value] of Object.entries(row)) normalized[normalizeKey(key)] = value
+        return normalized
+      })
 
       /**
        * REGRA:
@@ -168,16 +216,17 @@ export default function TransacionandoPage() {
        */
       const list: ExpressoContabil[] = rows
         .filter((r) => {
-          const trx = toNumber(r.qtd_TrxContabil)
-          if (trx <= 0) return false
+          const trx = toNumber(r.qtd_trxcontabil || r.qtd_trx_contabil || r.qtd_trx)
+          if (trx <= 0 || !toStr(r.chave_loja || r.chave)) return false
 
+          // Usa os indicadores que a página Geral Junho/2026 lê desta mesma base.
           const outrosCampos = [
             r.qtd_contas,
             r.qtd_contas_com_deposito,
             r.qtd_cesta_serv,
-            r.QTD_MOBILIDADE,
-            r.QTD_MTOKEN,
-            r.QTD_CARTAO_EMITIDO,
+            r.qtd_mobilidade,
+            r.qtd_mtoken,
+            r.qtd_cartao_emitido,
             r.vlr_ches,
             r.qtd_chesp_contratado,
             r.qtd_lime_ab_conta,
@@ -185,38 +234,46 @@ export default function TransacionandoPage() {
             r.vlr_lime,
             r.qtd_consignado,
             r.vlr_consignado,
-            r.QTD_CREDITO_PARCEL_DTLHES,
+            r.vlr_consignado_total,
+            r.vlr_consignado_inss,
+            r.vlr_consignado_pub,
+            r.vlr_consignado_priv,
+            r.vlr_credito_parcel,
+            r.qtd_credito_parcel,
+            r.qtd_credito_parcel_dtlh,
+            r.qtd_credito_parcel_dtlhes,
+            r.qtd_credito_parcelado_dtlhes,
             r.qtd_consorcio,
-            r.QTD_CONTAS_PJ,
-            r.QTD_CONTAS_FOLHA,
+            r.qtd_contas_pj,
+            r.qtd_contas_folha,
             r.qtd_microsseguro,
-            r.QTD_SUPER_PROTEGIDO,
-            r.QTD_MICRO_VIVAVIDA,
-            r.QTD_PLANO_ODONTO,
-            r.QTD_SEG_RESIDENCIAL,
-            r.QTD_SEG_CARTAO_DEB,
-            r.QTD_EXP_SORTE,
-            r.VLR_EXP_SORTE,
+            r.qtd_super_protegido,
+            r.qtd_micro_vivavida,
+            r.qtd_plano_odonto,
+            r.qtd_seg_residencial,
+            r.qtd_seg_cartao_deb,
+            r.qtd_exp_sorte,
+            r.vlr_exp_sorte,
           ]
 
           return outrosCampos.every((v) => toNumber(v) === 0)
         })
         .map((r) => {
-          const agPacb = toStr(r.ag_pacb || r.AG_PACB || r['AGENCIA/PACB'] || '')
+          const agPacb = toStr(r.ag_pacb || r['agencia/pacb'] || '')
           const [agencia, pacb] = agPacb.split('/').map((x) => (x ? x.trim() : ''))
 
           return {
-            chave: toStr(r.chave_loja || r.CHAVE_LOJA || ''),
-            nome: toStr(r.nome_loja || r.NOME_LOJA || ''),
-            municipio: toStr(r.municipio || r.MUNICIPIO || r.Municipio || ''),
+            chave: toStr(r.chave_loja || r.chave),
+            nome: toStr(r.nome_loja || r.nome),
+            municipio: toStr(r.municipio),
             agencia: agencia || '',
             pacb: pacb || '',
-            trx: toNumber(r.qtd_TrxContabil),
-            status: toStr(r.STATUS_ANALISE || r.status_analise || '') || '—',
+            trx: toNumber(r.qtd_trxcontabil || r.qtd_trx_contabil || r.qtd_trx),
+            status: toStr(r.status_analise || r.status) || '—',
           }
         })
 
-      setExpressos(list)
+      setExpressos(list.sort(ordenarPorTrxDesc))
     } catch (e: any) {
       console.error(e)
       setError(`Erro ao carregar base. (${e?.code || 'sem-code'})`)
@@ -241,7 +298,7 @@ export default function TransacionandoPage() {
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase()
 
-    return expressos.filter((e) => {
+    const resultado = expressos.filter((e) => {
       if (fAgencia && e.agencia !== fAgencia) return false
 
       if (fStatus !== 'todos') {
@@ -256,6 +313,8 @@ export default function TransacionandoPage() {
 
       return true
     })
+
+    return resultado.sort(ordenarPorTrxDesc)
   }, [expressos, fAgencia, fStatus, q])
 
   const totalFiltrado = filtered.length
@@ -277,6 +336,7 @@ export default function TransacionandoPage() {
         <div style={{ display: 'flex', gap: '.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
           <span className="pill">Resumo</span>
           <div className="h2">Total encontrado</div>
+          <span className="pill">Ordem: TRX maior para menor</span>
 
           <button
             type="button"

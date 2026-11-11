@@ -6,6 +6,7 @@ import { onAuthStateChanged } from 'firebase/auth'
 import { auth, db } from '@/lib/firebase'
 import { doc, serverTimestamp, writeBatch } from 'firebase/firestore'
 import * as XLSX from 'xlsx'
+import { calcPontosExpressoGeral } from '@/lib/pontuacao-junho-2026'
 
 const ADMIN_EMAIL = 'marcelo@treinexpresso.com.br'
 
@@ -27,6 +28,13 @@ type LinhaImportada = {
   qtdCartaoEmitido: number
   qtdChesContratado: number
   qtdLimeAbConta: number
+  qtdContasSemDeposito: number
+  vlrLime: number
+  vlrConsignadoTotal: number
+  vlrConsignadoInss: number
+  vlrConsignadoPub: number
+  vlrConsignadoPriv: number
+  vlrCreditoParcelado: number
   qtdLime: number
   qtdConsignado: number
   qtdCreditoParcelado: number
@@ -172,40 +180,6 @@ function getFirstValue(
   return ''
 }
 
-function calcPontos(r: {
-  qtdContasComDeposito: number
-  qtdContas: number
-  qtdCestaServ: number
-  qtdSuperProtegido: number
-  qtdMobilidade: number
-  qtdLime: number
-  qtdConsignado: number
-  qtdCreditoParcelado: number
-  qtdMicrosseguro: number
-  qtdVivaVida: number
-  qtdPlanoOdonto: number
-  qtdSegCartaoDeb: number
-  vlrExpSorte: number
-}) {
-  const expSortePts = Math.floor((r.vlrExpSorte || 0) / 50)
-
-  return (
-    (r.qtdContasComDeposito || 0) * 7 +
-    (r.qtdContas || 0) * 3 +
-    (r.qtdCestaServ || 0) * 3 +
-    (r.qtdSuperProtegido || 0) * 1 +
-    (r.qtdMobilidade || 0) * 0.5 +
-    (r.qtdLime || 0) * 6.5 +
-    (r.qtdConsignado || 0) * 5.5 +
-    (r.qtdCreditoParcelado || 0) * 6.5 +
-    (r.qtdMicrosseguro || 0) * 1 +
-    (r.qtdVivaVida || 0) * 1 +
-    (r.qtdPlanoOdonto || 0) * 1 +
-    (r.qtdSegCartaoDeb || 0) * 1 +
-    expSortePts
-  )
-}
-
 function mapearLinha(r: Record<string, any>): LinhaImportada | null {
   const chave = toStr(getFirstValue(r, ['chave_loja', 'chave loja', 'chave']))
   if (!chave) return null
@@ -242,10 +216,12 @@ function mapearLinha(r: Record<string, any>): LinhaImportada | null {
     )
   )
 
-  const qtdContas = parseNumber(getFirstValue(r, ['qtd_contas', 'qtd contas']))
-  const qtdContasComDeposito = parseNumber(
+  const qtdContas = Math.max(parseNumber(getFirstValue(r, ['qtd_contas', 'qtd contas'])), 0)
+  const qtdContasComDepositoInformada = Math.max(parseNumber(
     getFirstValue(r, ['qtd_contas_com_deposito', 'qtd contas com deposito'])
-  )
+  ), 0)
+  const qtdContasComDeposito = Math.min(qtdContasComDepositoInformada, qtdContas)
+  const qtdContasSemDeposito = Math.max(qtdContas - qtdContasComDeposito, 0)
   const qtdCestaServ = parseNumber(getFirstValue(r, ['qtd_cesta_serv', 'qtd cesta serv']))
 
   const qtdSuperProtegido = parseNumber(
@@ -272,23 +248,26 @@ function mapearLinha(r: Record<string, any>): LinhaImportada | null {
   const qtdLimeAbConta = parseNumber(
     getFirstValue(r, ['qtd_lime_ab_conta', 'qtd lime ab conta'])
   )
-  const qtdLime = parseNumber(getFirstValue(r, ['qtd_lime', 'qtd lime']))
-  const qtdConsignado = parseNumber(getFirstValue(r, ['qtd_consignado', 'qtd consignado']))
-
-  const qtdCreditoParcelado = parseNumber(
-    getFirstValue(
-      r,
-      [
-        'qtd_credito_parcel_dtlhes',
-        'qtd_credito_parcelado_dtlhes',
-        'qtd_credito_parcel',
-        'credito parcelado',
-        'qtd_credito_parcel_dtlh',
-        'qtd_credito_parcel_detalhes',
-      ],
-      ['credito', 'parcel']
-    )
+  const vlrLime = parseNumber(getFirstValue(r, ['vlr_lime', 'valor do lime', 'valor lime']))
+  const vlrConsignadoTotal = parseNumber(
+    getFirstValue(r, ['vlr_consignado_total', 'valor consignado total', 'consignado total'])
   )
+  const vlrConsignadoInss = parseNumber(
+    getFirstValue(r, ['vlr_consignado_inss', 'valor consignado inss'])
+  )
+  const vlrConsignadoPub = parseNumber(
+    getFirstValue(r, ['vlr_consignado_pub', 'valor consignado publico', 'valor consignado público'])
+  )
+  const vlrConsignadoPriv = parseNumber(
+    getFirstValue(r, ['vlr_consignado_priv', 'valor consignado privado'])
+  )
+  const vlrCreditoParcelado = parseNumber(
+    getFirstValue(r, ['vlr_credito_parcel', 'valor credito parcelado', 'valor crédito parcelado'])
+  )
+  const qtdLime = 0
+  const qtdConsignado = 0
+
+  const qtdCreditoParcelado = 0
 
   const qtdMicrosseguro = parseNumber(getFirstValue(r, ['qtd_microsseguro', 'qtd microsseguro']))
   const qtdVivaVida = parseNumber(
@@ -333,15 +312,14 @@ function mapearLinha(r: Record<string, any>): LinhaImportada | null {
     )
   )
 
-  const pontos = calcPontos({
+  const pontos = calcPontosExpressoGeral({
     qtdContasComDeposito,
-    qtdContas,
+    qtdContasSemDeposito,
     qtdCestaServ,
     qtdSuperProtegido,
-    qtdMobilidade,
-    qtdLime,
-    qtdConsignado,
-    qtdCreditoParcelado,
+    vlrLime,
+    vlrConsignadoTotal,
+    vlrCreditoParcelado,
     qtdMicrosseguro,
     qtdVivaVida,
     qtdPlanoOdonto,
@@ -366,6 +344,13 @@ function mapearLinha(r: Record<string, any>): LinhaImportada | null {
     qtdCartaoEmitido,
     qtdChesContratado,
     qtdLimeAbConta,
+    qtdContasSemDeposito,
+    vlrLime,
+    vlrConsignadoTotal,
+    vlrConsignadoInss,
+    vlrConsignadoPub,
+    vlrConsignadoPriv,
+    vlrCreditoParcelado,
     qtdLime,
     qtdConsignado,
     qtdCreditoParcelado,
@@ -412,7 +397,7 @@ export default function ImportarArvoreCronologicaPage() {
 
   async function processarPreview(arquivo: File) {
     const buffer = await arquivo.arrayBuffer()
-    const workbook = XLSX.read(buffer, { type: 'array', cellDates: true })
+    const workbook = XLSX.read(buffer, { type: 'array', cellDates: true, codepage: 1252 })
     const sheet = workbook.Sheets[workbook.SheetNames[0]]
 
     const rawRows: Record<string, any>[] = XLSX.utils.sheet_to_json(sheet, {
@@ -464,8 +449,9 @@ export default function ImportarArvoreCronologicaPage() {
       const mesOrdem = gerarMesOrdem(mes)
       const mesDoc = mes.replace('/', '-')
 
-      const batch = writeBatch(db)
+      let batch = writeBatch(db)
       let contador = 0
+      let operacoesNoLote = 0
 
       for (const r of linhas) {
         const ref = doc(db, 'arvorecronologica', r.chave, 'meses', mesDoc)
@@ -494,6 +480,13 @@ export default function ImportarArvoreCronologicaPage() {
           qtdCartaoEmitido: r.qtdCartaoEmitido,
           qtdChesContratado: r.qtdChesContratado,
           qtdLimeAbConta: r.qtdLimeAbConta,
+          qtdContasSemDeposito: r.qtdContasSemDeposito,
+          vlrLime: r.vlrLime,
+          vlrConsignadoTotal: r.vlrConsignadoTotal,
+          vlrConsignadoInss: r.vlrConsignadoInss,
+          vlrConsignadoPub: r.vlrConsignadoPub,
+          vlrConsignadoPriv: r.vlrConsignadoPriv,
+          vlrCreditoParcelado: r.vlrCreditoParcelado,
           qtdLime: r.qtdLime,
           qtdConsignado: r.qtdConsignado,
           qtdCreditoParcelado: r.qtdCreditoParcelado,
@@ -511,9 +504,16 @@ export default function ImportarArvoreCronologicaPage() {
         })
 
         contador++
+        operacoesNoLote++
+
+        if (operacoesNoLote === 450) {
+          await batch.commit()
+          batch = writeBatch(db)
+          operacoesNoLote = 0
+        }
       }
 
-      await batch.commit()
+      if (operacoesNoLote > 0) await batch.commit()
 
       setMsg(`Importação concluída. ${contador} expressos atualizados.`)
       setFile(null)

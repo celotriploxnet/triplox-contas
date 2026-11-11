@@ -51,7 +51,13 @@ function formatCNPJ(v: any) {
 }
 
 function normalizeKey(k: string) {
-  return k
+  return corrigirTexto(k)
+    .trim()
+    .toUpperCase()
+}
+
+function corrigirTexto(value: any) {
+  return toStr(value)
     .replaceAll('Ã³', 'ó')
     .replaceAll('Ã£', 'ã')
     .replaceAll('Ã§', 'ç')
@@ -61,9 +67,16 @@ function normalizeKey(k: string) {
     .replaceAll('Ã­', 'í')
     .replaceAll('Ãª', 'ê')
     .replaceAll('Ã´', 'ô')
+    .replaceAll('Ã“', 'Ó')
+    .replaceAll('Ã‡', 'Ç')
+    .replaceAll('Ãƒ', 'Ã')
     .replaceAll('Â', '')
-    .trim()
-    .toUpperCase()
+    .replace(/concei磯/gi, (trecho) => {
+      if (trecho === trecho.toUpperCase()) return 'CONCEIÇÃO'
+      if (trecho === trecho.toLowerCase()) return 'conceição'
+      return 'Conceição'
+    })
+    .normalize('NFC')
 }
 
 function toUint8(bytes: any): Uint8Array {
@@ -273,15 +286,15 @@ export default function PessoaCertificadaPage() {
       const mapped: CertRow[] = normalized.map((r) => {
         const cnpj = formatCNPJ(r['CNPJ_LOJA'] || r['CNPJ'])
         const chave = toStr(r['CHAVE_LOJA'])
-        const correspondente = toStr(r['RZ_SOCIAL'] || r['CORRESPONDENTE'])
-        const vinculo = toStr(r['COLABORADOR_ESTA_VINCULADO_AO_CNPJ'])
-        const statusBase = toStr(r['STATUS_CERTIFICACAO'])
+        const correspondente = corrigirTexto(r['RZ_SOCIAL'] || r['CORRESPONDENTE'])
+        const vinculo = corrigirTexto(r['COLABORADOR_ESTA_VINCULADO_AO_CNPJ'])
+        const statusBase = corrigirTexto(r['STATUS_CERTIFICACAO'])
 
         const semCertificado =
           vinculo.toUpperCase().includes('NÃO POSSUI CERTIFICADO') ||
           vinculo.toUpperCase().includes('NAO POSSUI CERTIFICADO')
 
-        const nomeRaw = toStr(r['NOME_INSCRITO'] || r['NOME CANDIDATO'] || r['NOME_CANDIDATO'])
+        const nomeRaw = corrigirTexto(r['NOME_INSCRITO'] || r['NOME CANDIDATO'] || r['NOME_CANDIDATO'])
         const cpfRaw = toStr(r['CPF'] || r['CPF CANDIDATO'] || r['CPF_CANDIDATO'])
         const dataRaw = r['DATA_CERTIFICACAO'] || r['DATA REALIZAÇÃO'] || r['DATA_REALIZACAO'] || ''
 

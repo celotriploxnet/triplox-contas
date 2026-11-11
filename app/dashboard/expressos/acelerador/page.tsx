@@ -12,7 +12,7 @@ import { auth, storage } from '@/lib/firebase'
    CONFIG
    ========================= */
 const ADMIN_EMAIL = 'marcelo@treinexpresso.com.br'
-const CSV_PATH = 'base-lojas/banco.csv'
+const CSV_PATH = 'base-lojas/banco-junho-2026.csv'
 
 const LIMIT_NO_SEARCH = 250
 
@@ -68,7 +68,27 @@ function parseCSVText(u8: Uint8Array) {
 }
 
 function parseNumber(v: any) {
-  const s = toStr(v).replace(/\./g, '').replace(',', '.')
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0
+
+  let s = toStr(v)
+    .replace(/R\$/gi, '')
+    .replace(/\s/g, '')
+    .replace(/[^\d,.-]/g, '')
+  if (!s) return 0
+
+  const hasComma = s.includes(',')
+  const hasDot = s.includes('.')
+  if (hasComma && hasDot) {
+    if (s.lastIndexOf(',') > s.lastIndexOf('.')) s = s.replace(/\./g, '').replace(',', '.')
+    else s = s.replace(/,/g, '')
+  } else if (hasComma) {
+    s = s.replace(',', '.')
+  } else if (hasDot) {
+    const parts = s.split('.')
+    const looksLikeThousands = parts.length > 1 && parts.slice(1).every((part) => part.length === 3)
+    if (looksLikeThousands) s = s.replace(/\./g, '')
+  }
+
   const n = Number(s)
   return Number.isFinite(n) ? n : 0
 }
@@ -290,9 +310,14 @@ export default function AceleradorPage() {
         const statusAnalise = toStr(r['status_analise'] || r['status analise'] || r['status'])
         const trx = parseNumber(r['qtd_trxcontabil'] || r['qtd_trx_contabil'] || r['qtd trxcontabil'] || r['qtd_trx'])
 
-        // ✅ Contas PF (acelerador): soma dessas duas
-        const qtdContas = parseNumber(r['qtd_contas'] || r['qtd contas'])
-        const qtdContasComDeposito = parseNumber(r['qtd_contas_com_deposito'] || r['qtd contas com deposito'])
+        // Na base da Geral, qtd_contas já é o total; derive a parte sem depósito
+        // para somar com as contas com depósito sem duplicar essas contas.
+        const qtdContasTotal = Math.max(parseNumber(r['qtd_contas'] || r['qtd contas']), 0)
+        const qtdContasComDeposito = Math.min(
+          Math.max(parseNumber(r['qtd_contas_com_deposito'] || r['qtd contas com deposito']), 0),
+          qtdContasTotal
+        )
+        const qtdContas = Math.max(qtdContasTotal - qtdContasComDeposito, 0)
 
         return {
           chave,

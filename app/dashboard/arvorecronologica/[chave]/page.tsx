@@ -1,16 +1,17 @@
 'use client'
 
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { onAuthStateChanged } from 'firebase/auth'
 import { auth, db, storage } from '@/lib/firebase'
 import { collection, getDocs, orderBy, query } from 'firebase/firestore'
 import { getBytes, ref } from 'firebase/storage'
+import { calcPontosExpressoGeral } from '@/lib/pontuacao-junho-2026'
+import styles from './arvoreCronologica.module.css'
 import {
   Bar,
   BarChart,
   CartesianGrid,
-  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -32,12 +33,16 @@ type MesRow = {
 
   qtdContas?: number
   qtdContasComDeposito?: number
+  qtdContasSemDeposito?: number
   qtdCestaServ?: number
   qtdSuperProtegido?: number
   qtdMobilidade?: number
   qtdLime?: number
   qtdConsignado?: number
   qtdCreditoParcelado?: number
+  vlrLime?: number
+  vlrConsignadoTotal?: number
+  vlrCreditoParcelado?: number
   qtdMicrosseguro?: number
   qtdVivaVida?: number
   qtdPlanoOdonto?: number
@@ -77,6 +82,10 @@ type AtualRow = {
   qtdPlanoOdonto: number
   qtdSegResidencial: number
   qtdSegCartaoDeb: number
+  qtdContasSemDeposito: number
+  vlrLime: number
+  vlrConsignadoTotal: number
+  vlrCreditoParcelado: number
   vlrExpSorte: number
   qtdExpSorte: number
   referencia: string
@@ -124,6 +133,25 @@ function formatPontos(n: number | undefined) {
   return isInt ? String(Math.round(rounded)) : rounded.toFixed(1).replace('.', ',')
 }
 
+function formatCurrency(n: number | undefined) {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    maximumFractionDigits: 0,
+  }).format(Number(n || 0))
+}
+
+function formatMetric(value: number, tipo: 'money' | 'count') {
+  return tipo === 'money' ? formatCurrency(value) : formatNum(value)
+}
+
+function percentual(atual: number, anterior: number) {
+  if (!anterior) return atual === 0 ? '0%' : '—'
+  const valor = ((atual - anterior) / anterior) * 100
+  const sinal = valor > 0 ? '+' : ''
+  return `${sinal}${valor.toFixed(1).replace('.', ',')}%`
+}
+
 function nomeMes(mesRef: string) {
   if (!mesRef) return ''
 
@@ -155,6 +183,11 @@ function mesAtualRef() {
   const mes = String(now.getMonth() + 1).padStart(2, '0')
   const ano = String(now.getFullYear())
   return `${mes}/${ano}`
+}
+
+function gerarMesOrdem(mesRef: string) {
+  const [mes, ano] = mesRef.split('/')
+  return Number(`${ano}${mes}`)
 }
 
 function formatCertificacaoValue(v: any) {
@@ -397,7 +430,9 @@ export default function ArvoreCronologicaPage() {
         const snap = await getDocs(q)
 
         const lista = snap.docs.map((d) => d.data() as MesRow)
-        setRows(lista)
+        // Mantém somente os quatro fechamentos mais recentes; a base do mês atual
+        // continua sendo carregada separadamente e aparece na comparação existente.
+        setRows(lista.slice(-4))
       } catch (e: any) {
         console.error(e)
         setErro(e?.message || 'Erro ao carregar árvore cronológica.')
@@ -433,10 +468,19 @@ export default function ArvoreCronologicaPage() {
           )
 
           const qtdContas = parseNumber(r['qtd_contas'] || r['qtd contas'])
-          const qtdContasComDeposito = parseNumber(
-            r['qtd_contas_com_deposito'] || r['qtd contas com deposito']
+          const qtdContasComDeposito = Math.min(
+            Math.max(parseNumber(r['qtd_contas_com_deposito'] || r['qtd contas com deposito']), 0),
+            Math.max(qtdContas, 0)
           )
+          const qtdContasSemDeposito = Math.max(qtdContas - qtdContasComDeposito, 0)
           const qtdCestaServ = parseNumber(r['qtd_cesta_serv'] || r['qtd cesta serv'])
+          const vlrLime = parseNumber(r['vlr_lime'] || r['valor do lime'] || r['valor lime'])
+          const vlrConsignadoTotal = parseNumber(
+            r['vlr_consignado_total'] || r['valor consignado total'] || r['consignado total']
+          )
+          const vlrCreditoParcelado = parseNumber(
+            r['vlr_credito_parcel'] || r['valor credito parcelado'] || r['valor crédito parcelado']
+          )
 
           const qtdSuperProtegido = parseNumber(
             r['qtd_super_protegido'] ||
@@ -500,15 +544,14 @@ export default function ArvoreCronologicaPage() {
               r['expresso referencia?']
           )
 
-          const pontos = calcPontos({
+          const pontos = calcPontosExpressoGeral({
             qtdContasComDeposito,
-            qtdContas,
+            qtdContasSemDeposito,
             qtdCestaServ,
             qtdSuperProtegido,
-            qtdMobilidade,
-            qtdLime,
-            qtdConsignado,
-            qtdCreditoParcelado,
+            vlrLime,
+            vlrConsignadoTotal,
+            vlrCreditoParcelado,
             qtdMicrosseguro,
             qtdVivaVida,
             qtdPlanoOdonto,
@@ -527,6 +570,10 @@ export default function ArvoreCronologicaPage() {
             trx,
             qtdContas,
             qtdContasComDeposito,
+            qtdContasSemDeposito,
+            vlrLime,
+            vlrConsignadoTotal,
+            vlrCreditoParcelado,
             qtdCestaServ,
             qtdSuperProtegido,
             qtdMobilidade,
@@ -566,7 +613,7 @@ export default function ArvoreCronologicaPage() {
   const rowsComPontos = useMemo(() => {
     return rows.map((r) => ({
       ...r,
-      pontosCalculados: calcPontos({
+      pontosCalculados: Number(r.pontos ?? calcPontos({
         qtdContasComDeposito: r.qtdContasComDeposito,
         qtdContas: r.qtdContas,
         qtdCestaServ: r.qtdCestaServ,
@@ -580,7 +627,7 @@ export default function ArvoreCronologicaPage() {
         qtdPlanoOdonto: r.qtdPlanoOdonto,
         qtdSegCartaoDeb: r.qtdSegCartaoDeb,
         vlrExpSorte: r.vlrExpSorte,
-      }),
+      })),
       dtCertificacaoFormatada: formatCertificacaoValue(r.dtCertificacao),
     }))
   }, [rows])
@@ -600,14 +647,7 @@ export default function ArvoreCronologicaPage() {
   const chartData = useMemo(() => {
     const historico = rowsComPontos.map((r) => ({
       mes: r.mesReferencia,
-      contaSemDeposito: Number(r.qtdContas || 0),
-      contaComDeposito: Number(r.qtdContasComDeposito || 0),
-      consignado: Number(r.qtdConsignado || 0),
-      emprestimoPessoal: Number(r.qtdLime || 0),
-      planoOdonto: Number(r.qtdPlanoOdonto || 0),
-      microsseguro: Number(r.qtdMicrosseguro || 0),
-      vivaVida: Number(r.qtdVivaVida || 0),
-      sorteExpressa: Number(r.qtdExpSorte || 0),
+      pontos: Number((r as any).pontosCalculados || 0),
     }))
 
     if (currentRow) {
@@ -616,14 +656,7 @@ export default function ArvoreCronologicaPage() {
 
       const atualGrafico = {
         mes: refAtual,
-        contaSemDeposito: Number(currentRow.qtdContas || 0),
-        contaComDeposito: Number(currentRow.qtdContasComDeposito || 0),
-        consignado: Number(currentRow.qtdConsignado || 0),
-        emprestimoPessoal: Number(currentRow.qtdLime || 0),
-        planoOdonto: Number(currentRow.qtdPlanoOdonto || 0),
-        microsseguro: Number(currentRow.qtdMicrosseguro || 0),
-        vivaVida: Number(currentRow.qtdVivaVida || 0),
-        sorteExpressa: Number(currentRow.qtdExpSorte || 0),
+        pontos: Number(currentRow.pontos || 0),
       }
 
       if (idx >= 0) {
@@ -640,7 +673,104 @@ export default function ArvoreCronologicaPage() {
     })
   }, [rowsComPontos, currentRow])
 
+  const comparacaoProdutos = useMemo(() => {
+    const fechamentos = [...rowsComPontos]
+      .filter((r) => r.mesReferencia !== mesAtualRef())
+      .sort((a, b) => a.mesOrdem - b.mesOrdem)
+    const atual = fechamentos[fechamentos.length - 1]
+    const anterior = fechamentos[fechamentos.length - 2]
+    if (!atual || !anterior) return null
+
+    const medidas: { nome: string; tipo: 'money' | 'count'; valor: (r: any) => number }[] = [
+      { nome: 'Contas sem depósito', tipo: 'count', valor: (r) => Number(r.qtdContasSemDeposito ?? Math.max(Number(r.qtdContas || 0) - Number(r.qtdContasComDeposito || 0), 0)) },
+      { nome: 'Contas com depósito', tipo: 'count', valor: (r) => Number(r.qtdContasComDeposito || 0) },
+      { nome: 'Cesta de serviços', tipo: 'count', valor: (r) => Number(r.qtdCestaServ || 0) },
+      { nome: 'Super Protegido', tipo: 'count', valor: (r) => Number(r.qtdSuperProtegido || 0) },
+      { nome: 'Empréstimo pessoal', tipo: 'money', valor: (r) => Number(r.vlrLime || 0) },
+      { nome: 'Consignado', tipo: 'money', valor: (r) => Number(r.vlrConsignadoTotal || 0) },
+      { nome: 'Crédito parcelado', tipo: 'money', valor: (r) => Number(r.vlrCreditoParcelado || 0) },
+      { nome: 'Microsseguro', tipo: 'count', valor: (r) => Number(r.qtdMicrosseguro || 0) },
+      { nome: 'Viva Vida', tipo: 'count', valor: (r) => Number(r.qtdVivaVida || 0) },
+      { nome: 'Plano odontológico', tipo: 'count', valor: (r) => Number(r.qtdPlanoOdonto || 0) },
+      { nome: 'Seguro residencial', tipo: 'count', valor: (r) => Number(r.qtdSegResidencial || 0) },
+      { nome: 'Seguro do cartão', tipo: 'count', valor: (r) => Number(r.qtdSegCartaoDeb || 0) },
+      { nome: 'Expresso da Sorte', tipo: 'money', valor: (r) => Number(r.vlrExpSorte || 0) },
+    ]
+
+    const produtos = medidas.map((medida) => {
+      const valorAtual = medida.valor(atual)
+      const valorAnterior = medida.valor(anterior)
+      const diferenca = valorAtual - valorAnterior
+      const estado = valorAtual === 0 && valorAnterior === 0
+        ? 'none'
+        : diferenca > 0
+          ? 'up'
+          : diferenca < 0
+            ? 'down'
+            : 'flat'
+      return {
+        ...medida,
+        valorAtual,
+        valorAnterior,
+        diferenca,
+        percentual: percentual(valorAtual, valorAnterior),
+        estado,
+      }
+    })
+
+    return {
+      mesAtual: atual.mesReferencia,
+      mesAnterior: anterior.mesReferencia,
+      produtos,
+      cresceu: produtos.filter((p) => p.estado === 'up').length,
+      manteve: produtos.filter((p) => p.estado === 'flat').length,
+      caiu: produtos.filter((p) => p.estado === 'down').length,
+      semProducao: produtos.filter((p) => p.estado === 'none').length,
+    }
+  }, [rowsComPontos])
+
   const mesAtualNome = useMemo(() => nomeMes(mesAtualRef()), [])
+
+  const timelineItems = useMemo(() => {
+    const historico = [...rowsComPontos]
+      .filter((r) => r.mesReferencia !== mesAtualRef())
+      .sort((a, b) => b.mesOrdem - a.mesOrdem)
+
+    const fechamentos = historico.map((r, index) => {
+      const anterior = historico[index + 1]
+      return {
+        ...r,
+        atual: false,
+        pontosValor: Number((r as any).pontosCalculados || 0),
+        anteriorPontos: anterior ? Number((anterior as any).pontosCalculados || 0) : null,
+        anteriorTrx: anterior ? Number(anterior.trx || 0) : null,
+        contasSemDeposito: Number(
+          r.qtdContasSemDeposito ?? Math.max(Number(r.qtdContas || 0) - Number(r.qtdContasComDeposito || 0), 0)
+        ),
+        vlrLime: Number(r.vlrLime || 0),
+        vlrConsignadoTotal: Number(r.vlrConsignadoTotal || 0),
+        vlrCreditoParcelado: Number(r.vlrCreditoParcelado || 0),
+      }
+    })
+
+    if (!currentRow) return fechamentos
+    return [
+      {
+        ...currentRow,
+        mesReferencia: mesAtualRef(),
+        mesOrdem: gerarMesOrdem(mesAtualRef()),
+        atual: true,
+        pontosValor: Number(currentRow.pontos || 0),
+        anteriorPontos: null,
+        anteriorTrx: null,
+        contasSemDeposito: Number(currentRow.qtdContasSemDeposito || 0),
+        vlrLime: Number(currentRow.vlrLime || 0),
+        vlrConsignadoTotal: Number(currentRow.vlrConsignadoTotal || 0),
+        vlrCreditoParcelado: Number(currentRow.vlrCreditoParcelado || 0),
+      },
+      ...fechamentos,
+    ]
+  }, [rowsComPontos, currentRow])
 
   if (!userReady) {
     return (
@@ -651,345 +781,170 @@ export default function ArvoreCronologicaPage() {
   }
 
   return (
-    <section style={{ display: 'grid', gap: '1.25rem' }}>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'flex-start',
-          gap: '1rem',
-          flexWrap: 'wrap',
-        }}
-      >
+    <section className={styles.page}>
+      <header className={styles.header}>
         <div>
           <span className="pill">Árvore Cronológica</span>
-          <h1 className="h1" style={{ marginTop: '.75rem' }}>
-            🌳 Evolução do Expresso
-          </h1>
-          <p className="p-muted" style={{ marginTop: '.35rem' }}>
-            Acompanhe a evolução mensal de produção, pontos e indicadores do expresso.
-          </p>
+          <h1 className={styles.title}>Produção do Expresso</h1>
+          <p className={styles.subtitle}>Acompanhe os fechamentos mensais e identifique rapidamente mudanças na produção.</p>
         </div>
+        <button className={styles.backButton} onClick={() => router.back()}>← Voltar</button>
+      </header>
 
-        <button
-          onClick={() => router.back()}
-          style={{
-            borderRadius: 999,
-            padding: '.55rem .9rem',
-            fontSize: '.9rem',
-            fontWeight: 900,
-            border: '1px solid rgba(15,15,25,.18)',
-            background: 'rgba(255,255,255,.92)',
-            color: 'rgba(16,16,24,.92)',
-            boxShadow: '0 10px 18px rgba(10,10,20,.06)',
-            cursor: 'pointer',
-          }}
-        >
-          ← Voltar
-        </button>
-      </div>
+      <section className={styles.identity} aria-label="Identificação do expresso">
+        <div className={styles.identityName}>
+          <span className={styles.eyebrow}>Expresso</span>
+          <strong>{infoExpresso?.nome || `Chave ${chave}`}</strong>
+          <span>{infoExpresso?.municipio || 'Município não informado'} · Chave {chave || '—'}</span>
+        </div>
+        <div className={styles.identityMeta}>
+          <span><small>Agência / PACB</small><b>{infoExpresso?.agencia || '—'} / {infoExpresso?.pacb || '—'}</b></span>
+          <span><small>Status</small><b>{infoExpresso?.statusAnalise || '—'}</b></span>
+          <span><small>Certificação</small><b>{(infoExpresso as any)?.dtCertificacaoFormatada || '—'}</b></span>
+        </div>
+      </section>
 
-      <div className="card">
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            gap: '1rem',
-            flexWrap: 'wrap',
-            alignItems: 'center',
-          }}
-        >
-          <div>
-            <div className="p-muted" style={{ fontSize: 12 }}>
-              Chave do Expresso
+      {currentLoading && <div className={styles.notice}>Carregando a produção de {mesAtualNome}...</div>}
+      {currentError && <div className={`${styles.notice} ${styles.noticeError}`}>{currentError}</div>}
+      {erro && <div className={`${styles.notice} ${styles.noticeError}`}>{erro}</div>}
+
+      {comparacaoProdutos ? (
+        <section className={styles.summary} aria-label="Resumo de desempenho">
+          <div className={styles.summaryLead}>
+            <span className={styles.eyebrow}>Comparativo comercial</span>
+            <strong>Evolução dos produtos</strong>
+            <span>{nomeMes(comparacaoProdutos.mesAtual)} × {nomeMes(comparacaoProdutos.mesAnterior)}</span>
+            <small>Vendas e produtos, sem usar TRX para classificar o resultado.</small>
+          </div>
+          <div className={styles.summaryCounts}>
+            <div className={styles.summaryMetric}>
+              <span>Produtos que cresceram</span>
+              <strong className={styles.positive}>{comparacaoProdutos.cresceu}</strong>
+              <small>Valor ou quantidade maior</small>
             </div>
-            <div style={{ fontWeight: 900, fontSize: '1.08rem' }}>
-              {chave || '—'}
+            <div className={styles.summaryMetric}>
+              <span>Produtos que se mantiveram</span>
+              <strong>{comparacaoProdutos.manteve}</strong>
+              <small>Mesmo valor ou quantidade</small>
+            </div>
+            <div className={styles.summaryMetric}>
+              <span>Produtos que caíram</span>
+              <strong className={comparacaoProdutos.caiu ? styles.negative : ''}>{comparacaoProdutos.caiu}</strong>
+              <small>Valor ou quantidade menor</small>
             </div>
           </div>
-
-          <div>
-            <span className="pill">Histórico mensal</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="card" style={{ display: 'grid', gap: '1rem' }}>
-        <div>
-          <span className="pill">Resumo atual</span>
-        </div>
-
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-            gap: '.75rem',
-          }}
-        >
-          <InfoBox label="Nome do Expresso" value={infoExpresso?.nome || '—'} />
-          <InfoBox label="Município" value={infoExpresso?.municipio || '—'} />
-          <InfoBox
-            label="Agência / PACB"
-            value={`${infoExpresso?.agencia || '—'} / ${infoExpresso?.pacb || '—'}`}
-          />
-          <InfoBox label="Status Análise" value={infoExpresso?.statusAnalise || '—'} />
-          <InfoBox label="Certificação" value={(infoExpresso as any)?.dtCertificacaoFormatada || '—'} />
-          <InfoBox
-            label="Pontos (regra da Geral)"
-            value={formatPontos(currentRow ? currentRow.pontos : (infoExpresso as any)?.pontosCalculados)}
-          />
-        </div>
-      </div>
-
-      {currentLoading ? (
-        <div className="card-soft">
-          <p className="p-muted">Carregando produção atual do mês corrente...</p>
-        </div>
-      ) : currentError ? (
-        <div className="card-soft" style={{ borderColor: 'rgba(214,31,44,.25)' }}>
-          <p className="p-muted" style={{ color: 'rgba(214,31,44,.95)', fontWeight: 800 }}>
-            {currentError}
+          <p className={styles.summaryNote}>
+            Comparação dos dois fechamentos completos mais recentes. A base de {mesAtualNome} é parcial e não entra na classificação. {comparacaoProdutos.semProducao} produto(s) ficaram sem produção nos dois meses.
           </p>
-        </div>
-      ) : currentRow ? null : (
-        <div className="card-soft">
-          <p className="p-muted">Não encontrei este expresso na base atual do mês corrente.</p>
-        </div>
+          <div className={styles.comparisonGrid}>
+            {comparacaoProdutos.produtos.map((produto) => (
+              <article className={styles.comparisonCard} key={produto.nome}>
+                <div className={styles.comparisonCardHead}>
+                  <strong>{produto.nome}</strong>
+                  <span className={`${styles.comparisonStatus} ${styles[`product_${produto.estado}`]}`}>
+                    {produto.estado === 'up' ? 'Cresceu' : produto.estado === 'down' ? 'Caiu' : produto.estado === 'flat' ? 'Manteve' : 'Sem produção'}
+                  </span>
+                </div>
+                <div className={styles.comparisonValues}>
+                  <div><small>{nomeMes(comparacaoProdutos.mesAtual)}</small><b>{formatMetric(produto.valorAtual, produto.tipo)}</b></div>
+                  <span aria-hidden="true">←</span>
+                  <div><small>{nomeMes(comparacaoProdutos.mesAnterior)}</small><b>{formatMetric(produto.valorAnterior, produto.tipo)}</b></div>
+                </div>
+                <div className={`${styles.comparisonDelta} ${produto.estado === 'up' ? styles.positive : produto.estado === 'down' ? styles.negative : styles.muted}`}>
+                  {produto.estado === 'none' ? 'Sem produção nos dois meses' : `${produto.diferenca > 0 ? '+' : ''}${formatMetric(produto.diferenca, produto.tipo)} · ${produto.percentual}`}
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : (
+        <section className={styles.summaryEmpty}>
+          <strong>Ainda não há dois fechamentos para comparar os produtos.</strong>
+          <span>Quando houver pelo menos dois meses históricos, cada produto será marcado como cresceu, manteve, caiu ou sem produção.</span>
+        </section>
       )}
 
       {loading ? (
-        <div className="card-soft">
-          <p className="p-muted">Carregando árvore cronológica...</p>
-        </div>
-      ) : erro ? (
-        <div className="card-soft" style={{ borderColor: 'rgba(214,31,44,.25)' }}>
-          <p className="p-muted" style={{ color: 'rgba(214,31,44,.95)', fontWeight: 800 }}>
-            {erro}
-          </p>
-        </div>
-      ) : rowsComPontos.length === 0 ? (
-        <div className="card-soft">
-          <p className="p-muted">Nenhum histórico encontrado para este expresso.</p>
-        </div>
-      ) : (
+        <div className={styles.notice}>Carregando histórico mensal...</div>
+      ) : !erro && rowsComPontos.length === 0 ? (
+        <div className={styles.notice}>Nenhum histórico encontrado para este expresso.</div>
+      ) : rowsComPontos.length > 0 ? (
         <>
-          <div className="card" style={{ display: 'grid', gap: '1rem' }}>
-            <div>
-              <span className="pill">Gráfico</span>
-              <h2 className="h2" style={{ marginTop: '.6rem' }}>
-                Evolução mensal dos produtos
-              </h2>
+          <section className={styles.section}>
+            <div className={styles.sectionHeading}>
+              <div><span className={styles.eyebrow}>Tendência</span><h2>Visão mês a mês</h2></div>
+              <span className={styles.sectionHint}>Pontuação comercial calculada a partir dos produtos</span>
             </div>
-
-            <div
-              className="card-soft"
-              style={{
-                width: '100%',
-                height: 460,
-                padding: '1rem',
-              }}
-            >
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} barGap={8} barCategoryGap="18%">
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="mes" />
-                  <YAxis />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Legend />
-                  <Bar dataKey="contaSemDeposito" name="Conta sem Depósito" fill="#2563eb" radius={[6, 6, 0, 0]} />
-                  <Bar dataKey="contaComDeposito" name="Conta com Depósito" fill="#60a5fa" radius={[6, 6, 0, 0]} />
-                  <Bar dataKey="consignado" name="Consignado" fill="#16a34a" radius={[6, 6, 0, 0]} />
-                  <Bar dataKey="emprestimoPessoal" name="Empréstimo Pessoal" fill="#0f766e" radius={[6, 6, 0, 0]} />
-                  <Bar dataKey="planoOdonto" name="Plano Odonto" fill="#7a1ea1" radius={[6, 6, 0, 0]} />
-                  <Bar dataKey="microsseguro" name="Microsseguro" fill="#d61f2c" radius={[6, 6, 0, 0]} />
-                  <Bar dataKey="vivaVida" name="Viva Vida" fill="#f59e0b" radius={[6, 6, 0, 0]} />
-                  <Bar dataKey="sorteExpressa" name="Sorte Expressa" fill="#1d4ed8" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          <div className="card">
-            <span className="pill">Linha do tempo</span>
-
-            <div style={{ display: 'grid', gap: '1rem', marginTop: '1rem' }}>
-              {currentRow && (
-                <div className="card-soft" style={{ display: 'grid', gap: '.85rem' }}>
-                  <div>
-                    <div className="p-muted" style={{ fontSize: 12 }}>
-                      Mês de referência
-                    </div>
-
-                    <div style={{ fontWeight: 900, fontSize: '1.05rem' }}>
-                      {mesAtualRef()}
-                    </div>
-
-                    <div className="p-muted" style={{ fontSize: 13 }}>
-                      {mesAtualNome} • produção atual
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
-                    <span className="pill">TRX: {formatNum(currentRow.trx)}</span>
-                    <span className="pill">Pontos: {formatPontos(currentRow.pontos)}</span>
-                  </div>
-
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                      gap: '.7rem',
-                    }}
-                  >
-                    <InfoBox label="TRX" value={formatNum(currentRow.trx)} />
-                    <InfoBox label="Pontos" value={formatPontos(currentRow.pontos)} />
-                    <InfoBox label="Conta sem Depósito" value={formatNum(currentRow.qtdContas)} />
-                    <InfoBox label="Conta com Depósito" value={formatNum(currentRow.qtdContasComDeposito)} />
-                    <InfoBox label="Consignado" value={formatNum(currentRow.qtdConsignado)} />
-                    <InfoBox label="Empréstimo Pessoal" value={formatNum(currentRow.qtdLime)} />
-                    <InfoBox label="Plano Odonto" value={formatNum(currentRow.qtdPlanoOdonto)} />
-                    <InfoBox label="Microsseguro" value={formatNum(currentRow.qtdMicrosseguro)} />
-                    <InfoBox label="Viva Vida" value={formatNum(currentRow.qtdVivaVida)} />
-                    <InfoBox label="Sorte Expressa" value={formatNum(currentRow.qtdExpSorte)} />
-                    <InfoBox label="Status Análise" value={currentRow.statusAnalise || '—'} />
-                  </div>
+            <div className={styles.charts}>
+              <div className={`${styles.chartCard} ${styles.chartCardWide}`}>
+                <h3>Pontos de produção</h3>
+                <div className={styles.chart}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chartData} margin={{ top: 12, right: 12, left: -12, bottom: 4 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="mes" tick={{ fontSize: 12 }} />
+                      <YAxis tick={{ fontSize: 12 }} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Bar dataKey="pontos" name="Pontos" fill="#b5122b" radius={[7, 7, 0, 0]} maxBarSize={54} />
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
-              )}
-
-              {[...rowsComPontos]
-                .sort((a, b) => b.mesOrdem - a.mesOrdem)
-                .map((r, index, arrDesc) => {
-                  const anterior = arrDesc[index + 1]
-
-                  return (
-                    <div
-                      key={`${r.chave}-${r.mesReferencia}`}
-                      className="card-soft"
-                      style={{ display: 'grid', gap: '.85rem' }}
-                    >
-                      <div>
-                        <div className="p-muted" style={{ fontSize: 12 }}>
-                          Mês de referência
-                        </div>
-
-                        <div style={{ fontWeight: 900, fontSize: '1.05rem' }}>
-                          {r.mesReferencia}
-                        </div>
-
-                        <div className="p-muted" style={{ fontSize: 13 }}>
-                          {nomeMes(r.mesReferencia)}
-                        </div>
-                      </div>
-
-                      <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
-                        <span className="pill">TRX: {formatNum(r.trx)}</span>
-                        <span className="pill">Pontos: {formatPontos((r as any).pontosCalculados)}</span>
-                      </div>
-
-                      <div
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                          gap: '.7rem',
-                        }}
-                      >
-                        <InfoBox
-                          label="TRX"
-                          value={formatNum(r.trx)}
-                          extra={
-                            anterior ? (
-                              <span className="pill" style={deltaStyle(r.trx, anterior.trx)}>
-                                {deltaLabel(r.trx, anterior.trx)}
-                              </span>
-                            ) : null
-                          }
-                        />
-
-                        <InfoBox
-                          label="Pontos"
-                          value={formatPontos((r as any).pontosCalculados)}
-                          extra={
-                            anterior ? (
-                              <span
-                                className="pill"
-                                style={deltaStyle((r as any).pontosCalculados, (anterior as any).pontosCalculados)}
-                              >
-                                {deltaLabel((r as any).pontosCalculados, (anterior as any).pontosCalculados)}
-                              </span>
-                            ) : null
-                          }
-                        />
-
-                        <InfoBox
-                          label="Conta sem Depósito"
-                          value={formatNum(r.qtdContas)}
-                          extra={
-                            anterior ? (
-                              <span className="pill" style={deltaStyle(r.qtdContas, anterior.qtdContas)}>
-                                {deltaLabel(r.qtdContas, anterior.qtdContas)}
-                              </span>
-                            ) : null
-                          }
-                        />
-
-                        <InfoBox
-                          label="Conta com Depósito"
-                          value={formatNum(r.qtdContasComDeposito)}
-                          extra={
-                            anterior ? (
-                              <span className="pill" style={deltaStyle(r.qtdContasComDeposito, anterior.qtdContasComDeposito)}>
-                                {deltaLabel(r.qtdContasComDeposito, anterior.qtdContasComDeposito)}
-                              </span>
-                            ) : null
-                          }
-                        />
-
-                        <InfoBox
-                          label="Consignado"
-                          value={formatNum(r.qtdConsignado)}
-                          extra={
-                            anterior ? (
-                              <span className="pill" style={deltaStyle(r.qtdConsignado, anterior.qtdConsignado)}>
-                                {deltaLabel(r.qtdConsignado, anterior.qtdConsignado)}
-                              </span>
-                            ) : null
-                          }
-                        />
-
-                        <InfoBox label="Empréstimo Pessoal" value={formatNum(r.qtdLime)} />
-                        <InfoBox label="Plano Odonto" value={formatNum(r.qtdPlanoOdonto)} />
-                        <InfoBox label="Microsseguro" value={formatNum(r.qtdMicrosseguro)} />
-                        <InfoBox label="Viva Vida" value={formatNum(r.qtdVivaVida)} />
-                        <InfoBox label="Sorte Expressa" value={formatNum(r.qtdExpSorte)} />
-                        <InfoBox label="Status Análise" value={r.statusAnalise || '—'} />
-                      </div>
-                    </div>
-                  )
-                })}
+              </div>
             </div>
-          </div>
-        </>
-      )}
-    </section>
-  )
-}
+          </section>
 
-function InfoBox({
-  label,
-  value,
-  extra,
-}: {
-  label: string
-  value: string
-  extra?: ReactNode
-}) {
-  return (
-    <div className="card-soft" style={{ padding: '.85rem .95rem' }}>
-      <div className="p-muted" style={{ fontSize: 12 }}>
-        {label}
-      </div>
-      <div style={{ fontWeight: 900, marginTop: '.2rem' }}>{value}</div>
-      {extra && <div style={{ marginTop: '.45rem' }}>{extra}</div>}
-    </div>
+          <section className={styles.section}>
+            <div className={styles.sectionHeading}>
+              <div><span className={styles.eyebrow}>Histórico</span><h2>Fechamentos e produção</h2></div>
+              <span className={styles.sectionHint}>TRX aparece nos detalhes de cada mês</span>
+            </div>
+
+            <div className={styles.tableWrap}>
+              <table className={styles.table}>
+                <thead><tr><th>Período</th><th>Pontos comerciais</th><th>Variação</th><th>Detalhamento</th></tr></thead>
+                <tbody>
+                  {timelineItems.map((item: any) => (
+                    <tr key={`${item.chave}-${item.mesReferencia}`}>
+                      <th scope="row"><strong>{nomeMes(item.mesReferencia)}</strong><span className={item.atual ? styles.currentBadge : styles.closedBadge}>{item.atual ? 'Em andamento' : 'Fechado'}</span></th>
+                      <td className={styles.numberCell}>{formatPontos(item.pontosValor)}</td>
+                      <td>{item.atual || item.anteriorPontos === null ? <span className={styles.muted}>—</span> : <span className={item.pontosValor < item.anteriorPontos ? styles.negative : item.pontosValor > item.anteriorPontos ? styles.positive : styles.neutral}>{deltaLabel(item.pontosValor, item.anteriorPontos)} · {percentual(item.pontosValor, item.anteriorPontos)}</span>}</td>
+                      <td><details className={styles.details}><summary>Produtos</summary><div className={styles.productGrid}>
+                        <div><span>TRX (informativo)</span><b>{formatNum(item.trx)}</b></div>
+                        <div><span>Contas sem depósito</span><b>{formatNum(item.contasSemDeposito)}</b></div>
+                        <div><span>Contas com depósito</span><b>{formatNum(item.qtdContasComDeposito)}</b></div>
+                        <div><span>Empréstimo pessoal</span><b>{formatCurrency(item.vlrLime)}</b></div>
+                        <div><span>Consignado</span><b>{formatCurrency(item.vlrConsignadoTotal)}</b></div>
+                        <div><span>Crédito parcelado</span><b>{formatCurrency(item.vlrCreditoParcelado)}</b></div>
+                        <div><span>Microsseguro</span><b>{formatNum(item.qtdMicrosseguro)}</b></div>
+                        <div><span>Viva Vida</span><b>{formatNum(item.qtdVivaVida)}</b></div>
+                        <div><span>Plano odontológico</span><b>{formatNum(item.qtdPlanoOdonto)}</b></div>
+                        <div><span>Super Protegido</span><b>{formatNum(item.qtdSuperProtegido)}</b></div>
+                        <div><span>Seguro residencial</span><b>{formatNum(item.qtdSegResidencial)}</b></div>
+                        <div><span>Seguro do cartão</span><b>{formatNum(item.qtdSegCartaoDeb)}</b></div>
+                        <div><span>Expresso da Sorte (valor)</span><b>{formatCurrency(item.vlrExpSorte)}</b></div>
+                        <div><span>Expresso da Sorte (qtd.)</span><b>{formatNum(item.qtdExpSorte)}</b></div>
+                      </div></details></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className={styles.mobileTimeline}>
+              {timelineItems.map((item: any) => (
+                <article className={styles.monthCard} key={`mobile-${item.chave}-${item.mesReferencia}`}>
+                  <div className={styles.monthCardHead}><div><strong>{nomeMes(item.mesReferencia)}</strong><span>{item.atual ? 'Produção parcial' : 'Fechamento'}</span></div><span className={item.atual ? styles.currentBadge : styles.closedBadge}>{item.atual ? 'Em andamento' : 'Fechado'}</span></div>
+                  <div className={styles.mobileStats}><div><span>Pontos comerciais</span><b>{formatPontos(item.pontosValor)}</b></div><div><span>Contas com depósito</span><b>{formatNum(item.qtdContasComDeposito)}</b></div></div>
+                  {!item.atual && item.anteriorPontos !== null && <p className={item.pontosValor < item.anteriorPontos ? styles.negative : item.pontosValor > item.anteriorPontos ? styles.positive : styles.neutral}>Pontos: {deltaLabel(item.pontosValor, item.anteriorPontos)} · {percentual(item.pontosValor, item.anteriorPontos)}</p>}
+                  <details className={styles.details}><summary>Ver produtos e contas</summary><div className={styles.productGrid}>
+                    <div><span>TRX (informativo)</span><b>{formatNum(item.trx)}</b></div><div><span>Contas sem depósito</span><b>{formatNum(item.contasSemDeposito)}</b></div><div><span>Contas com depósito</span><b>{formatNum(item.qtdContasComDeposito)}</b></div><div><span>Empréstimo pessoal</span><b>{formatCurrency(item.vlrLime)}</b></div><div><span>Consignado</span><b>{formatCurrency(item.vlrConsignadoTotal)}</b></div><div><span>Crédito parcelado</span><b>{formatCurrency(item.vlrCreditoParcelado)}</b></div><div><span>Microsseguro</span><b>{formatNum(item.qtdMicrosseguro)}</b></div><div><span>Viva Vida</span><b>{formatNum(item.qtdVivaVida)}</b></div><div><span>Plano odontológico</span><b>{formatNum(item.qtdPlanoOdonto)}</b></div><div><span>Super Protegido</span><b>{formatNum(item.qtdSuperProtegido)}</b></div><div><span>Seguro residencial</span><b>{formatNum(item.qtdSegResidencial)}</b></div><div><span>Seguro do cartão</span><b>{formatNum(item.qtdSegCartaoDeb)}</b></div><div><span>Expresso da Sorte (valor)</span><b>{formatCurrency(item.vlrExpSorte)}</b></div><div><span>Expresso da Sorte (qtd.)</span><b>{formatNum(item.qtdExpSorte)}</b></div>
+                  </div></details>
+                </article>
+              ))}
+            </div>
+          </section>
+        </>
+      ) : null}
+    </section>
   )
 }

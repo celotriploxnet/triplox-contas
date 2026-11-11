@@ -13,6 +13,7 @@ import { getBytes, ref } from 'firebase/storage'
 import * as XLSX from 'xlsx'
 
 import { auth, storage } from '@/lib/firebase'
+import { calcPontosExpressoGeral } from '@/lib/pontuacao-junho-2026'
 
 /* =========================
    CONFIG
@@ -36,15 +37,16 @@ type RowBase = {
 
   qtdContas: number
   qtdContasComDeposito: number
+  qtdContasSemDeposito: number
   qtdCestaServ: number
   qtdSuperProtegido: number
   qtdMobilidade: number
   qtdCartaoEmitido: number
   qtdChesContratado: number
   qtdLimeAbConta: number
-  qtdLime: number
-  qtdConsignado: number
-  qtdCreditoParcelado: number
+  vlrLime: number
+  vlrConsignadoTotal: number
+  vlrCreditoParcelado: number
   qtdMicrosseguro: number
   qtdVivaVida: number
   qtdPlanoOdonto: number
@@ -94,82 +96,24 @@ function parseCSVText(u8: Uint8Array) {
   return new TextDecoder('utf-8').decode(u8)
 }
 
-function detectDelimiter(headerLine: string) {
-  const candidates = [',', ';', '\t']
-  let best = ','
-  let bestCount = -1
-
-  for (const delimiter of candidates) {
-    const escaped = delimiter === '\t' ? '\\t' : `\\${delimiter}`
-    const count = (headerLine.match(new RegExp(escaped, 'g')) || []).length
-    if (count > bestCount) {
-      best = delimiter
-      bestCount = count
-    }
-  }
-
-  return best
-}
-
-function parseDelimitedLine(line: string, delimiter: string) {
-  const result: string[] = []
-  let current = ''
-  let inQuotes = false
-
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i]
-    const next = line[i + 1]
-
-    if (ch === '"') {
-      if (inQuotes && next === '"') {
-        current += '"'
-        i++
-      } else {
-        inQuotes = !inQuotes
-      }
-      continue
-    }
-
-    if (ch === delimiter && !inQuotes) {
-      result.push(current)
-      current = ''
-      continue
-    }
-
-    current += ch
-  }
-
-  result.push(current)
-  return result
-}
-
-function parseCsvRows(text: string): Record<string, string>[] {
-  const cleaned = text.replace(/^\uFEFF/, '')
-  const lines = cleaned
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    .split('\n')
-    .filter((line) => line.trim().length > 0)
-
-  if (!lines.length) return []
-
-  const delimiter = detectDelimiter(lines[0])
-  const headers = parseDelimitedLine(lines[0], delimiter).map((h) => h.trim())
-
-  return lines.slice(1).map((line) => {
-    const values = parseDelimitedLine(line, delimiter)
-    const row: Record<string, string> = {}
-
-    headers.forEach((header, idx) => {
-      row[header] = (values[idx] ?? '').trim()
-    })
-
-    return row
-  })
-}
-
 function parseNumber(v: any) {
-  const s = toStr(v).replace(/\./g, '').replace(',', '.')
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0
+  let s = toStr(v).replace(/R\$/gi, '').replace(/\s/g, '').replace(/[^\d,.-]/g, '')
+  if (!s) return 0
+
+  const hasComma = s.includes(',')
+  const hasDot = s.includes('.')
+  if (hasComma && hasDot) {
+    if (s.lastIndexOf(',') > s.lastIndexOf('.')) s = s.replace(/\./g, '').replace(',', '.')
+    else s = s.replace(/,/g, '')
+  } else if (hasComma) {
+    s = s.replace(',', '.')
+  } else if (hasDot) {
+    const parts = s.split('.')
+    const looksLikeThousands = parts.length > 1 && parts.slice(1).every((part) => part.length === 3)
+    if (looksLikeThousands) s = s.replace(/\./g, '')
+  }
+
   const n = Number(s)
   return Number.isFinite(n) ? n : 0
 }
@@ -355,43 +299,6 @@ function formatPontos(n: number) {
   return isInt ? String(Math.round(rounded)) : rounded.toFixed(1).replace('.', ',')
 }
 
-/* =========================
-   PONTUAÇÃO
-   ========================= */
-function calcPontos(r: {
-  qtdContasComDeposito: number
-  qtdContas: number
-  qtdCestaServ: number
-  qtdSuperProtegido: number
-  qtdMobilidade: number
-  qtdLime: number
-  qtdConsignado: number
-  qtdCreditoParcelado: number
-  qtdMicrosseguro: number
-  qtdVivaVida: number
-  qtdPlanoOdonto: number
-  qtdSegCartaoDeb: number
-  vlrExpSorte: number
-}) {
-  const expSortePts = Math.floor((r.vlrExpSorte || 0) / 50)
-
-  return (
-    (r.qtdContasComDeposito || 0) * 7 +
-    (r.qtdContas || 0) * 3 +
-    (r.qtdCestaServ || 0) * 3 +
-    (r.qtdSuperProtegido || 0) * 1 +
-    (r.qtdMobilidade || 0) * 0.5 +
-    (r.qtdLime || 0) * 6.5 +
-    (r.qtdConsignado || 0) * 5.5 +
-    (r.qtdCreditoParcelado || 0) * 6.5 +
-    (r.qtdMicrosseguro || 0) * 1 +
-    (r.qtdVivaVida || 0) * 1 +
-    (r.qtdPlanoOdonto || 0) * 1 +
-    (r.qtdSegCartaoDeb || 0) * 1 +
-    expSortePts
-  )
-}
-
 function calcAtividade(r: RowBase) {
   return (r.trx || 0) + (r.pontos || 0)
 }
@@ -528,7 +435,9 @@ export default function CertificacaoVencidaPage() {
 
       const bytesAny = await getBytes(ref(storage, CSV_PATH))
       const text = parseCSVText(toUint8(bytesAny))
-      const raw = parseCsvRows(text)
+      const workbook = XLSX.read(text, { type: 'string' })
+      const sheet = workbook.Sheets[workbook.SheetNames[0]]
+      const raw: Record<string, any>[] = XLSX.utils.sheet_to_json(sheet, { defval: '' })
 
       const normalized = raw.map((obj) => {
         const out: Record<string, any> = {}
@@ -559,10 +468,12 @@ export default function CertificacaoVencidaPage() {
           r['qtd_trxcontabil'] || r['qtd_trx_contabil'] || r['qtd trxcontabil'] || r['qtd_trx']
         )
 
-        const qtdContas = parseNumber(r['qtd_contas'] || r['qtd contas'])
-        const qtdContasComDeposito = parseNumber(
-          r['qtd_contas_com_deposito'] || r['qtd contas com deposito']
+        const qtdContas = Math.max(parseNumber(r['qtd_contas'] || r['qtd contas']), 0)
+        const qtdContasComDeposito = Math.min(
+          Math.max(parseNumber(r['qtd_contas_com_deposito'] || r['qtd contas com deposito']), 0),
+          qtdContas
         )
+        const qtdContasSemDeposito = Math.max(qtdContas - qtdContasComDeposito, 0)
         const qtdCestaServ = parseNumber(r['qtd_cesta_serv'] || r['qtd cesta serv'])
 
         const qtdSuperProtegido = parseNumber(
@@ -579,16 +490,12 @@ export default function CertificacaoVencidaPage() {
           r['qtd_chesp_contratado'] || r['qtd chesp contratado']
         )
         const qtdLimeAbConta = parseNumber(r['qtd_lime_ab_conta'] || r['qtd lime ab conta'])
-        const qtdLime = parseNumber(r['qtd_lime'] || r['qtd lime'])
-        const qtdConsignado = parseNumber(r['qtd_consignado'] || r['qtd consignado'])
-
-        const qtdCreditoParcelado = parseNumber(
-          r['qtd_credito_parcel_dtlhes'] ||
-            r['qtd_credito_parcelado_dtlhes'] ||
-            r['qtd_credito_parcel'] ||
-            r['credito parcelado'] ||
-            r['qtd_credito_parcel_dtlh'] ||
-            r['qtd_credito_parcel_detalhes']
+        const vlrLime = parseNumber(r['vlr_lime'] || r['valor do lime'] || r['valor lime'])
+        const vlrConsignadoTotal = parseNumber(
+          r['vlr_consignado_total'] || r['valor consignado total'] || r['consignado total']
+        )
+        const vlrCreditoParcelado = parseNumber(
+          r['vlr_credito_parcel'] || r['valor credito parcelado'] || r['valor crédito parcelado']
         )
 
         const qtdMicrosseguro = parseNumber(r['qtd_microsseguro'] || r['qtd microsseguro'])
@@ -627,15 +534,14 @@ export default function CertificacaoVencidaPage() {
             r['expresso referencia?']
         )
 
-        const pontos = calcPontos({
+        const pontos = calcPontosExpressoGeral({
           qtdContasComDeposito,
-          qtdContas,
+          qtdContasSemDeposito,
           qtdCestaServ,
           qtdSuperProtegido,
-          qtdMobilidade,
-          qtdLime,
-          qtdConsignado,
-          qtdCreditoParcelado,
+          vlrLime,
+          vlrConsignadoTotal,
+          vlrCreditoParcelado,
           qtdMicrosseguro,
           qtdVivaVida,
           qtdPlanoOdonto,
@@ -654,15 +560,16 @@ export default function CertificacaoVencidaPage() {
           trx,
           qtdContas,
           qtdContasComDeposito,
+          qtdContasSemDeposito,
           qtdCestaServ,
           qtdSuperProtegido,
           qtdMobilidade,
           qtdCartaoEmitido,
           qtdChesContratado,
           qtdLimeAbConta,
-          qtdLime,
-          qtdConsignado,
-          qtdCreditoParcelado,
+          vlrLime,
+          vlrConsignadoTotal,
+          vlrCreditoParcelado,
           qtdMicrosseguro,
           qtdVivaVida,
           qtdPlanoOdonto,

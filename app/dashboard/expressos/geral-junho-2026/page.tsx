@@ -9,7 +9,7 @@ import {
 } from 'react'
 import { useRouter } from 'next/navigation'
 import { onAuthStateChanged, type User } from 'firebase/auth'
-import { getBytes, ref } from 'firebase/storage'
+import { getBytes, getMetadata, ref } from 'firebase/storage'
 import {
   collection,
   doc,
@@ -35,6 +35,7 @@ import {
 
 const ADMIN_EMAIL = 'marcelo@treinexpresso.com.br'
 const CSV_PATH = 'base-lojas/banco-junho-2026.csv'
+const CONSORCIO_PATH = 'consorcio/consorcios-liberados.xlsx'
 const EXPRESSOS_COLLECTION = 'expressos_registro_junho_2026'
 const EXPRESSOS_COLLECTION_ANTIGA = 'expressos_registro'
 const RESUMO_EXPRESSOS_DOC = 'resumo_expressos_junho_2026'
@@ -251,6 +252,10 @@ function normalizeText(v: any) {
 
 function onlyDigits(v: any) {
   return toStr(v).replace(/\D/g, '')
+}
+
+function normalizeStoreKey(v: unknown) {
+  return toStr(v).replace(/\D/g, '').replace(/^0+(?=\d)/, '')
 }
 
 function getFirstKeyContaining(obj: Record<string, any>, ...parts: string[]) {
@@ -799,8 +804,10 @@ export default function ExpressoGeralPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState('')
+  const [baseAtualizadaEm, setBaseAtualizadaEm] = useState('')
 
   const [rows, setRows] = useState<RowBase[]>([])
+  const [chavesConsorcio, setChavesConsorcio] = useState<Set<string>>(new Set())
   const [allRowsLoaded, setAllRowsLoaded] = useState(false)
   const [resumoExpressos, setResumoExpressos] =
     useState<ResumoExpressos | null>(null)
@@ -1029,6 +1036,55 @@ export default function ExpressoGeralPage() {
     await carregarPrimeirosRegistros()
   }
 
+  async function carregarDataAtualizacaoBase() {
+    try {
+      const metadata = await getMetadata(ref(storage, CSV_PATH))
+      if (!metadata.updated) return
+
+      const data = new Date(metadata.updated)
+      if (Number.isNaN(data.getTime())) return
+
+      setBaseAtualizadaEm(
+        new Intl.DateTimeFormat('pt-BR', {
+          dateStyle: 'short',
+          timeStyle: 'short',
+        }).format(data)
+      )
+    } catch (e) {
+      // A data é informativa; a página continua funcionando se o usuário
+      // não tiver permissão para consultar os metadados do arquivo.
+      console.warn('Não foi possível consultar a data da base:', e)
+    }
+  }
+
+  async function carregarChavesConsorcio() {
+    try {
+      const bytes = toUint8(await getBytes(ref(storage, CONSORCIO_PATH)))
+      const workbook = XLSX.read(bytes, { type: 'array' })
+      const sheet = workbook.Sheets[workbook.SheetNames[0]]
+      if (!sheet) {
+        setChavesConsorcio(new Set())
+        return
+      }
+
+      const registros = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' })
+      const keys = new Set(
+        registros
+          .map((registro) => {
+            const chave = Object.entries(registro).find(([header]) => compactKey(header) === 'chaveloja')?.[1]
+            return normalizeStoreKey(chave)
+          })
+          .filter(Boolean)
+      )
+      setChavesConsorcio(keys)
+    } catch (e) {
+      // A página geral continua normal caso a lista de consórcio ainda não
+      // esteja disponível ou o usuário não tenha acesso a esse arquivo.
+      console.warn('Não foi possível carregar as chaves de consórcio liberado:', e)
+      setChavesConsorcio(new Set())
+    }
+  }
+
   async function loadCsv() {
     if (!auth.currentUser) {
       setError('Você precisa estar logado.')
@@ -1040,6 +1096,7 @@ export default function ExpressoGeralPage() {
       setError(null)
       setInfo('')
 
+      await carregarDataAtualizacaoBase()
       const bytesAny = await getBytes(ref(storage, CSV_PATH))
       const text = parseCSVText(toUint8(bytesAny))
 
@@ -1380,6 +1437,8 @@ export default function ExpressoGeralPage() {
       setIsAdmin((u.email || '').toLowerCase() === ADMIN_EMAIL.toLowerCase())
       carregarResumoExpressos()
       carregarPrimeirosRegistros()
+      carregarDataAtualizacaoBase()
+      carregarChavesConsorcio()
     })
 
     return () => unsub()
@@ -1660,6 +1719,10 @@ Maiores informações favor entrar em contato com nossa equipe.\n\nChave Loja: $
     router.push(`/dashboard/arvorecronologica/${encodeURIComponent(r.chave)}`)
   }
 
+  function irParaConsorcio(r: RowBase) {
+    router.push(`/dashboard/expressos/consorcio?chave=${encodeURIComponent(normalizeStoreKey(r.chave))}`)
+  }
+
   return (
     <section style={{ display: 'grid', gap: '1.25rem' }}>
       <div>
@@ -1667,6 +1730,9 @@ Maiores informações favor entrar em contato com nossa equipe.\n\nChave Loja: $
         <h1 className="h1" style={{ marginTop: '.75rem' }}>
           📊 Expresso Geral 2026 (Nova Pontuação)
         </h1>
+        <p style={{ margin: '.35rem 0 0', color: 'rgba(16,16,24,.62)', fontSize: '.9rem' }}>
+          Base atualizada em: <strong>{baseAtualizadaEm || 'consultando data…'}</strong>
+        </p>
       </div>
 
       <div
@@ -1703,7 +1769,21 @@ Maiores informações favor entrar em contato com nossa equipe.\n\nChave Loja: $
           Possível bloqueado: {stats.possivelBloqueado}
         </Pill>
 
-
+        <button
+          type="button"
+          onClick={() => router.push('/dashboard/expressos/consorcio')}
+          style={{
+            border: '1px solid rgba(15,15,25,.18)',
+            background: '#fff',
+            color: 'rgba(16,16,24,.9)',
+            borderRadius: 999,
+            padding: '.65rem .95rem',
+            fontWeight: 800,
+            cursor: 'pointer',
+          }}
+        >
+          Consórcio liberado
+        </button>
 
         <button
           className="btn-primary"
@@ -1921,6 +2001,15 @@ Maiores informações favor entrar em contato com nossa equipe.\n\nChave Loja: $
                         municipio: r.municipio,
                       }}
                     />
+
+                    {chavesConsorcio.has(normalizeStoreKey(r.chave)) && (
+                      <LightButton
+                        onClick={() => irParaConsorcio(r)}
+                        title="Consultar dados e orientações de consórcio"
+                      >
+                        🚗 Consórcio
+                      </LightButton>
+                    )}
 
                     <LightButton
                       onClick={() => irParaArvoreCronologica(r)}
