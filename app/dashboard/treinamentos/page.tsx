@@ -288,6 +288,7 @@ function CompanyCard({
   isAdmin,
   isMine,
   onStartSchedule,
+  onRequestBaixa,
   onCopyWhatsApp,
   onMarkDone,
   onReset,
@@ -298,6 +299,7 @@ function CompanyCard({
   isAdmin: boolean
   isMine: boolean
   onStartSchedule: () => void
+  onRequestBaixa: () => void
   onCopyWhatsApp: () => void
   onMarkDone: () => void
   onReset: () => void
@@ -334,6 +336,8 @@ function CompanyCard({
           <button className="btn-primary" type="button" onClick={onStartSchedule}>
             {ag ? (canEdit ? 'Reagendar' : 'Ver') : 'Assumir e agendar'}
           </button>
+
+          <LightButton onClick={onRequestBaixa}>Solicitar baixa</LightButton>
 
           <LightButton onClick={onCopyWhatsApp}>Copiar msg WhatsApp</LightButton>
 
@@ -913,6 +917,7 @@ export default function TreinamentosPage() {
                     isAdmin={isAdmin}
                     isMine={isMine}
                     onStartSchedule={() => startSchedule(r.chaveLoja)}
+                    onRequestBaixa={() => router.push('/dashboard/baixa-empresa')}
                     onCopyWhatsApp={() => copyWhatsAppMessage(r)}
                     onMarkDone={() => markDone(r.chaveLoja)}
                     onReset={() => resetAgendamento(r.chaveLoja)}
