@@ -190,6 +190,13 @@ function gerarMesOrdem(mesRef: string) {
   return Number(`${ano}${mes}`)
 }
 
+function referenciaMesAnterior(mesRef: string) {
+  const [mes, ano] = mesRef.split('/').map(Number)
+  if (!mes || !ano) return ''
+  const anterior = new Date(ano, mes - 2, 1)
+  return `${String(anterior.getMonth() + 1).padStart(2, '0')}/${anterior.getFullYear()}`
+}
+
 function formatCertificacaoValue(v: any) {
   const raw = toStr(v)
   if (!raw) return '—'
@@ -729,6 +736,36 @@ export default function ArvoreCronologicaPage() {
     }
   }, [rowsComPontos])
 
+  const transacoesMensais = useMemo(() => {
+    const fechamentos = [...rowsComPontos]
+      .filter((row) => row.mesReferencia !== mesAtualRef())
+      .sort((a, b) => a.mesOrdem - b.mesOrdem)
+
+    return fechamentos.map((row) => {
+      const mesAnterior = referenciaMesAnterior(row.mesReferencia)
+      const anterior = fechamentos.find((item) => item.mesReferencia === mesAnterior)
+      const total = Number(row.trx || 0)
+      const totalAnterior = anterior ? Number(anterior.trx || 0) : null
+      const diferenca = totalAnterior === null ? null : total - totalAnterior
+      const estado = diferenca === null
+        ? 'first'
+        : diferenca > 0
+          ? 'up'
+          : diferenca < 0
+            ? 'down'
+            : 'flat'
+
+      return {
+        mes: row.mesReferencia,
+        total,
+        mesAnterior: anterior?.mesReferencia || '',
+        totalAnterior,
+        diferenca,
+        estado,
+      }
+    }).reverse()
+  }, [rowsComPontos])
+
   const mesAtualNome = useMemo(() => nomeMes(mesAtualRef()), [])
 
   const timelineItems = useMemo(() => {
@@ -942,6 +979,47 @@ export default function ArvoreCronologicaPage() {
                 </article>
               ))}
             </div>
+          </section>
+
+          <section className={styles.section}>
+            <div className={styles.sectionHeading}>
+              <div><span className={styles.eyebrow}>Transações</span><h2>Totais dos meses anteriores</h2></div>
+              <span className={styles.sectionHint}>Comparação com o fechamento do mês anterior</span>
+            </div>
+
+            {transacoesMensais.length === 0 ? (
+              <div className={styles.summaryEmpty}>
+                <strong>Ainda não há fechamentos anteriores com transações.</strong>
+                <span>Os totais mensais aparecerão aqui quando os fechamentos estiverem disponíveis.</span>
+              </div>
+            ) : (
+              <div className={styles.comparisonGrid}>
+                {transacoesMensais.map((item) => (
+                  <article className={styles.comparisonCard} key={`trx-${item.mes}`}>
+                    <div className={styles.comparisonCardHead}>
+                      <strong>{nomeMes(item.mes)}</strong>
+                      <span className={`${styles.comparisonStatus} ${item.estado === 'up' ? styles.product_up : item.estado === 'down' ? styles.product_down : item.estado === 'first' ? styles.product_none : styles.product_flat}`}>
+                        {item.estado === 'up' ? '↑ Subiu' : item.estado === 'down' ? '↓ Caiu' : item.estado === 'first' ? 'Sem comparação' : '→ Manteve'}
+                      </span>
+                    </div>
+                    <div className={styles.comparisonValues}>
+                      <div><small>Total de transações</small><b>{formatNum(item.total)}</b></div>
+                      {item.totalAnterior !== null && (
+                        <div><small>{nomeMes(item.mesAnterior)}</small><b>{formatNum(item.totalAnterior)}</b></div>
+                      )}
+                    </div>
+                    {item.diferenca !== null ? (
+                      <div className={`${styles.comparisonDelta} ${item.estado === 'up' ? styles.positive : item.estado === 'down' ? styles.negative : styles.neutral}`}>
+                        {item.diferenca > 0 ? `Subiu ${formatNum(item.diferenca)} transações` : item.diferenca < 0 ? `Caiu ${formatNum(Math.abs(item.diferenca))} transações` : 'Manteve o mesmo total'}
+                        {item.totalAnterior !== null && item.totalAnterior > 0 ? ` · ${percentual(item.total, item.totalAnterior)}` : ''}
+                      </div>
+                    ) : (
+                      <div className={`${styles.comparisonDelta} ${styles.muted}`}>Primeiro mês disponível para comparação</div>
+                    )}
+                  </article>
+                ))}
+              </div>
+            )}
           </section>
         </>
       ) : null}
