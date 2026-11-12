@@ -75,6 +75,7 @@ type GrupoResumo = {
   supervisor: string
 
   totalExpressos: number
+  totalTrx: number
   transacionamEProduzem: number
   trxZeradaEProduzem: number
   somenteTransacionando: number
@@ -680,11 +681,12 @@ export default function RelatorioGestaoPage() {
 
     const result: GrupoResumo[] = Array.from(map.entries()).map(([nomeGrupo, list]) => {
       const ordered = [...list].sort((a, b) => {
+        if ((b.trx || 0) !== (a.trx || 0)) return (b.trx || 0) - (a.trx || 0)
+
         const pontosB = calcPontos(b)
         const pontosA = calcPontos(a)
 
         if (pontosB !== pontosA) return pontosB - pontosA
-        if ((b.trx || 0) !== (a.trx || 0)) return (b.trx || 0) - (a.trx || 0)
 
         return a.nome.localeCompare(b.nome)
       })
@@ -696,6 +698,7 @@ export default function RelatorioGestaoPage() {
         supervisor: ordered[0]?.supervisor || '',
 
         totalExpressos: ordered.length,
+        totalTrx: ordered.reduce((acc, r) => acc + (r.trx || 0), 0),
         transacionamEProduzem: ordered.filter(
           (r) => (r.trx || 0) > 0 && getTotalProduzido(r) > 0
         ).length,
@@ -733,7 +736,7 @@ export default function RelatorioGestaoPage() {
       }
     })
 
-    return result.sort((a, b) => a.nomeGrupo.localeCompare(b.nomeGrupo))
+    return result.sort((a, b) => b.totalTrx - a.totalTrx || a.nomeGrupo.localeCompare(b.nomeGrupo))
   }, [filteredRows, agruparPor])
 
   const grupoAgenciaInfoMap = useMemo(() => {
