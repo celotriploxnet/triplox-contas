@@ -15,7 +15,7 @@ import { getBytes, ref } from 'firebase/storage'
 
 import { auth, db, storage } from '@/lib/firebase'
 
-const CSV_PATH = 'base-lojas/banco.csv'
+const CSV_PATH = 'base-lojas/banco-junho-2026.csv'
 
 type AgruparPor = 'regional' | 'agencia' | 'supervisor'
 
