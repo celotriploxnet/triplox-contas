@@ -1723,6 +1723,10 @@ Maiores informações favor entrar em contato com nossa equipe.\n\nChave Loja: $
     router.push(`/dashboard/expressos/consorcio?chave=${encodeURIComponent(normalizeStoreKey(r.chave))}`)
   }
 
+  function irParaInformacoesGerenciais(r: RowBase) {
+    router.push(`/dashboard/expressos/informacoesgerenciais?chave=${encodeURIComponent(normalizeStoreKey(r.chave))}`)
+  }
+
   return (
     <section style={{ display: 'grid', gap: '1.25rem' }}>
       <div>
@@ -2010,6 +2014,13 @@ Maiores informações favor entrar em contato com nossa equipe.\n\nChave Loja: $
                         🚗 Consórcio
                       </LightButton>
                     )}
+
+                    <LightButton
+                      onClick={() => irParaInformacoesGerenciais(r)}
+                      title="Consultar informações gerenciais do Expresso"
+                    >
+                      📋 Informações
+                    </LightButton>
 
                     <LightButton
                       onClick={() => irParaArvoreCronologica(r)}
