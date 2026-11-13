@@ -389,8 +389,8 @@ export default function ConsorcioPage() {
   }
 
   async function saveContact(row: ConsorcioRow) {
-    if (!isAdmin) {
-      setError('Somente o administrador pode atualizar os dados de contato.')
+    if (!auth.currentUser) {
+      setError('Entre no portal para atualizar os dados.')
       return
     }
     if (!editDraft) return
@@ -458,7 +458,7 @@ export default function ConsorcioPage() {
       console.error('Falha ao salvar dados do consórcio:', cause)
       const failure = cause as { code?: string }
       setError(failure?.code === 'storage/unauthorized'
-        ? 'O Firebase Storage não autorizou salvar os dados. Verifique a permissão de escrita para o administrador.'
+        ? 'O Firebase Storage não autorizou salvar os dados. Verifique se a regra permite edição para usuários logados.'
         : 'Não consegui salvar os dados na base. Confira a conexão e tente novamente.')
       setInfo('')
     } finally {
@@ -505,12 +505,19 @@ export default function ConsorcioPage() {
   async function copiarSolicitacaoMatriz(row: ConsorcioRow) {
     if (!isAdmin) return
     const mensagem = [
-      'Solicito a alteração dos dados abaixo do Expresso em questão:',
-      `CNPJ: ${formatCnpj(row.cnpj)}`,
-      `Usuário: ${row.codigoUsuario}`,
-      `CPF: ${row.cpfUsuario}`,
-      `E-mail: ${row.email}`,
-      `Celular: ${row.telefone}`,
+      '🏢 *Solicitação de atualização cadastral*',
+      '',
+      'Olá! Solicito a alteração dos dados do Expresso abaixo:',
+      '',
+      `🏪 *Expresso:* ${row.nomeEmpresa}`,
+      `🔑 *Chave Loja:* ${row.chave}`,
+      `🧾 *CNPJ:* ${formatCnpj(row.cnpj) || 'Não informado'}`,
+      `👤 *Usuário:* ${row.codigoUsuario}`,
+      `🪪 *CPF:* ${row.cpfUsuario || 'Não informado'}`,
+      `📧 *E-mail:* ${row.email || 'Não informado'}`,
+      `📱 *Celular:* ${row.telefone || 'Não informado'}`,
+      '',
+      'Obrigado!',
     ].join('\n')
 
     try {
@@ -658,7 +665,7 @@ export default function ConsorcioPage() {
                       <span style={fieldLabelStyle}>Nome da empresa</span>
                       <strong style={{ display: 'block', overflowWrap: 'anywhere' }}>{row.nomeEmpresa}</strong>
                     </div>
-                    {isAdmin && !isEditing && (
+                    {!isEditing && (
                       <button
                         type="button"
                         onClick={() => {
