@@ -30,6 +30,27 @@ type AccessValidation =
       mensagem: string;
     };
 
+function mensagemErroFirebase(error: unknown) {
+  const failure = error as { code?: string };
+  const code = String(failure?.code || '');
+  console.error('Falha durante o acesso ao portal:', error);
+
+  if (code === 'permission-denied') {
+    return 'A autenticação ocorreu, mas o sistema não conseguiu consultar seu cadastro. Verifique as regras do Firestore para a coleção users.';
+  }
+  if (code === 'auth/network-request-failed') {
+    return 'Não foi possível conectar ao sistema. Verifique sua internet e tente novamente.';
+  }
+  if (code === 'auth/too-many-requests') {
+    return 'Muitas tentativas de acesso. Aguarde alguns minutos e tente novamente.';
+  }
+  if (code === 'auth/user-disabled') {
+    return 'Este usuário está desativado no Firebase Authentication. Fale com o administrador.';
+  }
+  if (code) return `Não foi possível entrar no sistema. Código do erro: ${code}.`;
+  return 'Não foi possível validar seu acesso no momento.';
+}
+
 export default function LoginPage() {
   const router = useRouter();
 
@@ -85,11 +106,11 @@ export default function LoginPage() {
         await signOut(auth);
         setErro(validacao.mensagem);
         setVerificandoSessao(false);
-      } catch {
+      } catch (error) {
         try {
           await signOut(auth);
         } catch {}
-        setErro("Não foi possível validar seu acesso no momento.");
+        setErro(mensagemErroFirebase(error));
         setVerificandoSessao(false);
       }
     });
@@ -114,8 +135,9 @@ export default function LoginPage() {
       }
 
       router.push("/dashboard");
-    } catch (err: any) {
-      const code = String(err?.code || "");
+    } catch (err: unknown) {
+      const failure = err as { code?: string };
+      const code = String(failure?.code || "");
 
       if (
         code.includes("auth/invalid-credential") ||
@@ -125,7 +147,7 @@ export default function LoginPage() {
       ) {
         setErro("Email ou senha inválidos.");
       } else {
-        setErro("Não foi possível entrar no sistema.");
+        setErro(mensagemErroFirebase(err));
       }
     } finally {
       setCarregando(false);
