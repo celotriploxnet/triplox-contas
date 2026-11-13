@@ -471,10 +471,12 @@ export default function ConsorcioPage() {
     const mensagem = [
       `Olá! Seguem as orientações de acesso ao consórcio para ${row.nomeEmpresa}:`,
       '',
-      row.cpfUsuario
-        ? `O CPF de acesso para o consórcio é sempre o do Responsável da Loja. Para confirmação, informe o CPF do responsável que começa com: ${cpfPrimeirosTresNumeros}.`
-        : 'O CPF de acesso para o consórcio é sempre o do Responsável da Loja. Confirme os dados com o responsável da loja.',
-      `Código do usuário: ${row.codigoUsuario}`,
+      `O CPF de acesso para o consórcio é sempre o do Responsável da Loja. Para confirmação, informe o CPF do responsável que começa com: ${cpfPrimeirosTresNumeros}.`,
+      `Código do usuário: ${row.codigoUsuario} (caso não tenha chegado o e-mail por favor nos comunicar)`,
+      '',
+      'Dados cadastrados:',
+      `E-mail: ${row.email}`,
+      `TEL: ${row.telefone}`,
       '',
       'O código de usuário deve ser usado somente na criação do primeiro acesso ou quando for alterar a senha.',
       'Caso esqueça a senha, ou precise criar uma nova, o site para isso é o NEWCON:',
@@ -497,6 +499,27 @@ export default function ConsorcioPage() {
     } catch (cause) {
       console.error('Não foi possível copiar as orientações de consórcio:', cause)
       setError('Não consegui copiar a mensagem. Verifique a permissão de área de transferência do navegador.')
+    }
+  }
+
+  async function copiarSolicitacaoMatriz(row: ConsorcioRow) {
+    if (!isAdmin) return
+    const mensagem = [
+      'Solicito a alteração dos dados abaixo do Expresso em questão:',
+      `CNPJ: ${formatCnpj(row.cnpj)}`,
+      `Usuário: ${row.codigoUsuario}`,
+      `CPF: ${row.cpfUsuario}`,
+      `E-mail: ${row.email}`,
+      `Celular: ${row.telefone}`,
+    ].join('\n')
+
+    try {
+      await navigator.clipboard.writeText(mensagem)
+      setInfo('Solicitação para a matriz copiada. Agora é só colar na mensagem.')
+      setError('')
+    } catch (cause) {
+      console.error('Não foi possível copiar a solicitação para a matriz:', cause)
+      setError('Não consegui copiar a solicitação. Verifique a permissão de área de transferência do navegador.')
     }
   }
 
@@ -784,14 +807,26 @@ export default function ConsorcioPage() {
                       </button>
                     </div>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => void copiarOrientacoesWhatsApp(row)}
-                      title="Copiar orientações para enviar pelo WhatsApp"
-                      style={{ ...secondaryButtonStyle, justifySelf: 'start', marginTop: '.25rem' }}
-                    >
-                      📤 Copiar para WhatsApp
-                    </button>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '.5rem', marginTop: '.25rem' }}>
+                      <button
+                        type="button"
+                        onClick={() => void copiarOrientacoesWhatsApp(row)}
+                        title="Copiar orientações para enviar pelo WhatsApp"
+                        style={secondaryButtonStyle}
+                      >
+                        📤 Copiar para WhatsApp
+                      </button>
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => void copiarSolicitacaoMatriz(row)}
+                          title="Copiar solicitação de atualização dos dados para a matriz"
+                          style={secondaryButtonStyle}
+                        >
+                          🏢 Enviar para matriz
+                        </button>
+                      )}
+                    </div>
                   )}
                 </article>
               )
