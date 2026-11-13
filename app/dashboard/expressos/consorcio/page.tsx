@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { onAuthStateChanged } from 'firebase/auth'
 import { getBytes, ref, uploadBytes } from 'firebase/storage'
+import { Check, Pencil, X } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 import { auth, storage } from '@/lib/firebase'
@@ -16,10 +17,13 @@ type ConsorcioRow = {
   nomeEmpresa: string
   codigoUsuario: string
   cpfUsuario: string
+  dataNascimento: string
   telefone: string
   email: string
   cnpj: string
 }
+
+type ContactDraft = Pick<ConsorcioRow, 'cpfUsuario' | 'dataNascimento' | 'telefone' | 'email'>
 
 function text(value: unknown) {
   return value === null || value === undefined ? '' : String(value).trim()
@@ -58,6 +62,30 @@ function normalizeCnpj(value: unknown) {
   return digits ? digits.padStart(14, '0') : ''
 }
 
+function normalizeBirthDate(value: unknown) {
+  if (value === null || value === undefined || text(value) === '') return ''
+  if (typeof value === 'number' || /^\d{4,5}$/.test(text(value))) {
+    const parsed = XLSX.SSF.parse_date_code(Number(value))
+    if (parsed) {
+      return `${String(parsed.y).padStart(4, '0')}-${String(parsed.m).padStart(2, '0')}-${String(parsed.d).padStart(2, '0')}`
+    }
+  }
+
+  const raw = text(value)
+  const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (isoMatch) return raw
+  const brMatch = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  if (brMatch) return `${brMatch[3]}-${brMatch[2].padStart(2, '0')}-${brMatch[1].padStart(2, '0')}`
+  return ''
+}
+
+function displayBirthDate(value: unknown) {
+  const iso = normalizeBirthDate(value)
+  if (!iso) return ''
+  const [, year, month, day] = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/) || []
+  return year ? `${day}/${month}/${year}` : ''
+}
+
 function formatPhone(value: unknown) {
   const original = text(value)
   const digits = original.replace(/\D/g, '')
@@ -92,6 +120,7 @@ function readConsorcio(bytes: Uint8Array | ArrayBuffer) {
       nomeEmpresa: text(recordValue(record, 'NomeEmpresa', 'NM_PARCEIRO')),
       codigoUsuario: text(recordValue(record, 'CodigoUsuario', 'USUÁRIO')),
       cpfUsuario: cpfFormat(recordValue(record, 'CpfUsuario', 'CPF')),
+      dataNascimento: normalizeBirthDate(recordValue(record, 'DataNascimento', 'Data de Nascimento', 'Nascimento')),
       telefone: formatPhone(recordValue(record, 'Telefone', 'TelefoneResponsavel')),
       email: text(recordValue(record, 'Email', 'E-mail')),
       cnpj: normalizeCnpj(recordValue(record, 'CNPJ')),
@@ -124,6 +153,17 @@ function setSheetText(sheet: XLSX.WorkSheet, row: number, column: number, value:
   sheet[XLSX.utils.encode_cell({ r: row, c: column })] = { t: 's', v: text(value) }
 }
 
+function ensureSheetColumn(sheet: XLSX.WorkSheet, aliases: string[], header: string) {
+  const existing = sheetColumn(sheet, aliases)
+  if (existing >= 0) return existing
+  const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1')
+  const column = range.e.c + 1
+  setSheetText(sheet, range.s.r, column, header)
+  range.e.c = column
+  sheet['!ref'] = XLSX.utils.encode_range(range)
+  return column
+}
+
 function serializeWorkbook(workbook: XLSX.WorkBook) {
   return new Uint8Array(XLSX.write(workbook, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer)
 }
@@ -137,16 +177,13 @@ function mergeExistingAccessData(bytes: Uint8Array, previousRows: ConsorcioRow[]
   const keyColumn = sheetColumn(sheet, ['CHAVE_LOJA'])
   const codeColumn = sheetColumn(sheet, ['CodigoUsuario', 'USUÁRIO'])
   const cnpjColumn = sheetColumn(sheet, ['CNPJ'])
-  let cpfColumn = sheetColumn(sheet, ['CpfUsuario', 'CPF'])
   if (keyColumn < 0 || codeColumn < 0) {
     throw new Error('A nova planilha precisa ter CHAVE_LOJA e CodigoUsuario/USUÁRIO.')
   }
-  if (cpfColumn < 0) {
-    cpfColumn = range.e.c + 1
-    setSheetText(sheet, headerRow, cpfColumn, 'CpfUsuario')
-    range.e.c = cpfColumn
-    sheet['!ref'] = XLSX.utils.encode_range(range)
-  }
+  const cpfColumn = ensureSheetColumn(sheet, ['CpfUsuario', 'CPF'], 'CpfUsuario')
+  const birthColumn = ensureSheetColumn(sheet, ['DataNascimento', 'Data de Nascimento', 'Nascimento'], 'DataNascimento')
+  const phoneColumn = ensureSheetColumn(sheet, ['Telefone', 'TelefoneResponsavel'], 'Telefone')
+  const emailColumn = ensureSheetColumn(sheet, ['Email', 'E-mail'], 'Email')
 
   const previousByKey = new Map(previousRows.filter((row) => row.chave).map((row) => [row.chave, row]))
   const previousByCnpj = new Map(previousRows.filter((row) => row.cnpj).map((row) => [row.cnpj, row]))
@@ -164,11 +201,17 @@ function mergeExistingAccessData(bytes: Uint8Array, previousRows: ConsorcioRow[]
     if (!text(codeCell?.v) && previous.codigoUsuario) setSheetText(sheet, row, codeColumn, previous.codigoUsuario)
     const cpfCell = sheet[XLSX.utils.encode_cell({ r: row, c: cpfColumn })]
     if (!text(cpfCell?.v) && previous.cpfUsuario) setSheetText(sheet, row, cpfColumn, previous.cpfUsuario.replace(/\D/g, ''))
+    const birthCell = sheet[XLSX.utils.encode_cell({ r: row, c: birthColumn })]
+    if (!text(birthCell?.v) && previous.dataNascimento) setSheetText(sheet, row, birthColumn, previous.dataNascimento)
+    const phoneCell = sheet[XLSX.utils.encode_cell({ r: row, c: phoneColumn })]
+    if (!text(phoneCell?.v) && previous.telefone) setSheetText(sheet, row, phoneColumn, previous.telefone)
+    const emailCell = sheet[XLSX.utils.encode_cell({ r: row, c: emailColumn })]
+    if (!text(emailCell?.v) && previous.email) setSheetText(sheet, row, emailColumn, previous.email)
   }
   return serializeWorkbook(workbook)
 }
 
-function updateCpfInWorkbook(bytes: Uint8Array, rowData: ConsorcioRow, cpf: string) {
+function updateContactInWorkbook(bytes: Uint8Array, rowData: ConsorcioRow, draft: ContactDraft) {
   const workbook = XLSX.read(bytes, { type: 'array' })
   const sheet = workbook.Sheets[workbook.SheetNames[0]]
   if (!sheet) throw new Error('A planilha não contém uma aba com dados.')
@@ -176,28 +219,35 @@ function updateCpfInWorkbook(bytes: Uint8Array, rowData: ConsorcioRow, cpf: stri
   const headerRow = range.s.r
   const keyColumn = sheetColumn(sheet, ['CHAVE_LOJA'])
   const cnpjColumn = sheetColumn(sheet, ['CNPJ'])
-  let cpfColumn = sheetColumn(sheet, ['CpfUsuario', 'CPF'])
   if (keyColumn < 0) throw new Error('Não encontrei a coluna CHAVE_LOJA na base atual.')
-  if (cpfColumn < 0) {
-    cpfColumn = range.e.c + 1
-    setSheetText(sheet, headerRow, cpfColumn, 'CpfUsuario')
-    range.e.c = cpfColumn
-    sheet['!ref'] = XLSX.utils.encode_range(range)
-  }
+  const cpfColumn = ensureSheetColumn(sheet, ['CpfUsuario', 'CPF'], 'CpfUsuario')
+  const birthColumn = ensureSheetColumn(sheet, ['DataNascimento', 'Data de Nascimento', 'Nascimento'], 'DataNascimento')
+  const phoneColumn = ensureSheetColumn(sheet, ['Telefone', 'TelefoneResponsavel'], 'Telefone')
+  const emailColumn = ensureSheetColumn(sheet, ['Email', 'E-mail'], 'Email')
 
   const lastRow = XLSX.utils.decode_range(sheet['!ref'] || 'A1').e.r
   let targetRow = -1
   for (let row = headerRow + 1; row <= lastRow; row += 1) {
     const keyCell = sheet[XLSX.utils.encode_cell({ r: row, c: keyColumn })]
-    const cnpjCell = cnpjColumn >= 0 ? sheet[XLSX.utils.encode_cell({ r: row, c: cnpjColumn })] : undefined
-    if ((rowData.chave && storeKey(keyCell?.v) === rowData.chave) ||
-        (!rowData.chave && rowData.cnpj && normalizeCnpj(cnpjCell?.v) === rowData.cnpj)) {
+    if (rowData.chave && storeKey(keyCell?.v) === rowData.chave) {
       targetRow = row
       break
     }
   }
+  if (targetRow < 0 && rowData.cnpj && cnpjColumn >= 0) {
+    for (let row = headerRow + 1; row <= lastRow; row += 1) {
+      const cnpjCell = sheet[XLSX.utils.encode_cell({ r: row, c: cnpjColumn })]
+      if (normalizeCnpj(cnpjCell?.v) === rowData.cnpj) {
+        targetRow = row
+        break
+      }
+    }
+  }
   if (targetRow < 0) throw new Error('Não consegui localizar a loja na base atual para salvar o CPF.')
-  setSheetText(sheet, targetRow, cpfColumn, cpf)
+  setSheetText(sheet, targetRow, cpfColumn, draft.cpfUsuario.replace(/\D/g, ''))
+  setSheetText(sheet, targetRow, birthColumn, normalizeBirthDate(draft.dataNascimento))
+  setSheetText(sheet, targetRow, phoneColumn, draft.telefone)
+  setSheetText(sheet, targetRow, emailColumn, draft.email)
   return serializeWorkbook(workbook)
 }
 
@@ -213,7 +263,9 @@ export default function ConsorcioPage() {
   const [rows, setRows] = useState<ConsorcioRow[]>([])
   const [search, setSearch] = useState('')
   const [selectedFileName, setSelectedFileName] = useState('')
-  const [savingCpfKey, setSavingCpfKey] = useState('')
+  const [editingKey, setEditingKey] = useState('')
+  const [editDraft, setEditDraft] = useState<ContactDraft | null>(null)
+  const [savingKey, setSavingKey] = useState('')
   const baseBytesRef = useRef<Uint8Array | null>(null)
 
   async function loadData() {
@@ -293,14 +345,28 @@ export default function ConsorcioPage() {
     }
   }
 
-  async function saveCpf(row: ConsorcioRow) {
+  async function saveContact(row: ConsorcioRow) {
     if (!isAdmin) {
-      setError('Somente o administrador pode atualizar o CPF.')
+      setError('Somente o administrador pode atualizar os dados de contato.')
       return
     }
-    const cpf = row.cpfUsuario.replace(/\D/g, '')
-    if (cpf.length !== 11) {
-      setError('Informe os 11 números do CPF antes de salvar.')
+    if (!editDraft) return
+    const cpf = editDraft.cpfUsuario.replace(/\D/g, '')
+    const cpfAnterior = row.cpfUsuario.replace(/\D/g, '')
+    if ((cpf && cpf.length !== 11) || (!cpf && cpfAnterior)) {
+      setError(cpfAnterior && !cpf
+        ? 'Para preservar o CPF já cadastrado, não deixe o campo em branco.'
+        : 'O CPF precisa ter 11 números.')
+      return
+    }
+    if (editDraft.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editDraft.email.trim())) {
+      setError('Informe um e-mail válido antes de salvar.')
+      return
+    }
+    const today = new Date()
+    const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+    if (editDraft.dataNascimento && editDraft.dataNascimento > todayIso) {
+      setError('A data de nascimento não pode ser futura.')
       return
     }
     if (!baseBytesRef.current) {
@@ -308,11 +374,18 @@ export default function ConsorcioPage() {
       return
     }
 
-    setSavingCpfKey(row.chave)
+    setSavingKey(row.chave)
     setError('')
-    setInfo('Salvando CPF…')
+    setInfo('Salvando alterações…')
     try {
-      const updatedBytes = updateCpfInWorkbook(baseBytesRef.current, row, cpf)
+      const valuesToSave: ContactDraft = {
+        ...editDraft,
+        cpfUsuario: cpf,
+        dataNascimento: normalizeBirthDate(editDraft.dataNascimento),
+        telefone: text(editDraft.telefone),
+        email: text(editDraft.email),
+      }
+      const updatedBytes = updateContactInWorkbook(baseBytesRef.current, row, valuesToSave)
       const updatedBlob = new Blob([updatedBytes.buffer as ArrayBuffer], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       })
@@ -321,18 +394,28 @@ export default function ConsorcioPage() {
       })
       baseBytesRef.current = updatedBytes
       setRows((current) => current.map((item) =>
-        item.chave === row.chave ? { ...item, cpfUsuario: cpfFormat(cpf) } : item
+        item.chave === row.chave
+          ? {
+              ...item,
+              cpfUsuario: cpfFormat(cpf),
+              dataNascimento: valuesToSave.dataNascimento,
+              telefone: formatPhone(valuesToSave.telefone),
+              email: valuesToSave.email,
+            }
+          : item
       ))
-      setInfo(`CPF de ${row.nomeEmpresa} salvo na base de consórcio.`)
+      setEditingKey('')
+      setEditDraft(null)
+      setInfo(`Dados de ${row.nomeEmpresa} salvos na base de consórcio.`)
     } catch (cause: unknown) {
-      console.error('Falha ao salvar CPF de acesso ao consórcio:', cause)
+      console.error('Falha ao salvar dados do consórcio:', cause)
       const failure = cause as { code?: string }
       setError(failure?.code === 'storage/unauthorized'
-        ? 'O Firebase Storage não autorizou salvar o CPF. Verifique a permissão de escrita para o administrador.'
-        : 'Não consegui salvar o CPF na base. Confira a conexão e tente novamente.')
+        ? 'O Firebase Storage não autorizou salvar os dados. Verifique a permissão de escrita para o administrador.'
+        : 'Não consegui salvar os dados na base. Confira a conexão e tente novamente.')
       setInfo('')
     } finally {
-      setSavingCpfKey('')
+      setSavingKey('')
     }
   }
 
@@ -393,7 +476,7 @@ export default function ConsorcioPage() {
     const needle = search.trim().toLocaleLowerCase('pt-BR')
     if (!needle) return rows
     return rows.filter((row) =>
-      `${row.nomeEmpresa} ${row.codigoUsuario} ${row.cpfUsuario} ${row.chave} ${row.telefone} ${row.email}`
+      `${row.nomeEmpresa} ${row.codigoUsuario} ${row.cpfUsuario} ${row.dataNascimento} ${row.chave} ${row.telefone} ${row.email}`
         .toLocaleLowerCase('pt-BR').includes(needle)
     )
   }, [rows, search])
@@ -420,7 +503,7 @@ export default function ConsorcioPage() {
         <div className="card" style={{ display: 'grid', gap: '.75rem' }}>
           <strong>Atualizar base de consórcios</strong>
           <p className="p-muted" style={{ margin: 0 }}>
-            Envie a planilha mais completa com CHAVE_LOJA, nome da empresa, usuário, telefone e e-mail. Os CPFs e códigos já cadastrados serão preservados pela chave loja ou CNPJ.
+            Envie a planilha mais completa com CHAVE_LOJA, nome da empresa, usuário, telefone e e-mail. CPFs, datas de nascimento e códigos já cadastrados serão preservados pela chave loja ou CNPJ.
           </p>
           <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem', flexWrap: 'wrap' }}>
             <input
@@ -477,68 +560,166 @@ export default function ConsorcioPage() {
           </p>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: '.85rem' }}>
-            {visibleRows.map((row, index) => (
-              <article key={`${row.codigoUsuario}-${row.cpfUsuario}-${index}`} className="card-soft" style={{ display: 'grid', gap: '.6rem', minWidth: 0 }}>
-                <div>
-                  <span style={fieldLabelStyle}>Nome da empresa</span>
-                  <strong style={{ display: 'block', overflowWrap: 'anywhere' }}>{row.nomeEmpresa}</strong>
-                </div>
-                <div>
-                  <span style={fieldLabelStyle}>CPF</span>
-                  {isAdmin ? (
-                    <div style={{ display: 'grid', gap: '.45rem' }}>
+            {visibleRows.map((row) => {
+              const rowDraft = editingKey === row.chave ? editDraft : null
+              const isEditing = rowDraft !== null
+
+              return (
+                <article key={row.chave || row.codigoUsuario} className="card-soft" style={{ display: 'grid', gap: '.6rem', minWidth: 0 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '.75rem' }}>
+                    <div style={{ minWidth: 0 }}>
+                      <span style={fieldLabelStyle}>Nome da empresa</span>
+                      <strong style={{ display: 'block', overflowWrap: 'anywhere' }}>{row.nomeEmpresa}</strong>
+                    </div>
+                    {isAdmin && !isEditing && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingKey(row.chave)
+                          setEditDraft({
+                            cpfUsuario: row.cpfUsuario,
+                            dataNascimento: row.dataNascimento,
+                            telefone: row.telefone,
+                            email: row.email,
+                          })
+                          setError('')
+                          setInfo('')
+                        }}
+                        title="Editar dados de contato e acesso"
+                        aria-label={`Editar CPF, nascimento, e-mail e telefone de ${row.nomeEmpresa}`}
+                        disabled={Boolean(savingKey) || uploading || Boolean(editingKey)}
+                        style={editIconButtonStyle}
+                      >
+                        <Pencil size={17} aria-hidden="true" />
+                        <span>Editar</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div>
+                    <span style={fieldLabelStyle}>CPF</span>
+                    {isEditing && rowDraft ? (
                       <input
-                        id={`cpf-${row.chave}`}
                         className="input"
                         type="text"
                         inputMode="numeric"
                         maxLength={14}
-                        value={row.cpfUsuario}
-                        disabled={Boolean(savingCpfKey)}
-                        onChange={(event) => {
-                          const cpfUsuario = formatCpfDraft(event.target.value)
-                          setRows((current) => current.map((item) =>
-                            item.chave === row.chave ? { ...item, cpfUsuario } : item
-                          ))
-                        }}
+                        value={rowDraft.cpfUsuario}
+                        disabled={Boolean(savingKey)}
+                        onChange={(event) => setEditDraft((current) => current
+                          ? { ...current, cpfUsuario: formatCpfDraft(event.target.value) }
+                          : current
+                        )}
                         placeholder="000.000.000-00"
                         aria-label={`CPF do responsável da loja ${row.nomeEmpresa}`}
                       />
+                    ) : (
+                      <strong style={{ display: 'block' }}>{row.cpfUsuario || 'CPF não cadastrado'}</strong>
+                    )}
+                  </div>
+
+                  <div>
+                    <span style={fieldLabelStyle}>Data de nascimento</span>
+                    {isEditing && rowDraft ? (
+                      <input
+                        className="input"
+                        type="date"
+                        value={rowDraft.dataNascimento}
+                        disabled={Boolean(savingKey)}
+                        onChange={(event) => setEditDraft((current) => current
+                          ? { ...current, dataNascimento: event.target.value }
+                          : current
+                        )}
+                        aria-label={`Data de nascimento do responsável da loja ${row.nomeEmpresa}`}
+                      />
+                    ) : (
+                      <strong style={{ display: 'block' }}>{displayBirthDate(row.dataNascimento) || 'Não informada'}</strong>
+                    )}
+                  </div>
+
+                  <div>
+                    <span style={fieldLabelStyle}>Código do usuário</span>
+                    <strong style={{ display: 'block', overflowWrap: 'anywhere' }}>{row.codigoUsuario}</strong>
+                  </div>
+
+                  <div>
+                    <span style={fieldLabelStyle}>Telefone</span>
+                    {isEditing && rowDraft ? (
+                      <input
+                        className="input"
+                        type="tel"
+                        value={rowDraft.telefone}
+                        disabled={Boolean(savingKey)}
+                        onChange={(event) => setEditDraft((current) => current
+                          ? { ...current, telefone: formatPhone(event.target.value) }
+                          : current
+                        )}
+                        placeholder="(00) 00000-0000"
+                        aria-label={`Telefone da loja ${row.nomeEmpresa}`}
+                      />
+                    ) : (
+                      <strong style={{ display: 'block', overflowWrap: 'anywhere' }}>{row.telefone || 'Não informado'}</strong>
+                    )}
+                  </div>
+
+                  <div>
+                    <span style={fieldLabelStyle}>E-mail</span>
+                    {isEditing && rowDraft ? (
+                      <input
+                        className="input"
+                        type="email"
+                        value={rowDraft.email}
+                        disabled={Boolean(savingKey)}
+                        onChange={(event) => setEditDraft((current) => current
+                          ? { ...current, email: event.target.value }
+                          : current
+                        )}
+                        placeholder="email@exemplo.com"
+                        aria-label={`E-mail da loja ${row.nomeEmpresa}`}
+                      />
+                    ) : (
+                      <strong style={{ display: 'block', overflowWrap: 'anywhere' }}>{row.email || 'Não informado'}</strong>
+                    )}
+                  </div>
+
+                  {isEditing && rowDraft ? (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '.5rem', marginTop: '.25rem' }}>
                       <button
                         type="button"
-                        onClick={() => void saveCpf(row)}
-                        disabled={Boolean(savingCpfKey) || row.cpfUsuario.replace(/\D/g, '').length !== 11}
-                        style={{ ...secondaryButtonStyle, justifySelf: 'start', opacity: savingCpfKey ? 0.6 : 1 }}
+                        onClick={() => void saveContact(row)}
+                        disabled={Boolean(savingKey)}
+                        style={{ ...secondaryButtonStyle, display: 'inline-flex', alignItems: 'center', gap: '.4rem', opacity: savingKey ? 0.6 : 1 }}
                       >
-                        {savingCpfKey === row.chave ? 'Salvando CPF…' : 'Salvar CPF'}
+                        <Check size={16} aria-hidden="true" />
+                        {savingKey === row.chave ? 'Salvando…' : 'Salvar alterações'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingKey('')
+                          setEditDraft(null)
+                          setError('')
+                        }}
+                        disabled={Boolean(savingKey)}
+                        style={{ ...secondaryButtonStyle, display: 'inline-flex', alignItems: 'center', gap: '.4rem' }}
+                      >
+                        <X size={16} aria-hidden="true" />
+                        Cancelar
                       </button>
                     </div>
                   ) : (
-                    <strong style={{ display: 'block' }}>{row.cpfUsuario || 'CPF não cadastrado'}</strong>
+                    <button
+                      type="button"
+                      onClick={() => void copiarOrientacoesWhatsApp(row)}
+                      title="Copiar orientações para enviar pelo WhatsApp"
+                      style={{ ...secondaryButtonStyle, justifySelf: 'start', marginTop: '.25rem' }}
+                    >
+                      📤 Copiar para WhatsApp
+                    </button>
                   )}
-                </div>
-                <div>
-                  <span style={fieldLabelStyle}>Código do usuário</span>
-                  <strong style={{ display: 'block', overflowWrap: 'anywhere' }}>{row.codigoUsuario}</strong>
-                </div>
-                <div>
-                  <span style={fieldLabelStyle}>Telefone</span>
-                  <strong style={{ display: 'block', overflowWrap: 'anywhere' }}>{row.telefone || 'Não informado'}</strong>
-                </div>
-                <div>
-                  <span style={fieldLabelStyle}>E-mail</span>
-                  <strong style={{ display: 'block', overflowWrap: 'anywhere' }}>{row.email || 'Não informado'}</strong>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void copiarOrientacoesWhatsApp(row)}
-                  title="Copiar orientações para enviar pelo WhatsApp"
-                  style={{ ...secondaryButtonStyle, justifySelf: 'start', marginTop: '.25rem' }}
-                >
-                  📤 Copiar para WhatsApp
-                </button>
-              </article>
-            ))}
+                </article>
+              )
+            })}
           </div>
         )}
       </div>
@@ -547,6 +728,19 @@ export default function ConsorcioPage() {
 }
 
 const fieldLabelStyle = { color: 'rgba(16,16,24,.58)', fontSize: '.8rem', display: 'block', marginBottom: '.15rem' }
+const editIconButtonStyle = {
+  border: '1px solid rgba(15,15,25,.18)',
+  background: '#fff',
+  color: 'rgba(16,16,24,.86)',
+  borderRadius: 999,
+  padding: '.45rem .7rem',
+  fontWeight: 700,
+  cursor: 'pointer',
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '.35rem',
+  flexShrink: 0,
+}
 const secondaryButtonStyle = {
   border: '1px solid rgba(15,15,25,.18)',
   background: '#fff',
