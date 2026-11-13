@@ -102,6 +102,11 @@ type ResumoExpressos = {
   semCert: number
   vencida: number
   possivelBloqueado: number
+  topExpressosAbaixoMeta?: ExpressoAbaixoMeta[]
+}
+
+type ExpressoAbaixoMeta = Pick<RowBase, 'chave' | 'nome' | 'municipio' | 'agencia' | 'pacb' | 'pontos'> & {
+  produtos: string[]
 }
 
 type CertFilter = 'Todos' | 'NaoCertificado' | 'Certificado' | 'Vencida'
@@ -605,6 +610,32 @@ function calcularResumoExpressos(rows: RowBase[]): ResumoExpressos {
     return { r, semCert, vencida }
   })
 
+  const topExpressosAbaixoMeta = rows
+    .filter((row) => row.presenteNaUltimaBase !== false && row.pontos > 0 && row.pontos < 10)
+    .sort((a, b) => b.pontos - a.pontos || normalizeText(a.nome).localeCompare(normalizeText(b.nome), 'pt-BR'))
+    .slice(0, 10)
+    .map((row) => ({
+      chave: row.chave,
+      nome: row.nome,
+      municipio: row.municipio,
+      agencia: row.agencia,
+      pacb: row.pacb,
+      pontos: row.pontos,
+      produtos: [
+        row.qtdContasComDeposito > 0 || row.qtdContasSemDeposito > 0 ? 'Contas' : '',
+        row.qtdCestaServ > 0 ? 'Cesta de serviços' : '',
+        row.qtdSuperProtegido > 0 ? 'Super Protegido' : '',
+        row.vlrLime > 0 ? 'Lime' : '',
+        row.vlrConsignadoTotal > 0 ? 'Consignado' : '',
+        row.vlrCreditoParcelado > 0 ? 'Crédito parcelado' : '',
+        row.qtdMicrosseguro > 0 ? 'Microsseguro' : '',
+        row.qtdVivaVida > 0 ? 'Viva Vida' : '',
+        row.qtdPlanoOdonto > 0 ? 'Plano dental' : '',
+        row.qtdSegCartaoDeb > 0 ? 'Seguro cartão' : '',
+        row.vlrExpSorte > 0 ? 'Expresso da Sorte' : '',
+      ].filter(Boolean),
+    }))
+
   return {
     total: list.length,
     transacional: list.filter((x) => isTransacional(x.r.statusAnalise)).length,
@@ -613,6 +644,7 @@ function calcularResumoExpressos(rows: RowBase[]): ResumoExpressos {
     vencida: list.filter((x) => x.vencida).length,
     possivelBloqueado: list.filter((x) => x.r.presenteNaUltimaBase === false)
       .length,
+    topExpressosAbaixoMeta,
   }
 }
 
@@ -811,6 +843,8 @@ export default function ExpressoGeralPage() {
   const [allRowsLoaded, setAllRowsLoaded] = useState(false)
   const [resumoExpressos, setResumoExpressos] =
     useState<ResumoExpressos | null>(null)
+  const [topExpressosAbaixoMeta, setTopExpressosAbaixoMeta] = useState<ExpressoAbaixoMeta[]>([])
+  const [rankingPontosDisponivel, setRankingPontosDisponivel] = useState(false)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [contatosAbertos, setContatosAbertos] = useState<
     Record<string, boolean>
@@ -837,21 +871,45 @@ export default function ExpressoGeralPage() {
   async function carregarResumoExpressos() {
     try {
       const snap = await getDoc(doc(db, 'config', RESUMO_EXPRESSOS_DOC))
+      const data = snap.exists() ? snap.data() as Partial<ResumoExpressos> : null
+      let ranking = Array.isArray(data?.topExpressosAbaixoMeta)
+        ? data.topExpressosAbaixoMeta as ExpressoAbaixoMeta[]
+        : null
 
-      if (!snap.exists()) {
-        setResumoExpressos(null)
-        return
+      // Gera o ranking uma vez para a base existente e o guarda no resumo,
+      // evitando ler todos os Expressos a cada visita dos colaboradores.
+      const usuarioAtual = auth.currentUser
+      const adminAtual = (usuarioAtual?.email || '').toLowerCase() === ADMIN_EMAIL.toLowerCase()
+      if (!ranking && adminAtual) {
+        try {
+          const registros = await getDocs(collection(db, EXPRESSOS_COLLECTION))
+          const todosExpressos = registros.docs.map((docSnap) => buildEmptyRowFromRegistro(docSnap.data()))
+          ranking = calcularResumoExpressos(todosExpressos).topExpressosAbaixoMeta || []
+          await setDoc(
+            doc(db, 'config', RESUMO_EXPRESSOS_DOC),
+            { topExpressosAbaixoMeta: ranking },
+            { merge: true }
+          )
+        } catch (rankingError) {
+          console.error('Não consegui preparar o ranking de expressos abaixo dos 10 pontos:', rankingError)
+        }
       }
 
-      const data = snap.data() as Partial<ResumoExpressos>
-      setResumoExpressos({
-        total: Number(data.total || 0),
-        transacional: Number(data.transacional || 0),
-        treinado: Number(data.treinado || 0),
-        semCert: Number(data.semCert || 0),
-        vencida: Number(data.vencida || 0),
-        possivelBloqueado: Number(data.possivelBloqueado || 0),
-      })
+      if (data) {
+        setResumoExpressos({
+          total: Number(data.total || 0),
+          transacional: Number(data.transacional || 0),
+          treinado: Number(data.treinado || 0),
+          semCert: Number(data.semCert || 0),
+          vencida: Number(data.vencida || 0),
+          possivelBloqueado: Number(data.possivelBloqueado || 0),
+          topExpressosAbaixoMeta: ranking || [],
+        })
+      } else {
+        setResumoExpressos(null)
+      }
+      setTopExpressosAbaixoMeta(ranking || [])
+      setRankingPontosDisponivel(ranking !== null)
     } catch (e) {
       console.error('Erro ao carregar resumo dos expressos:', e)
       setResumoExpressos(null)
@@ -1398,6 +1456,8 @@ export default function ExpressoGeralPage() {
         await batch.commit()
 
         setResumoExpressos(resumoAtualizado)
+        setTopExpressosAbaixoMeta(resumoAtualizado.topExpressosAbaixoMeta || [])
+        setRankingPontosDisponivel(true)
         setRows(finalRows.slice(0, LIMIT_NO_SEARCH))
         setAllRowsLoaded(false)
         setInfo(
@@ -1549,9 +1609,18 @@ export default function ExpressoGeralPage() {
           Boolean(termDigits && hayDigits.includes(termDigits))
         )
       })
-    } else if (!allRowsLoaded) {
-      list = list.slice(0, LIMIT_NO_SEARCH)
     }
+
+    // Ordena Expressos com produção abaixo da meta antes de limitar a prévia.
+    list.sort((a, b) => {
+      const aPendente = a.r.pontos > 0 && a.r.pontos < 10 ? 1 : 0
+      const bPendente = b.r.pontos > 0 && b.r.pontos < 10 ? 1 : 0
+      if (aPendente !== bPendente) return bPendente - aPendente
+      if (aPendente && bPendente && a.r.pontos !== b.r.pontos) return b.r.pontos - a.r.pontos
+      return 0
+    })
+
+    if (!term && !termDigits && !allRowsLoaded) list = list.slice(0, LIMIT_NO_SEARCH)
 
     return list
   }, [computed.list, q, fCert, fTrx, allRowsLoaded])
@@ -1804,6 +1873,71 @@ Maiores informações favor entrar em contato com nossa equipe.\n\nChave Loja: $
                 : 'Atualizar lista'}
         </button>
       </div>
+
+      <section
+        className="card"
+        style={{
+          display: 'grid',
+          gap: '.9rem',
+          border: '1px solid rgba(217,119,6,.3)',
+          background: 'linear-gradient(135deg, rgba(255,251,235,.98), #fff)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '.7rem' }}>
+          <span aria-hidden="true" style={{ fontSize: '1.35rem', lineHeight: 1 }}>⚠️</span>
+          <div>
+            <strong style={{ color: '#92400e', fontSize: '1rem' }}>
+              Fique atento aos Expressos que ainda não completaram os 10 pontos
+            </strong>
+            <p className="p-muted" style={{ margin: '.25rem 0 0', fontSize: '.84rem' }}>
+              Os dez Expressos com produtos e pontuação de 1 a 9 aparecem primeiro, do mais próximo ao objetivo até os demais.
+            </p>
+          </div>
+        </div>
+
+        {topExpressosAbaixoMeta.length > 0 ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 245px), 1fr))', gap: '.65rem' }}>
+            {topExpressosAbaixoMeta.map((expresso) => (
+              <article
+                key={`${expresso.chave}-${expresso.agencia}-${expresso.pacb}`}
+                className="card-soft"
+                style={{ display: 'grid', gap: '.45rem', alignContent: 'start', background: '#fff', borderColor: 'rgba(217,119,6,.2)' }}
+              >
+                <strong style={{ overflowWrap: 'anywhere' }}>{expresso.nome}</strong>
+                <span className="p-muted" style={{ fontSize: '.8rem' }}>
+                  Chave {expresso.chave}{expresso.municipio ? ` • ${expresso.municipio}` : ''}
+                </span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '.4rem', alignItems: 'center' }}>
+                  <Pill style={{ background: 'rgba(245,158,11,.12)', color: '#92400e' }}>
+                    {formatPontos(expresso.pontos)} {expresso.pontos === 1 ? 'ponto' : 'pontos'}
+                  </Pill>
+                  <span style={{ color: '#92400e', fontSize: '.82rem', fontWeight: 800 }}>
+                    Faltam {formatPontos(10 - expresso.pontos)} para 10
+                  </span>
+                </div>
+                {expresso.produtos.length > 0 && (
+                  <span className="p-muted" style={{ fontSize: '.76rem', lineHeight: 1.4 }}>
+                    Produtos: {expresso.produtos.join(' · ')}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setQ(expresso.chave)}
+                  style={{ ...priorityButtonStyle, justifySelf: 'start', marginTop: '.1rem' }}
+                >
+                  Localizar no Expresso Geral
+                </button>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="p-muted" style={{ margin: 0, fontSize: '.84rem' }}>
+            {rankingPontosDisponivel
+              ? 'Nenhum Expresso com produtos e pontuação entre 1 e 9 nesta base.'
+              : 'A lista será calculada quando o administrador sincronizar a base pelo botão acima.'}
+          </p>
+        )}
+      </section>
 
       <div className="card" style={{ display: 'grid', gap: '1rem' }}>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -2354,4 +2488,15 @@ function Indicador({ label, value }: { label: string; value: string }) {
       <div style={{ fontWeight: 900 }}>{value}</div>
     </div>
   )
+}
+
+const priorityButtonStyle = {
+  borderRadius: 999,
+  padding: '.42rem .68rem',
+  border: '1px solid rgba(180,83,9,.24)',
+  background: '#fff',
+  color: '#92400e',
+  fontSize: '.78rem',
+  fontWeight: 800,
+  cursor: 'pointer',
 }

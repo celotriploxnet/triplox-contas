@@ -109,6 +109,10 @@ function displayValue(value: string) {
   return value
 }
 
+function dataOuTraco(value: string) {
+  return value && value !== '-' ? value : '-'
+}
+
 function yesNo(value: string) {
   const normalized = normalizeHeader(value)
   if (['s', 'sim', '1', 'true', 'x'].includes(normalized)) return 'Sim'
@@ -369,9 +373,9 @@ export default function InformacoesGerenciaisPage() {
               <div style={gridStyle}>
                 <DataField label="Inauguração" value={displayValue(selected.inauguracao)} />
                 <DataField label="Data certificação" value={displayValue(selected.certificacao)} />
-                <DataField label="Tablet retirado" value={displayValue(selected.retiradaTablet)} />
+                <DataField label="Tablet retirado" value={dataOuTraco(selected.retiradaTablet)} />
                 <DataField label="Data última transação" value={displayValue(selected.ultimaTransacao)} />
-                <DataField label="Retirada do equipamento" value={displayValue(selected.retiradaEquipamento)} />
+                <DataField label="Retirada do equipamento" value={dataOuTraco(selected.retiradaEquipamento)} />
               </div>
             </DataSection>
 
