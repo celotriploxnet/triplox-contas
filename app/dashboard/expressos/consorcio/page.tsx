@@ -3,11 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { onAuthStateChanged } from 'firebase/auth'
+import { doc, getDoc } from 'firebase/firestore'
 import { getBytes, ref, uploadBytes } from 'firebase/storage'
 import { Check, Pencil, X } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
-import { auth, storage } from '@/lib/firebase'
+import { auth, db, storage } from '@/lib/firebase'
 
 const ADMIN_EMAIL = 'marcelo@treinexpresso.com.br'
 const CONSORCIO_PATH = 'consorcio/consorcios-liberados.xlsx'
@@ -21,6 +22,8 @@ type ConsorcioRow = {
   telefone: string
   email: string
   cnpj: string
+  ultimaAlteracaoPor: string
+  ultimaAlteracaoEm: string
 }
 
 type ContactDraft = Pick<ConsorcioRow, 'cpfUsuario' | 'dataNascimento' | 'telefone' | 'email'>
@@ -67,6 +70,20 @@ function formatCpfDraft(value: unknown) {
 function normalizeCnpj(value: unknown) {
   const digits = text(value).replace(/\D/g, '')
   return digits ? digits.padStart(14, '0') : ''
+}
+
+function formatCnpj(value: unknown) {
+  const rawDigits = text(value).replace(/\D/g, '')
+  if (!rawDigits) return ''
+  const digits = rawDigits.length < 14 ? rawDigits.padStart(14, '0') : rawDigits
+  if (digits.length !== 14) return text(value)
+  return digits.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5')
+}
+
+function formatAuditDate(value: unknown) {
+  const date = new Date(text(value))
+  if (Number.isNaN(date.getTime())) return ''
+  return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(date)
 }
 
 function normalizeBirthDate(value: unknown) {
@@ -131,6 +148,8 @@ function readConsorcio(bytes: Uint8Array | ArrayBuffer) {
       telefone: formatPhone(recordValue(record, 'Telefone', 'TelefoneResponsavel')),
       email: text(recordValue(record, 'Email', 'E-mail')),
       cnpj: normalizeCnpj(recordValue(record, 'CNPJ')),
+      ultimaAlteracaoPor: text(recordValue(record, 'UltimaAlteracaoPor', 'Ultima Alteracao Por')),
+      ultimaAlteracaoEm: text(recordValue(record, 'UltimaAlteracaoEm', 'Ultima Alteracao Em')),
     }
   })
 
@@ -191,6 +210,8 @@ function mergeExistingAccessData(bytes: Uint8Array, previousRows: ConsorcioRow[]
   const birthColumn = ensureSheetColumn(sheet, ['DataNascimento', 'Data de Nascimento', 'Nascimento'], 'DataNascimento')
   const phoneColumn = ensureSheetColumn(sheet, ['Telefone', 'TelefoneResponsavel'], 'Telefone')
   const emailColumn = ensureSheetColumn(sheet, ['Email', 'E-mail'], 'Email')
+  const editedByColumn = ensureSheetColumn(sheet, ['UltimaAlteracaoPor', 'Ultima Alteracao Por'], 'UltimaAlteracaoPor')
+  const editedAtColumn = ensureSheetColumn(sheet, ['UltimaAlteracaoEm', 'Ultima Alteracao Em'], 'UltimaAlteracaoEm')
 
   const previousByKey = new Map(previousRows.filter((row) => row.chave).map((row) => [row.chave, row]))
   const previousByCnpj = new Map(previousRows.filter((row) => row.cnpj).map((row) => [row.cnpj, row]))
@@ -214,11 +235,21 @@ function mergeExistingAccessData(bytes: Uint8Array, previousRows: ConsorcioRow[]
     if (!text(phoneCell?.v) && previous.telefone) setSheetText(sheet, row, phoneColumn, previous.telefone)
     const emailCell = sheet[XLSX.utils.encode_cell({ r: row, c: emailColumn })]
     if (!text(emailCell?.v) && previous.email) setSheetText(sheet, row, emailColumn, previous.email)
+    const editedByCell = sheet[XLSX.utils.encode_cell({ r: row, c: editedByColumn })]
+    if (!text(editedByCell?.v) && previous.ultimaAlteracaoPor) setSheetText(sheet, row, editedByColumn, previous.ultimaAlteracaoPor)
+    const editedAtCell = sheet[XLSX.utils.encode_cell({ r: row, c: editedAtColumn })]
+    if (!text(editedAtCell?.v) && previous.ultimaAlteracaoEm) setSheetText(sheet, row, editedAtColumn, previous.ultimaAlteracaoEm)
   }
   return serializeWorkbook(workbook)
 }
 
-function updateContactInWorkbook(bytes: Uint8Array, rowData: ConsorcioRow, draft: ContactDraft) {
+function updateContactInWorkbook(
+  bytes: Uint8Array,
+  rowData: ConsorcioRow,
+  draft: ContactDraft,
+  editedBy: string,
+  editedAt: string
+) {
   const workbook = XLSX.read(bytes, { type: 'array' })
   const sheet = workbook.Sheets[workbook.SheetNames[0]]
   if (!sheet) throw new Error('A planilha não contém uma aba com dados.')
@@ -231,6 +262,8 @@ function updateContactInWorkbook(bytes: Uint8Array, rowData: ConsorcioRow, draft
   const birthColumn = ensureSheetColumn(sheet, ['DataNascimento', 'Data de Nascimento', 'Nascimento'], 'DataNascimento')
   const phoneColumn = ensureSheetColumn(sheet, ['Telefone', 'TelefoneResponsavel'], 'Telefone')
   const emailColumn = ensureSheetColumn(sheet, ['Email', 'E-mail'], 'Email')
+  const editedByColumn = ensureSheetColumn(sheet, ['UltimaAlteracaoPor', 'Ultima Alteracao Por'], 'UltimaAlteracaoPor')
+  const editedAtColumn = ensureSheetColumn(sheet, ['UltimaAlteracaoEm', 'Ultima Alteracao Em'], 'UltimaAlteracaoEm')
 
   const lastRow = XLSX.utils.decode_range(sheet['!ref'] || 'A1').e.r
   let targetRow = -1
@@ -250,11 +283,13 @@ function updateContactInWorkbook(bytes: Uint8Array, rowData: ConsorcioRow, draft
       }
     }
   }
-  if (targetRow < 0) throw new Error('Não consegui localizar a loja na base atual para salvar o CPF.')
+  if (targetRow < 0) throw new Error('Não consegui localizar a loja na base atual para salvar os dados.')
   setSheetText(sheet, targetRow, cpfColumn, draft.cpfUsuario.replace(/\D/g, ''))
   setSheetText(sheet, targetRow, birthColumn, normalizeBirthDate(draft.dataNascimento))
   setSheetText(sheet, targetRow, phoneColumn, draft.telefone)
   setSheetText(sheet, targetRow, emailColumn, draft.email)
+  setSheetText(sheet, targetRow, editedByColumn, editedBy)
+  setSheetText(sheet, targetRow, editedAtColumn, editedAt)
   return serializeWorkbook(workbook)
 }
 
@@ -273,6 +308,7 @@ export default function ConsorcioPage() {
   const [editingKey, setEditingKey] = useState('')
   const [editDraft, setEditDraft] = useState<ContactDraft | null>(null)
   const [savingKey, setSavingKey] = useState('')
+  const [currentUserName, setCurrentUserName] = useState('')
   const baseBytesRef = useRef<Uint8Array | null>(null)
 
   async function loadData() {
@@ -385,6 +421,8 @@ export default function ConsorcioPage() {
     setError('')
     setInfo('Salvando alterações…')
     try {
+      const editedAt = new Date().toISOString()
+      const editedBy = currentUserName || text(auth.currentUser?.displayName) || text(auth.currentUser?.email) || 'Usuário do portal'
       const valuesToSave: ContactDraft = {
         ...editDraft,
         cpfUsuario: cpf,
@@ -392,7 +430,7 @@ export default function ConsorcioPage() {
         telefone: text(editDraft.telefone),
         email: text(editDraft.email),
       }
-      const updatedBytes = updateContactInWorkbook(baseBytesRef.current, row, valuesToSave)
+      const updatedBytes = updateContactInWorkbook(baseBytesRef.current, row, valuesToSave, editedBy, editedAt)
       const updatedBlob = new Blob([updatedBytes.buffer as ArrayBuffer], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       })
@@ -408,6 +446,8 @@ export default function ConsorcioPage() {
               dataNascimento: valuesToSave.dataNascimento,
               telefone: formatPhone(valuesToSave.telefone),
               email: valuesToSave.email,
+              ultimaAlteracaoPor: editedBy,
+              ultimaAlteracaoEm: editedAt,
             }
           : item
       ))
@@ -461,16 +501,31 @@ export default function ConsorcioPage() {
   }
 
   useEffect(() => {
+    let active = true
     const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (!active) return
       setCheckingAuth(false)
       if (!user) {
+        setCurrentUserName('')
         router.push('/login')
         return
       }
+      const fallbackName = text(user.displayName) || text(user.email?.split('@')[0]) || 'Usuário do portal'
+      setCurrentUserName(fallbackName)
       setIsAdmin((user.email || '').toLowerCase() === ADMIN_EMAIL.toLowerCase())
+      void getDoc(doc(db, 'users', user.uid)).then((profile) => {
+        if (!active || auth.currentUser?.uid !== user.uid) return
+        const profileName = text(profile.data()?.nome)
+        if (profileName) setCurrentUserName(profileName)
+      }).catch((cause: unknown) => {
+        console.warn('Não consegui carregar o nome do perfil para o histórico de alterações:', cause)
+      })
       void loadData()
     })
-    return () => unsubscribe()
+    return () => {
+      active = false
+      unsubscribe()
+    }
     // loadData is intentionally called once when the authenticated user is known.
   }, [router])
 
@@ -482,10 +537,12 @@ export default function ConsorcioPage() {
   const visibleRows = useMemo(() => {
     const needle = search.trim().toLocaleLowerCase('pt-BR')
     if (!needle) return rows
-    return rows.filter((row) =>
-      `${row.nomeEmpresa} ${row.codigoUsuario} ${row.cpfUsuario} ${row.dataNascimento} ${row.chave} ${row.telefone} ${row.email}`
-        .toLocaleLowerCase('pt-BR').includes(needle)
-    )
+    const digits = needle.replace(/\D/g, '')
+    return rows.filter((row) => {
+      const searchable = `${row.nomeEmpresa} ${row.codigoUsuario} ${row.cpfUsuario} ${row.dataNascimento} ${row.chave} ${row.cnpj} ${row.telefone} ${row.email}`
+        .toLocaleLowerCase('pt-BR')
+      return searchable.includes(needle) || (digits.length >= 3 && row.cnpj.includes(digits))
+    })
   }, [rows, search])
 
   return (
@@ -553,8 +610,8 @@ export default function ConsorcioPage() {
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Buscar empresa, CPF, código, telefone ou e-mail"
-            aria-label="Buscar empresa, CPF, código, telefone ou e-mail"
+            placeholder="Buscar empresa, CPF, CNPJ, código, telefone ou e-mail"
+            aria-label="Buscar empresa, CPF, CNPJ, código, telefone ou e-mail"
             style={{ flex: '1 1 260px', maxWidth: 480 }}
           />
         </div>
@@ -601,6 +658,11 @@ export default function ConsorcioPage() {
                         <span>Editar</span>
                       </button>
                     )}
+                  </div>
+
+                  <div>
+                    <span style={fieldLabelStyle}>CNPJ</span>
+                    <strong style={{ display: 'block' }}>{formatCnpj(row.cnpj) || 'Não informado'}</strong>
                   </div>
 
                   <div>
@@ -689,6 +751,13 @@ export default function ConsorcioPage() {
                     )}
                   </div>
 
+                  {(row.ultimaAlteracaoPor || row.ultimaAlteracaoEm) && (
+                    <p style={auditNoteStyle}>
+                      Última alteração realizada por {row.ultimaAlteracaoPor || 'usuário'}
+                      {formatAuditDate(row.ultimaAlteracaoEm) ? ` em ${formatAuditDate(row.ultimaAlteracaoEm)}` : ''}
+                    </p>
+                  )}
+
                   {isEditing && rowDraft ? (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '.5rem', marginTop: '.25rem' }}>
                       <button
@@ -735,6 +804,12 @@ export default function ConsorcioPage() {
 }
 
 const fieldLabelStyle = { color: 'rgba(16,16,24,.58)', fontSize: '.8rem', display: 'block', marginBottom: '.15rem' }
+const auditNoteStyle = {
+  margin: '.15rem 0 0',
+  color: 'rgba(16,16,24,.55)',
+  fontSize: '.72rem',
+  lineHeight: 1.35,
+}
 const editIconButtonStyle = {
   border: '1px solid rgba(15,15,25,.18)',
   background: '#fff',
