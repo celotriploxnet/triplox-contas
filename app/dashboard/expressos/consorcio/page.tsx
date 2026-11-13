@@ -502,8 +502,7 @@ export default function ConsorcioPage() {
     }
   }
 
-  async function copiarSolicitacaoMatriz(row: ConsorcioRow) {
-    if (!isAdmin) return
+  function enviarSolicitacaoMatriz(row: ConsorcioRow) {
     const mensagem = [
       '🏢 *Solicitação de atualização cadastral*',
       '',
@@ -520,14 +519,11 @@ export default function ConsorcioPage() {
       'Obrigado!',
     ].join('\n')
 
-    try {
-      await navigator.clipboard.writeText(mensagem)
-      setInfo('Solicitação para a matriz copiada. Agora é só colar na mensagem.')
-      setError('')
-    } catch (cause) {
-      console.error('Não foi possível copiar a solicitação para a matriz:', cause)
-      setError('Não consegui copiar a solicitação. Verifique a permissão de área de transferência do navegador.')
-    }
+    const numeroWhatsApp = '5571981284289'
+    const url = `https://wa.me/${numeroWhatsApp}?text=${encodeURIComponent(mensagem)}`
+    window.open(url, '_blank', 'noopener,noreferrer')
+    setInfo('Solicitação preparada no WhatsApp para envio à matriz.')
+    setError('')
   }
 
   useEffect(() => {
@@ -823,16 +819,14 @@ export default function ConsorcioPage() {
                       >
                         📤 Copiar para WhatsApp
                       </button>
-                      {isAdmin && (
-                        <button
-                          type="button"
-                          onClick={() => void copiarSolicitacaoMatriz(row)}
-                          title="Copiar solicitação de atualização dos dados para a matriz"
-                          style={secondaryButtonStyle}
-                        >
-                          🏢 Enviar para matriz
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => enviarSolicitacaoMatriz(row)}
+                        title="Preparar solicitação de atualização dos dados no WhatsApp da matriz"
+                        style={secondaryButtonStyle}
+                      >
+                        🏢 Enviar para matriz
+                      </button>
                     </div>
                   )}
                 </article>
