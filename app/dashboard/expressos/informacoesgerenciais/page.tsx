@@ -117,6 +117,11 @@ function yesNo(value: string) {
   return displayValue(value)
 }
 
+function simOuTraco(value: string) {
+  const normalized = normalizeHeader(value)
+  return normalized === 's' || normalized === 'sim' ? 'Sim' : '-'
+}
+
 function formatCnpj(value: string) {
   const digits = value.replace(/\D/g, '')
   if (digits.length !== 14) return displayValue(value)
@@ -354,9 +359,9 @@ export default function InformacoesGerenciaisPage() {
 
             <DataSection title="Perfil de atendimento" icon={<Building2 size={19} />}>
               <div style={gridStyle}>
-                <DataField label="Avançado?" value={yesNo(selected.avancado)} />
-                <DataField label="Presença?" value={yesNo(selected.presenca)} />
-                <DataField label="Órgão pagador?" value={yesNo(selected.orgPagador)} />
+                <DataField label="Avançado?" value={simOuTraco(selected.avancado)} />
+                <DataField label="Presença?" value={simOuTraco(selected.presenca)} />
+                <DataField label="Órgão pagador?" value={simOuTraco(selected.orgPagador)} />
               </div>
             </DataSection>
 
