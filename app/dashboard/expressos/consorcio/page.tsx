@@ -49,6 +49,13 @@ function cpfFormat(value: unknown) {
   return digits.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4')
 }
 
+function cpfMask(value: unknown) {
+  const rawDigits = text(value).replace(/\D/g, '')
+  if (!rawDigits) return ''
+  const digits = rawDigits.length < 11 ? rawDigits.padStart(11, '0') : rawDigits
+  return digits.length === 11 ? `${digits.slice(0, 3)}.xxx.xxx-xx` : 'xxx.xxx.xxx-xx'
+}
+
 function formatCpfDraft(value: unknown) {
   const digits = text(value).replace(/\D/g, '').slice(0, 11)
   if (digits.length <= 3) return digits
@@ -614,7 +621,7 @@ export default function ConsorcioPage() {
                         aria-label={`CPF do responsável da loja ${row.nomeEmpresa}`}
                       />
                     ) : (
-                      <strong style={{ display: 'block' }}>{row.cpfUsuario || 'CPF não cadastrado'}</strong>
+                      <strong style={{ display: 'block' }}>{cpfMask(row.cpfUsuario) || 'CPF não cadastrado'}</strong>
                     )}
                   </div>
 
