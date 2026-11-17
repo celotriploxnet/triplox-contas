@@ -36,6 +36,13 @@ export default function ExpressosMenuPage() {
       pill: 'Produção',
     },
     {
+      title: '📑 Consignados pendentes',
+      desc: 'Agrupe contratos pendentes por agência e consulte os Expressos com maior produção de consignado.',
+      href: '/dashboard/expressos/consignados-pendentes',
+      enabled: true,
+      pill: 'Produção',
+    },
+    {
       title: '🚀 Acelerador (próximos da faixa)',
       desc: 'Ranking dos expressos mais próximos de subir o percentual.',
       href: '/dashboard/expressos/acelerador',

@@ -1859,6 +1859,22 @@ Maiores informações favor entrar em contato com nossa equipe.\n\nChave Loja: $
         </button>
 
         <button
+          type="button"
+          onClick={() => router.push('/dashboard/expressos/consignados-pendentes')}
+          style={{
+            border: '1px solid rgba(15,15,25,.18)',
+            background: '#fff',
+            color: 'rgba(16,16,24,.9)',
+            borderRadius: 999,
+            padding: '.65rem .95rem',
+            fontWeight: 800,
+            cursor: 'pointer',
+          }}
+        >
+          📑 Consignados pendentes
+        </button>
+
+        <button
           className="btn-primary"
           onClick={isAdmin ? loadCsv : recarregarTela}
           disabled={loading || checkingAuth}
