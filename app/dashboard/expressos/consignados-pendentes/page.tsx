@@ -429,7 +429,12 @@ export default function ConsignadosPendentesPage() {
                 <span style={{ width: 38, height: 38, display: 'grid', placeItems: 'center', borderRadius: 12, background: 'rgba(200,16,46,.09)', color: '#c8102e' }}><MapPin size={20} /></span>
                 <div style={{ flex: '1 1 180px' }}>
                   <h2 style={{ margin: 0, fontSize: '1.15rem' }}>Agência {grupo.agencia}</h2>
-                  <span className="p-muted" style={{ fontSize: '.82rem' }}>{grupo.pendencias.length} {grupo.pendencias.length === 1 ? 'pendência' : 'pendências'}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '.3rem .65rem', marginTop: '.15rem' }}>
+                    <span className="p-muted" style={{ fontSize: '.82rem' }}>{grupo.pendencias.length} {grupo.pendencias.length === 1 ? 'pendência' : 'pendências'}</span>
+                    <span style={{ color: '#92400e', fontSize: '.76rem', lineHeight: 1.4 }}>
+                      🔎 Confira se algum Expresso desta agência realizou contrato na data indicada para identificar com mais precisão o possível responsável.
+                    </span>
+                  </div>
                 </div>
                 <Pill>{formatCurrency(grupo.pendencias.reduce((sum, row) => sum + row.valorContrato, 0))} pendente</Pill>
               </div>
