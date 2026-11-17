@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { onAuthStateChanged } from 'firebase/auth'
 import { collection, getDocs } from 'firebase/firestore'
 import { getBytes, getMetadata, ref, uploadBytes } from 'firebase/storage'
-import { ArrowLeft, CalendarDays, CircleAlert, Eye, EyeOff, FileSpreadsheet, MapPin, RefreshCw, Search, TrendingUp, Upload } from 'lucide-react'
+import { ArrowLeft, CalendarDays, CircleAlert, Copy, Eye, EyeOff, FileSpreadsheet, MapPin, RefreshCw, Search, TrendingUp, Upload } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 import { auth, db, storage } from '@/lib/firebase'
@@ -163,6 +163,11 @@ function cpfMascarado(value: string) {
 
 function cpfCompleto(value: string) {
   return value.length === 11 ? value.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4') : 'CPF não informado'
+}
+
+function cpfUltimosCinco(value: string) {
+  if (value.length !== 11) return 'CPF não informado'
+  return `***.***.${value.slice(6, 9)}-${value.slice(9)}`
 }
 
 function tipoContrato(value: string) {
@@ -331,6 +336,29 @@ export default function ConsignadosPendentesPage() {
     })
   }
 
+  async function copiarPendenciaWhatsApp(row: Pendencia) {
+    const mensagem = [
+      '📄 *Contrato consignado com pendência*',
+      '',
+      `🏦 *Agência:* ${row.agencia}`,
+      `💰 *Valor do contrato:* ${formatCurrency(row.valorContrato)}`,
+      `📅 *Data do contrato:* ${row.dataContrato || 'Não informada'}`,
+      `🔖 *Tipo:* ${tipoContrato(row.tipo)}`,
+      `🪪 *CPF do cliente:* ${cpfUltimosCinco(row.cpfCliente)}`,
+      row.motivo ? `⚠️ *Motivo:* ${row.motivo}` : '',
+    ].filter(Boolean).join('\n')
+
+    try {
+      await navigator.clipboard.writeText(mensagem)
+      setInfo('Dados da pendência copiados ✅ Agora é só colar no WhatsApp.')
+      setError('')
+    } catch (cause) {
+      console.error('Não foi possível copiar a pendência para o WhatsApp:', cause)
+      setError('Não consegui copiar os dados. Verifique a permissão de área de transferência do navegador.')
+      setInfo('')
+    }
+  }
+
   return (
     <main style={{ display: 'grid', gap: '1rem', maxWidth: 1250, margin: '0 auto', paddingBottom: '2rem' }}>
       <header className="card" style={{ display: 'grid', gap: '.8rem', padding: 'clamp(1rem, 3vw, 1.5rem)', background: 'linear-gradient(135deg, #fff 0%, #fff7f7 100%)' }}>
@@ -424,6 +452,14 @@ export default function ConsignadosPendentesPage() {
                           <span style={{ fontSize: '.72rem', color: '#64748b' }}>{cpfVisible ? 'Ocultar' : 'Toque para revelar'}</span>
                         </button>
                         {row.motivo && <span style={{ fontSize: '.82rem', lineHeight: 1.4 }}><b>Motivo:</b> {row.motivo}</span>}
+                        <button
+                          type="button"
+                          onClick={() => void copiarPendenciaWhatsApp(row)}
+                          title="Copiar os dados desta pendência para enviar pelo WhatsApp"
+                          style={{ ...secondaryButtonStyle, justifySelf: 'start', marginTop: '.1rem' }}
+                        >
+                          <Copy size={15} /> Copiar para WhatsApp
+                        </button>
                       </article>
                     )
                   })}
