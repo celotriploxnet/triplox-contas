@@ -24,6 +24,8 @@ type ConsorcioRow = {
   cnpj: string
   ultimaAlteracaoPor: string
   ultimaAlteracaoEm: string
+  primeiroAcessoETreinamentoPor: string
+  primeiroAcessoETreinamentoEm: string
 }
 
 type ContactDraft = Pick<ConsorcioRow, 'cpfUsuario' | 'dataNascimento' | 'telefone' | 'email'>
@@ -150,6 +152,8 @@ function readConsorcio(bytes: Uint8Array | ArrayBuffer) {
       cnpj: normalizeCnpj(recordValue(record, 'CNPJ')),
       ultimaAlteracaoPor: text(recordValue(record, 'UltimaAlteracaoPor', 'Ultima Alteracao Por')),
       ultimaAlteracaoEm: text(recordValue(record, 'UltimaAlteracaoEm', 'Ultima Alteracao Em')),
+      primeiroAcessoETreinamentoPor: text(recordValue(record, 'PrimeiroAcessoETreinamentoPor')),
+      primeiroAcessoETreinamentoEm: text(recordValue(record, 'PrimeiroAcessoETreinamentoEm')),
     }
   })
 
@@ -212,6 +216,8 @@ function mergeExistingAccessData(bytes: Uint8Array, previousRows: ConsorcioRow[]
   const emailColumn = ensureSheetColumn(sheet, ['Email', 'E-mail'], 'Email')
   const editedByColumn = ensureSheetColumn(sheet, ['UltimaAlteracaoPor', 'Ultima Alteracao Por'], 'UltimaAlteracaoPor')
   const editedAtColumn = ensureSheetColumn(sheet, ['UltimaAlteracaoEm', 'Ultima Alteracao Em'], 'UltimaAlteracaoEm')
+  const firstAccessByColumn = ensureSheetColumn(sheet, ['PrimeiroAcessoETreinamentoPor'], 'PrimeiroAcessoETreinamentoPor')
+  const firstAccessAtColumn = ensureSheetColumn(sheet, ['PrimeiroAcessoETreinamentoEm'], 'PrimeiroAcessoETreinamentoEm')
 
   const previousByKey = new Map(previousRows.filter((row) => row.chave).map((row) => [row.chave, row]))
   const previousByCnpj = new Map(previousRows.filter((row) => row.cnpj).map((row) => [row.cnpj, row]))
@@ -239,6 +245,14 @@ function mergeExistingAccessData(bytes: Uint8Array, previousRows: ConsorcioRow[]
     if (!text(editedByCell?.v) && previous.ultimaAlteracaoPor) setSheetText(sheet, row, editedByColumn, previous.ultimaAlteracaoPor)
     const editedAtCell = sheet[XLSX.utils.encode_cell({ r: row, c: editedAtColumn })]
     if (!text(editedAtCell?.v) && previous.ultimaAlteracaoEm) setSheetText(sheet, row, editedAtColumn, previous.ultimaAlteracaoEm)
+    const firstAccessByCell = sheet[XLSX.utils.encode_cell({ r: row, c: firstAccessByColumn })]
+    if (!text(firstAccessByCell?.v) && previous.primeiroAcessoETreinamentoPor) {
+      setSheetText(sheet, row, firstAccessByColumn, previous.primeiroAcessoETreinamentoPor)
+    }
+    const firstAccessAtCell = sheet[XLSX.utils.encode_cell({ r: row, c: firstAccessAtColumn })]
+    if (!text(firstAccessAtCell?.v) && previous.primeiroAcessoETreinamentoEm) {
+      setSheetText(sheet, row, firstAccessAtColumn, previous.primeiroAcessoETreinamentoEm)
+    }
   }
   return serializeWorkbook(workbook)
 }
@@ -293,6 +307,45 @@ function updateContactInWorkbook(
   return serializeWorkbook(workbook)
 }
 
+function updateFirstAccessInWorkbook(bytes: Uint8Array, rowData: ConsorcioRow, markedBy: string, markedAt: string) {
+  const workbook = XLSX.read(bytes, { type: 'array' })
+  const sheet = workbook.Sheets[workbook.SheetNames[0]]
+  if (!sheet) throw new Error('A planilha não contém uma aba com dados.')
+  const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1')
+  const headerRow = range.s.r
+  const keyColumn = sheetColumn(sheet, ['CHAVE_LOJA'])
+  const cnpjColumn = sheetColumn(sheet, ['CNPJ'])
+  if (keyColumn < 0) throw new Error('Não encontrei a coluna CHAVE_LOJA na base atual.')
+  const markedByColumn = ensureSheetColumn(sheet, ['PrimeiroAcessoETreinamentoPor'], 'PrimeiroAcessoETreinamentoPor')
+  const markedAtColumn = ensureSheetColumn(sheet, ['PrimeiroAcessoETreinamentoEm'], 'PrimeiroAcessoETreinamentoEm')
+
+  const lastRow = XLSX.utils.decode_range(sheet['!ref'] || 'A1').e.r
+  let targetRow = -1
+  for (let row = headerRow + 1; row <= lastRow; row += 1) {
+    const keyCell = sheet[XLSX.utils.encode_cell({ r: row, c: keyColumn })]
+    if (rowData.chave && storeKey(keyCell?.v) === rowData.chave) {
+      targetRow = row
+      break
+    }
+  }
+  if (targetRow < 0 && rowData.cnpj && cnpjColumn >= 0) {
+    for (let row = headerRow + 1; row <= lastRow; row += 1) {
+      const cnpjCell = sheet[XLSX.utils.encode_cell({ r: row, c: cnpjColumn })]
+      if (normalizeCnpj(cnpjCell?.v) === rowData.cnpj) {
+        targetRow = row
+        break
+      }
+    }
+  }
+  if (targetRow < 0) throw new Error('Não consegui localizar a loja na base atual para registrar o primeiro acesso.')
+
+  const currentMarkedAt = sheet[XLSX.utils.encode_cell({ r: targetRow, c: markedAtColumn })]
+  if (text(currentMarkedAt?.v)) throw new Error('O primeiro acesso já foi confirmado para este Expresso.')
+  setSheetText(sheet, targetRow, markedByColumn, markedBy)
+  setSheetText(sheet, targetRow, markedAtColumn, markedAt)
+  return serializeWorkbook(workbook)
+}
+
 export default function ConsorcioPage() {
   const router = useRouter()
   const fileInput = useRef<HTMLInputElement>(null)
@@ -308,6 +361,8 @@ export default function ConsorcioPage() {
   const [editingKey, setEditingKey] = useState('')
   const [editDraft, setEditDraft] = useState<ContactDraft | null>(null)
   const [savingKey, setSavingKey] = useState('')
+  const [confirmingFirstAccess, setConfirmingFirstAccess] = useState<ConsorcioRow | null>(null)
+  const [savingFirstAccessKey, setSavingFirstAccessKey] = useState('')
   const [currentUserName, setCurrentUserName] = useState('')
   const baseBytesRef = useRef<Uint8Array | null>(null)
 
@@ -463,6 +518,62 @@ export default function ConsorcioPage() {
       setInfo('')
     } finally {
       setSavingKey('')
+    }
+  }
+
+  async function saveFirstAccess(row: ConsorcioRow) {
+    const user = auth.currentUser
+    if (!user) {
+      setError('Entre no portal para registrar o primeiro acesso.')
+      return
+    }
+    if (row.primeiroAcessoETreinamentoEm) {
+      setConfirmingFirstAccess(null)
+      return
+    }
+    setSavingFirstAccessKey(row.chave)
+    setError('')
+    setInfo('Registrando a confirmação…')
+    try {
+      // Busca a versão mais recente para preservar alterações feitas por outras pessoas.
+      const latestBytes = new Uint8Array(await getBytes(ref(storage, CONSORCIO_PATH)))
+      const latestRows = readConsorcio(latestBytes)
+      const latestRow = latestRows.find((item) =>
+        (row.chave && item.chave === row.chave) || (row.cnpj && item.cnpj === row.cnpj)
+      )
+      if (!latestRow) throw new Error('Não encontrei este Expresso na base atual.')
+      if (latestRow.primeiroAcessoETreinamentoEm) {
+        setRows((current) => current.map((item) => item.chave === row.chave ? latestRow : item))
+        setConfirmingFirstAccess(null)
+        setInfo('Este primeiro acesso já foi confirmado por outro colaborador.')
+        return
+      }
+
+      const markedAt = new Date().toISOString()
+      const markedBy = currentUserName || text(user.displayName) || text(user.email) || 'Usuário do portal'
+      const updatedBytes = updateFirstAccessInWorkbook(latestBytes, latestRow, markedBy, markedAt)
+      const updatedBlob = new Blob([updatedBytes.buffer as ArrayBuffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      })
+      await uploadBytes(ref(storage, CONSORCIO_PATH), updatedBlob, {
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      })
+      baseBytesRef.current = updatedBytes
+      setRows((current) => current.map((item) => item.chave === row.chave
+        ? { ...item, primeiroAcessoETreinamentoPor: markedBy, primeiroAcessoETreinamentoEm: markedAt }
+        : item
+      ))
+      setConfirmingFirstAccess(null)
+      setInfo(`Primeiro acesso e conversa sobre o treinamento registrados para ${row.nomeEmpresa}.`)
+    } catch (cause: unknown) {
+      console.error('Falha ao registrar primeiro acesso do consórcio:', cause)
+      const failure = cause as { code?: string; message?: string }
+      setError(failure?.code === 'storage/unauthorized'
+        ? 'O Firebase Storage não autorizou registrar a confirmação. Verifique se a regra permite edição para usuários logados.'
+        : failure?.message || 'Não consegui registrar a confirmação. Atualize a página e tente novamente.')
+      setInfo('')
+    } finally {
+      setSavingFirstAccessKey('')
     }
   }
 
@@ -784,12 +895,33 @@ export default function ConsorcioPage() {
                     </p>
                   )}
 
+                  <div style={firstAccessPanelStyle}>
+                    {row.primeiroAcessoETreinamentoEm ? (
+                      <>
+                        <strong style={{ color: '#166534', fontSize: '.9rem' }}>✅ Primeiro acesso e treinamento confirmados</strong>
+                        <p style={{ ...auditNoteStyle, marginTop: '.25rem' }}>
+                          Marcado por {row.primeiroAcessoETreinamentoPor || 'usuário'}
+                          {formatAuditDate(row.primeiroAcessoETreinamentoEm) ? ` em ${formatAuditDate(row.primeiroAcessoETreinamentoEm)}` : ''}
+                        </p>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => { setConfirmingFirstAccess(row); setError(''); setInfo('') }}
+                        disabled={Boolean(savingKey) || Boolean(savingFirstAccessKey) || uploading || Boolean(editingKey)}
+                        style={{ ...firstAccessButtonStyle, opacity: savingFirstAccessKey ? 0.6 : 1 }}
+                      >
+                        {savingFirstAccessKey === row.chave ? 'Registrando…' : '✅ Marcar primeiro acesso'}
+                      </button>
+                    )}
+                  </div>
+
                   {isEditing && rowDraft ? (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '.5rem', marginTop: '.25rem' }}>
                       <button
                         type="button"
                         onClick={() => void saveContact(row)}
-                        disabled={Boolean(savingKey)}
+                        disabled={Boolean(savingKey) || Boolean(savingFirstAccessKey)}
                         style={{ ...secondaryButtonStyle, display: 'inline-flex', alignItems: 'center', gap: '.4rem', opacity: savingKey ? 0.6 : 1 }}
                       >
                         <Check size={16} aria-hidden="true" />
@@ -802,7 +934,7 @@ export default function ConsorcioPage() {
                           setEditDraft(null)
                           setError('')
                         }}
-                        disabled={Boolean(savingKey)}
+                        disabled={Boolean(savingKey) || Boolean(savingFirstAccessKey)}
                         style={{ ...secondaryButtonStyle, display: 'inline-flex', alignItems: 'center', gap: '.4rem' }}
                       >
                         <X size={16} aria-hidden="true" />
@@ -835,6 +967,47 @@ export default function ConsorcioPage() {
           </div>
         )}
       </div>
+
+      {confirmingFirstAccess && (
+        <div style={confirmationOverlayStyle} onMouseDown={(event) => {
+          if (event.target === event.currentTarget && !savingFirstAccessKey) setConfirmingFirstAccess(null)
+        }}>
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="first-access-dialog-title"
+            aria-describedby="first-access-dialog-description"
+            className="card"
+            style={confirmationDialogStyle}
+          >
+            <span className="pill">Confirmação necessária</span>
+            <h2 id="first-access-dialog-title" style={{ margin: 0, fontSize: '1.2rem' }}>Registrar primeiro acesso?</h2>
+            <p id="first-access-dialog-description" className="p-muted" style={{ margin: 0 }}>
+              Você confirma que realizou o primeiro acesso ao consórcio do Expresso <strong>{confirmingFirstAccess.nomeEmpresa}</strong> e conversou com o responsável sobre o treinamento?
+            </p>
+            <p className="p-muted" style={{ margin: 0 }}>Ao confirmar, seu nome e a data e o horário serão registrados.</p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', gap: '.6rem', marginTop: '.3rem' }}>
+              <button
+                type="button"
+                onClick={() => setConfirmingFirstAccess(null)}
+                disabled={Boolean(savingFirstAccessKey)}
+                style={secondaryButtonStyle}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => void saveFirstAccess(confirmingFirstAccess)}
+                disabled={Boolean(savingFirstAccessKey)}
+                className="btn-primary"
+                style={{ opacity: savingFirstAccessKey ? 0.7 : 1 }}
+              >
+                {savingFirstAccessKey ? 'Salvando…' : 'Sim, confirmei'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </section>
   )
 }
@@ -867,4 +1040,34 @@ const secondaryButtonStyle = {
   padding: '.65rem .95rem',
   fontWeight: 800,
   cursor: 'pointer',
+}
+const firstAccessPanelStyle = {
+  borderTop: '1px solid rgba(15,15,25,.1)',
+  paddingTop: '.65rem',
+  marginTop: '.1rem',
+}
+const firstAccessButtonStyle = {
+  border: '1px solid #b7e4c7',
+  background: '#f0fdf4',
+  color: '#166534',
+  borderRadius: 999,
+  padding: '.65rem .95rem',
+  fontWeight: 800,
+  cursor: 'pointer',
+  maxWidth: '100%',
+}
+const confirmationOverlayStyle = {
+  position: 'fixed' as const,
+  inset: 0,
+  zIndex: 1000,
+  background: 'rgba(16,16,24,.55)',
+  display: 'grid',
+  placeItems: 'center',
+  padding: '1rem',
+}
+const confirmationDialogStyle = {
+  width: 'min(100%, 480px)',
+  display: 'grid',
+  gap: '.85rem',
+  boxShadow: '0 24px 70px rgba(0,0,0,.24)',
 }
