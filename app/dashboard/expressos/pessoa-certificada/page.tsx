@@ -413,6 +413,11 @@ export default function PessoaCertificadaPage() {
     return () => unsub()
   }, [router])
 
+  useEffect(() => {
+    const chave = new URLSearchParams(window.location.search).get('chave')
+    if (chave) setQ(chave.replace(/\D/g, ''))
+  }, [])
+
   const term = q.trim().toLowerCase()
   const hasSearch = term.length > 0
 

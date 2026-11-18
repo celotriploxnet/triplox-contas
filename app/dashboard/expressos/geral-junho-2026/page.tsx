@@ -1796,6 +1796,12 @@ Maiores informações favor entrar em contato com nossa equipe.\n\nChave Loja: $
     router.push(`/dashboard/expressos/informacoesgerenciais?chave=${encodeURIComponent(normalizeStoreKey(r.chave))}`)
   }
 
+  function irParaPessoaCertificada(r: RowBase) {
+    const chave = normalizeStoreKey(r.chave)
+    if (!chave) return
+    router.push(`/dashboard/expressos/pessoa-certificada?chave=${encodeURIComponent(chave)}`)
+  }
+
   return (
     <section style={{ display: 'grid', gap: '1.25rem' }}>
       <div>
@@ -2312,7 +2318,34 @@ Maiores informações favor entrar em contato com nossa equipe.\n\nChave Loja: $
                     <div className="p-muted" style={{ fontSize: 12 }}>
                       dt_certificacao
                     </div>
-                    <div style={{ fontWeight: 900 }}>{r.dtCertificacao || '—'}</div>
+                    {certDate ? (
+                      <button
+                        type="button"
+                        onClick={() => irParaPessoaCertificada(r)}
+                        title={`Consultar pessoa certificada pela chave loja ${r.chave}`}
+                        aria-label={`Consultar pessoa certificada do Expresso ${r.nome} pela chave loja ${r.chave}`}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '.35rem',
+                          marginTop: '.2rem',
+                          padding: 0,
+                          border: 0,
+                          background: 'transparent',
+                          color: '#166534',
+                          font: 'inherit',
+                          fontWeight: 900,
+                          textAlign: 'left',
+                          textDecoration: 'underline',
+                          textUnderlineOffset: 3,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {r.dtCertificacao} · Consultar pessoa
+                      </button>
+                    ) : (
+                      <div style={{ fontWeight: 900 }}>{r.dtCertificacao || '—'}</div>
+                    )}
                   </div>
                 </div>
 
