@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { onAuthStateChanged } from 'firebase/auth'
 import { doc, getDoc } from 'firebase/firestore'
@@ -968,7 +969,7 @@ export default function ConsorcioPage() {
         )}
       </div>
 
-      {confirmingFirstAccess && (
+      {confirmingFirstAccess && typeof document !== 'undefined' && createPortal(
         <div style={confirmationOverlayStyle} onMouseDown={(event) => {
           if (event.target === event.currentTarget && !savingFirstAccessKey) setConfirmingFirstAccess(null)
         }}>
@@ -1006,7 +1007,8 @@ export default function ConsorcioPage() {
               </button>
             </div>
           </section>
-        </div>
+        </div>,
+        document.body
       )}
     </section>
   )
