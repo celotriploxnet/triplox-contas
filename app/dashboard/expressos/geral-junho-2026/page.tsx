@@ -2325,23 +2325,23 @@ Maiores informações favor entrar em contato com nossa equipe.\n\nChave Loja: $
                         title={`Consultar pessoa certificada pela chave loja ${r.chave}`}
                         aria-label={`Consultar pessoa certificada do Expresso ${r.nome} pela chave loja ${r.chave}`}
                         style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '.35rem',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'flex-start',
+                          gap: '.1rem',
                           marginTop: '.2rem',
                           padding: 0,
                           border: 0,
                           background: 'transparent',
-                          color: '#166534',
                           font: 'inherit',
-                          fontWeight: 900,
                           textAlign: 'left',
-                          textDecoration: 'underline',
-                          textUnderlineOffset: 3,
                           cursor: 'pointer',
                         }}
                       >
-                        {r.dtCertificacao} · Consultar pessoa
+                        <span style={{ color: '#166534', fontWeight: 900 }}>{r.dtCertificacao}</span>
+                        <span style={{ color: 'rgba(16,16,24,.55)', fontSize: '.72rem', fontWeight: 600 }}>
+                          Consultar pessoa certificada →
+                        </span>
                       </button>
                     ) : (
                       <div style={{ fontWeight: 900 }}>{r.dtCertificacao || '—'}</div>
