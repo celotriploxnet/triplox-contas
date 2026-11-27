@@ -36,6 +36,14 @@ function obter(registro: Registro, ...chaves: string[]) {
   return 0
 }
 
+function totalConsignado(registro: Registro) {
+  const total = obter(registro, 'vlrConsignadoTotal', 'vlr_consignado_total', 'valor consignado total', 'consignado total')
+  if (total) return total
+  return obter(registro, 'vlrConsignadoInss', 'vlr_consignado_inss', 'valor consignado inss') +
+    obter(registro, 'vlrConsignadoPub', 'vlr_consignado_pub', 'valor consignado publico', 'valor consignado público') +
+    obter(registro, 'vlrConsignadoPriv', 'vlr_consignado_priv', 'valor consignado privado')
+}
+
 function obterTexto(registro: Registro, ...chaves: string[]) {
   const campos = new Map(Object.entries(registro).map(([key, value]) => [normalizar(key), value]))
   for (const chave of chaves) {
@@ -129,7 +137,7 @@ function agregar(registros: Registro[]): Produto[] {
   return medidas.map((medida) => ({
     nome: medida.nome,
     unidade: medida.unidade,
-    anterior: registros.reduce((total, row) => total + obter(row, ...medida.chaves), 0),
+    anterior: registros.reduce((total, row) => total + (medida.nome === 'Consignado' ? totalConsignado(row) : obter(row, ...medida.chaves)), 0),
     atual: 0,
     ...(medida.extra ? { extraAnterior: registros.reduce((total, row) => total + obter(row, ...medida.extra!), 0), extraAtual: 0 } : {}),
   }))
@@ -171,6 +179,7 @@ function agregarAtual(produtosFechamento: Produto[], registrosAtuais: Registro[]
       if (produto.nome === 'Contas sem depósito' && obter(row, 'qtd_contas_sem_deposito', 'qtd contas sem deposito') === 0) {
         return total + Math.max(0, obter(row, 'qtd_contas', 'qtd contas') - obter(row, 'qtd_contas_com_deposito', 'qtd contas com deposito'))
       }
+      if (produto.nome === 'Consignado') return total + totalConsignado(row)
       return total + obter(row, ...(catalogo.get(produto.nome) || []))
     }, 0),
     ...(extraCatalogo.has(produto.nome) ? { extraAtual: registrosAtuais.reduce((total, row) => total + obter(row, ...(extraCatalogo.get(produto.nome) || [])), 0) } : {}),
