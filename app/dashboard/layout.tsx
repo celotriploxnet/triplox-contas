@@ -6,6 +6,8 @@ import { useEffect, useState } from 'react'
 import { onAuthStateChanged, signOut, User } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
 
+const ADMIN_EMAIL = 'marcelo@treinexpresso.com.br'
+
 function NavLink({ href, label }: { href: string; label: string }) {
   const pathname = usePathname()
   const active = pathname === href || pathname.startsWith(href + '/')
@@ -62,6 +64,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {/* ✅ MENU PRINCIPAL (ordem nova) */}
             <NavLink href="/dashboard" label="Início" />
             <NavLink href="/dashboard/expressos" label="Expressos" />
+            {user?.email?.trim().toLowerCase() === ADMIN_EMAIL && (
+              <NavLink href="/dashboard/expressos/analise-producao" label="Análise Produção" />
+            )}
             <NavLink href="/dashboard/treinamentos" label="Treinamentos" />
             <NavLink href="/dashboard/agenda" label="Agenda" />
             <NavLink href="/dashboard/baixa-empresa" label="Baixa" />
