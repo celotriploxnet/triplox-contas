@@ -1,8 +1,19 @@
 'use client'
 
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
+import { onAuthStateChanged } from 'firebase/auth'
+import { auth } from '@/lib/firebase'
+
+const ADMIN_EMAIL = 'marcelo@treinexpresso.com.br'
 
 export default function ExpressosMenuPage() {
+  const [emailUsuario, setEmailUsuario] = useState('')
+
+  useEffect(() => onAuthStateChanged(auth, (user) => {
+    setEmailUsuario(user?.email?.trim().toLowerCase() || '')
+  }), [])
+
   const cards = [
     // GERAL
     {
@@ -11,6 +22,14 @@ export default function ExpressosMenuPage() {
       href: '/dashboard/expressos/geral-junho-2026',
       enabled: true,
       pill: 'Geral',
+    },
+    {
+      title: '📈 Análise Geral da Produção',
+      desc: 'Compare a produção diária de todos os Expressos com o último fechamento e veja quais produtos cresceram ou caíram.',
+      href: '/dashboard/expressos/analise-producao',
+      enabled: true,
+      pill: 'Produção',
+      adminOnly: true,
     },
 
     // PRODUÇÃO
@@ -36,7 +55,7 @@ export default function ExpressosMenuPage() {
       pill: 'Produção',
     },
     {
-      title: '📑 Consignados pendentes',
+      title: '⏳ Consignado Pendente',
       desc: 'Agrupe contratos pendentes por agência e consulte os Expressos com maior produção de consignado.',
       href: '/dashboard/expressos/consignados-pendentes',
       enabled: true,
@@ -111,7 +130,7 @@ export default function ExpressosMenuPage() {
           gap: '1rem',
         }}
       >
-        {cards.map((card, i) => (
+        {cards.filter((card) => !('adminOnly' in card) || emailUsuario === ADMIN_EMAIL).map((card, i) => (
           <Link key={i} href={card.href} className="card">
             <div className="card-soft" style={{ padding: '1rem' }}>
               <span className="pill">{card.pill}</span>
