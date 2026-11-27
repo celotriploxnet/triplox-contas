@@ -416,7 +416,7 @@ export default function ConsignadoINSSSimulator() {
                   <span className={styles.offerText}>
                     <strong>{money(offer.available)}</strong>
                     <span>{offer.title}</span>
-                    {offer.balance ? <small>Saldo devedor: <b>{money(offer.balance)}</b> · Refinanciamento</small> : <small>Novo contrato consignado</small>}
+                    {offer.balance && <small>Saldo devedor: <b>{money(offer.balance)}</b></small>}
                   </span>
                   <span className={styles.offerChevron}>{selectedOfferId === offer.id ? '✓' : '›'}</span>
                 </button>
