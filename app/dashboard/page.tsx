@@ -535,6 +535,7 @@ export default function DashboardPage() {
     { href: '/dashboard/reportar', titulo: 'Reportar', descricao: 'Abrir chamado ou acompanhar problemas reportados.', detalhe: textoChamados, icone: '📕', categoria: 'Suporte' },
     { href: '/dashboard/simulador', titulo: 'Simulador de Comissão', descricao: 'Simular comissão de produtos e resultados.', icone: '🧮', categoria: 'Simuladores' },
     { href: '/dashboard/simulador/abertura-conta', titulo: 'Simulador Abertura de Conta', descricao: 'Treinar o fluxo completo de abertura de conta.', icone: '🏦', categoria: 'Simuladores' },
+    { href: '/dashboard/simulador/consignado-inss', titulo: 'Simulador Consignado INSS', descricao: 'Treinar a jornada do crédito consignado INSS, da validação à confirmação.', icone: '💳', categoria: 'Simuladores' },
   ]
 
   return (

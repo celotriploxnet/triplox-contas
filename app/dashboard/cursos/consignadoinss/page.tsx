@@ -142,6 +142,9 @@ export default function ConsignadoINSSPage() {
             >
               Abrir material completo
             </a>
+            <a className={styles.secondaryButton} href="/dashboard/simulador/consignado-inss">
+              Abrir simulador
+            </a>
           </div>
         </div>
 
