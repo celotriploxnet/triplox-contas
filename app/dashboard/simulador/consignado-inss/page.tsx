@@ -7,6 +7,7 @@ import styles from './ConsignadoINSSSimulator.module.css'
 
 type Step =
   | 'welcome'
+  | 'errors'
   | 'cpf'
   | 'unlock'
   | 'faceInfo'
@@ -199,7 +200,13 @@ export default function ConsignadoINSSSimulator() {
       <div className={styles.redBar} />
 
       <div className={styles.content}>
-        {step !== 'welcome' && step !== 'done' && (
+        {step === 'errors' && (
+          <div className={styles.errorBackRow}>
+            <button type="button" className={styles.backButton} onClick={() => goTo('welcome')}>← <span>Voltar ao simulador</span></button>
+          </div>
+        )}
+
+        {step !== 'welcome' && step !== 'done' && step !== 'errors' && (
           <div className={styles.topControls}>
             <button type="button" className={styles.backButton} onClick={back} aria-label="Voltar uma etapa">← <span>Voltar</span></button>
             <Progress stage={stage} />
@@ -255,10 +262,59 @@ export default function ConsignadoINSSSimulator() {
             </section>
 
             <div className={styles.centerActions}>
-              <button type="button" className={styles.primaryButton} onClick={() => goTo('cpf')}>Iniciar simulador <span>→</span></button>
+              <div className={styles.introActionRow}>
+                <button type="button" className={styles.primaryButton} onClick={() => goTo('cpf')}>Iniciar simulador <span>→</span></button>
+                <button type="button" className={styles.secondaryButton} onClick={() => goTo('errors')}>⚠️ Possíveis erros</button>
+              </div>
               <p>Etapas demonstrativas. Nenhum dado ou pedido será enviado ao banco.</p>
             </div>
           </section>
+        )}
+
+        {step === 'errors' && (
+          <Screen title="Possíveis erros e como orientar" subtitle="Se alguma destas mensagens aparecer, confira os pontos abaixo com o cliente antes de tentar novamente.">
+            <div className={styles.errorCases}>
+              <article className={styles.errorCase}>
+                <span className={styles.errorCaseIcon}>⛔</span>
+                <div>
+                  <span className={styles.sectionEyebrow}>Mensagem de elegibilidade</span>
+                  <h2>“Não é possível continuar a contratação”</h2>
+                  <p>O benefício pode não atender aos critérios para contratação do consignado INSS neste momento.</p>
+                  <ul>
+                    <li>Confira se a aposentadoria ou pensão já tem mais de 90 dias.</li>
+                    <li>Confirme se o benefício está desbloqueado para empréstimo no Meu INSS.</li>
+                  </ul>
+                </div>
+              </article>
+              <article className={styles.errorCase}>
+                <span className={styles.errorCaseIcon}>🔄</span>
+                <div>
+                  <span className={styles.sectionEyebrow}>Mensagem temporária</span>
+                  <h2>“Algo deu errado. Por favor, tente mais tarde.”</h2>
+                  <p>Peça ao cliente para acessar o aplicativo Bradesco com a própria conta e pesquisar por “Crédito Consignado INSS” ou pelo nome do serviço. Se o erro continuar, confira também os dados cadastrais e a prova de vida descritos abaixo.</p>
+                </div>
+              </article>
+            </div>
+
+            <section className={styles.regularizationPanel}>
+              <div className={styles.sectionHeading}>
+                <span className={styles.sectionEyebrow}>Orientação para regularizar</span>
+                <h2>O que verificar com o cliente</h2>
+              </div>
+              <ol className={styles.regularizationList}>
+                <li><span>1</span><p><strong>Benefício:</strong> confirme se está desbloqueado no Meu INSS e se já completou 90 dias, quando esse critério se aplicar.</p></li>
+                <li><span>2</span><p><strong>Cadastro na agência:</strong> confira se os dados da conta e do CPF estão atualizados. O endereço residencial cadastrado no banco deve ser o mesmo que consta no Meu INSS; mantenha apenas um endereço residencial atualizado.</p></li>
+                <li><span>3</span><p><strong>Prova de vida:</strong> verifique se está atualizada. Ela pode ser realizada no tablet quando essa opção estiver disponível na jornada.</p></li>
+                <li><span>4</span><p><strong>Nova tentativa:</strong> depois de concluir as atualizações, aguarde 24 horas e tente novamente.</p></li>
+              </ol>
+              <div className={styles.errorContactNote}><strong>Se o erro persistir</strong><span>Após os procedimentos e o prazo de espera, fale com nossa equipe para ajudar na verificação.</span></div>
+              <p className={styles.privacyNote}>O cliente deve acessar os próprios aplicativos e nunca compartilhar senha ou código de segurança.</p>
+            </section>
+
+            <div className={styles.footerActions}>
+              <button type="button" className={styles.primaryButton} onClick={() => goTo('welcome')}>Voltar ao início <span>→</span></button>
+            </div>
+          </Screen>
         )}
 
         {step === 'cpf' && (
