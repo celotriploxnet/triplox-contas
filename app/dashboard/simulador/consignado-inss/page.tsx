@@ -247,7 +247,7 @@ export default function ConsignadoINSSSimulator() {
               <div>
                 <span className={styles.sectionEyebrow}>Exemplo para treinamento</span>
                 <h2>Confira o tipo de conta do cliente</h2>
-                <p>O cartão de benefício é diferente da conta-corrente habilitada para esta jornada.</p>
+                <p>O cartão de benefício é diferente da conta-corrente habilitada para esta jornada. Com esse cartão, não é possível realizar o consignado por este canal. Você pode ofertar a abertura de uma conta-corrente e orientar o cliente a vincular o benefício a ela. Após a abertura da conta e o recebimento do primeiro pagamento nessa conta, ele já poderá fazer o consignado por este canal, sujeito às demais condições da operação.</p>
               </div>
               <IllustrativeBenefitCard />
             </section>
