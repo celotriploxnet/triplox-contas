@@ -93,6 +93,8 @@ export default function ConsignadoINSSSimulator() {
   const [customCalculated, setCustomCalculated] = useState(false)
   const [authorizeRetry, setAuthorizeRetry] = useState(false)
   const [authorizeCreditLimit, setAuthorizeCreditLimit] = useState(false)
+  const [reviewAccepted, setReviewAccepted] = useState(false)
+  const [showReviewCosts, setShowReviewCosts] = useState(false)
 
   const selectedOffer = offers.find((offer) => offer.id === selectedOfferId) || null
   const customAmount = parseMoney(customValue)
@@ -114,6 +116,10 @@ export default function ConsignadoINSSSimulator() {
   function goTo(next: Step) {
     setError('')
     setNotice('')
+    if (next === 'review') {
+      setReviewAccepted(false)
+      setShowReviewCosts(false)
+    }
     setStep(next)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -186,6 +192,8 @@ export default function ConsignadoINSSSimulator() {
     setCustomCalculated(false)
     setAuthorizeRetry(false)
     setAuthorizeCreditLimit(false)
+    setReviewAccepted(false)
+    setShowReviewCosts(false)
     goTo('welcome')
   }
 
@@ -489,21 +497,38 @@ export default function ConsignadoINSSSimulator() {
         {step === 'review' && (
           <Screen title="Peça para a pessoa conferir os dados" subtitle="Confira junto com o cliente as informações da proposta antes de continuar.">
             <div className={styles.reviewCard}>
-              <ReviewRow label="Nome completo" value={demoClient.name} />
-              <ReviewRow label="CPF" value={demoClient.cpf} />
-              <ReviewRow label="Conta de crédito" value={`Ag.: ${demoClient.agency} | C/C: ${demoClient.account}`} />
-              <ReviewRow label="Valor solicitado" value={money(customCalculated ? customAmount : selectedOffer?.available || 0)} />
-              <ReviewRow label="Valor bruto do empréstimo" value={money(customCalculated ? customAmount : selectedContractAmount)} />
-              {selectedOffer?.balance && !customCalculated && <ReviewRow label="Saldo devedor refinanciado" value={money(selectedOffer.balance)} />}
-              <ReviewRow label="Juros" value="1,85% ao mês · 24,60% ao ano" />
-              <ReviewRow label="Parcelas" value={`${customCalculated ? customInstallments : selectedOffer?.installments || 0} parcelas`} />
-              <ReviewRow label="Valor estimado da parcela" value={money(customCalculated ? customPayment : selectedOffer?.payment || 0)} />
-              <ReviewRow label="Total estimado das parcelas" value={money(customCalculated ? customTotal : selectedTotal)} />
-              <ReviewRow label="Vencimento da primeira parcela" value={customCalculated ? formatDate(firstDueDate) : formatDate(getFollowingDate())} />
-              <ReviewRow label="Vencimento da última parcela" value={customCalculated ? addMonths(firstDueDate, customInstallments - 1) : addMonths(getFollowingDate(), (selectedOffer?.installments || 1) - 1)} />
+              <div className={styles.reviewIdentity}>
+                <ReviewRow label="Nome completo" value={demoClient.name} />
+                <ReviewRow label="CPF" value={demoClient.cpf} />
+                <ReviewRow label="Conta de crédito" value={`Ag.: ${demoClient.agency} | C/C: ${demoClient.account}`} />
+              </div>
+              <div className={styles.reviewFinancials}>
+                <ReviewRow label="Valor solicitado" value={money(customCalculated ? customAmount : selectedOffer?.available || 0)} />
+                <ReviewRow label="Valor do empréstimo" value={`${money(customCalculated ? customAmount : selectedContractAmount)} · 100%`} />
+                {selectedOffer?.balance && !customCalculated && <ReviewRow label="Saldo devedor" value={money(selectedOffer.balance)} />}
+                <ReviewRow label="Parcelas" value={`${customCalculated ? customInstallments : selectedOffer?.installments || 0}`} />
+                <ReviewRow label="Valor da parcela" value={money(customCalculated ? customPayment : selectedOffer?.payment || 0)} />
+                <ReviewRow label="Total das parcelas" value={money(customCalculated ? customTotal : selectedTotal)} />
+                <ReviewRow label="Valor liberado estimado" value={money(customCalculated ? customAmount : selectedOffer?.available || 0)} />
+                <ReviewRow label="Vencimento da 1ª parcela" value={customCalculated ? formatDate(firstDueDate) : formatDate(getFollowingDate())} />
+                <ReviewRow label="Vencimento da última parcela" value={customCalculated ? addMonths(firstDueDate, customInstallments - 1) : addMonths(getFollowingDate(), (selectedOffer?.installments || 1) - 1)} />
+              </div>
+              <div className={styles.reviewCostDetails}>
+                <div><span>Taxa de juros</span><strong>1,85% ao mês | 24,60% ao ano</strong></div>
+                <div><span>CET estimado</span><strong>1,97% ao mês | 26,35% ao ano</strong></div>
+                <button type="button" className={styles.textButton} aria-expanded={showReviewCosts} onClick={() => setShowReviewCosts((current) => !current)}>{showReviewCosts ? 'Ver menos' : 'Ver mais'}</button>
+                {showReviewCosts && <p>O Custo Efetivo Total (CET) reúne juros, tarifas, tributos e demais encargos da operação. Os percentuais exibidos são ilustrativos; confira as condições apresentadas no canal oficial.</p>}
+                <a href="https://meubolsoemdia.com.br/" target="_blank" rel="noreferrer">Confira informações sobre juros e encargos ↗</a>
+              </div>
+              <div className={styles.reviewExplanations}>
+                <p>Para dicas sobre controle financeiro, peça à pessoa que acesse <a href="https://meubolsoemdia.com.br/" target="_blank" rel="noreferrer">meubolsoemdia.com.br</a>.</p>
+                <p>Ao contratar o empréstimo, o valor líquido aproximado será creditado na conta, considerando o desconto da parcela e as informações do último pagamento do benefício.</p>
+              </div>
             </div>
-            <div className={styles.attentionNotice}><strong>Confira com atenção</strong><span>Esta tela não substitui o resumo oficial do contrato. No atendimento real, confirme todos os dados exibidos no sistema antes de prosseguir.</span></div>
-            <FooterActions error={error} onContinue={() => goTo('finalFaceInfo')} continueLabel="Continuar para a última biometria" />
+            <div className={styles.attentionNotice}><strong>Confira com atenção</strong><span>Os valores e dados desta tela são exemplos de treinamento e não substituem o resumo oficial. No atendimento real, confira as condições exibidas no canal oficial.</span></div>
+            <label className={styles.checkRow}><input type="checkbox" checked={reviewAccepted} onChange={(event) => setReviewAccepted(event.target.checked)} /><span>Li e concordo com o produto e com as condições apresentadas.</span></label>
+            <FooterActions error={error} onContinue={() => reviewAccepted ? goTo('finalFaceInfo') : setError('Peça à pessoa para conferir as informações e confirmar a leitura antes de continuar.')} continueLabel="Continuar" disabled={!reviewAccepted} />
+            <div className={styles.actionStack}><button type="button" className={styles.secondaryButton} onClick={() => { setReviewAccepted(false); goTo('custom') }}>Refazer simulação</button></div>
           </Screen>
         )}
 
