@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { onAuthStateChanged } from 'firebase/auth'
-import { collectionGroup, getDocs, query, where } from 'firebase/firestore'
+import { doc, getDoc } from 'firebase/firestore'
 import { getBytes, ref } from 'firebase/storage'
 import { auth, db, storage } from '@/lib/firebase'
 import styles from './AnaliseProducao.module.css'
@@ -34,6 +34,15 @@ function obter(registro: Registro, ...chaves: string[]) {
     if (value !== undefined && value !== null && value !== '') return numero(value)
   }
   return 0
+}
+
+function obterTexto(registro: Registro, ...chaves: string[]) {
+  const campos = new Map(Object.entries(registro).map(([key, value]) => [normalizar(key), value]))
+  for (const chave of chaves) {
+    const value = campos.get(normalizar(chave))
+    if (value !== undefined && value !== null && String(value).trim()) return String(value).trim()
+  }
+  return ''
 }
 
 function separarLinha(line: string, delimiter: string) {
@@ -193,12 +202,21 @@ export default function AnaliseProducaoPage() {
       setCarregando(true)
       setErro('')
       try {
-        const [bytes, fechamentoSnapshot] = await Promise.all([
-          getBytes(ref(storage, BASE_ATUAL)),
-          getDocs(query(collectionGroup(db, 'meses'), where('mesReferencia', '==', mesAnterior))),
-        ])
+        const bytes = await getBytes(ref(storage, BASE_ATUAL))
         const atual = lerCsv(new TextDecoder('utf-8').decode(bytes))
-        const fechamento = fechamentoSnapshot.docs.map((documento) => documento.data() as Registro)
+        const chaves = [...new Set(atual
+          .map((registro) => obterTexto(registro, 'chave_loja', 'chave loja', 'chave'))
+          .filter(Boolean))]
+        const fechamento: Registro[] = []
+        const mesDocumento = mesAnterior.replace('/', '-')
+        for (let inicio = 0; inicio < chaves.length; inicio += 40) {
+          const lote = chaves.slice(inicio, inicio + 40)
+          const documentos = await Promise.all(lote.map((chave) =>
+            getDoc(doc(db, 'arvorecronologica', chave, 'meses', mesDocumento))))
+          fechamento.push(...documentos
+            .filter((documento) => documento.exists())
+            .map((documento) => documento.data() as Registro))
+        }
         if (!fechamento.length) throw new Error(`Não encontrei fechamentos de ${nomeMes(mesAnterior)} na Árvore Cronológica.`)
         const baseFechada = agregar(fechamento)
         const comparativo = agregarAtual(baseFechada, atual)
@@ -241,7 +259,7 @@ export default function AnaliseProducaoPage() {
       </section>
 
       {carregando && <div className={styles.message}>Carregando e somando os dados de toda a rede…</div>}
-      {erro && <div className={`${styles.message} ${styles.error}`}>{erro}<small>Se aparecer permission-denied, a consulta em grupo da coleção arvorecronologica/{'{chave}'}/meses precisa estar liberada para usuários autenticados nas regras do Firestore.</small></div>}
+      {erro && <div className={`${styles.message} ${styles.error}`}>{erro}<small>Se aparecer permission-denied, verifique a permissão de leitura autenticada dos documentos em arvorecronologica/{'{chave}'}/meses/{'{mesId}'} nas regras do Firestore.</small></div>}
 
       {!carregando && !erro && (
         <>
